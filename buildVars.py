@@ -71,7 +71,10 @@ Initial development release with accessible clipboard navigation, bounded SQLite
 # pythonSources = ["addon/globalPlugins/*.py"]
 # For more information on SCons Glob expressions please take a look at:
 # https://scons.org/doc/production/HTML/scons-user/apd.html
-pythonSources: list[str] = ["addon/globalPlugins/nvdaClipboard/*.py"]
+pythonSources: list[str] = [
+	"addon/installTasks.py",
+	"addon/globalPlugins/nvdaClipboard/*.py",
+]
 
 # Vendored runtime dependencies are packaged as source but do not contain add-on translations.
 vendorSources: list[str] = [
