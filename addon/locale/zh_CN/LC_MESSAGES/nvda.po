@@ -1,0 +1,2059 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: nvdaClipboard 0.1.0\n"
+"Report-Msgid-Bugs-To: 'nvda-translations@groups.io'\n"
+"POT-Creation-Date: 2026-08-08 21:50+0800\n"
+"PO-Revision-Date: 2026-07-23 23:32+0800\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.9\n"
+
+# Cloud menu and account dialogs.
+#. Translators: Title of the Tiantan Clipboard account dialog.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:35
+msgid "Tiantan Clipboard"
+msgstr "天坦剪贴板"
+
+#. Translators: Label for the current Tiantan Clipboard status.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:53
+msgid "Status:"
+msgstr "状态："
+
+#. Translators: Description shown in the Tiantan Clipboard dialog.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:61
+msgid "Syncs clipboard text between this computer and Tiantan."
+msgstr "在本机与天坦之间同步剪贴板文本。"
+
+#. Translators: Label for the ClipDataCloud phone number field.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:70
+msgid "&Phone number:"
+msgstr "手机号(&P)："
+
+#. Translators: Label for the ClipDataCloud password field.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:76
+msgid "Pass&word:"
+msgstr "密码(&W)："
+
+#. Translators: Button to log in to ClipDataCloud.
+#. Translators: Button to sign in to OneDrive with the system browser.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:82
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:93
+msgid "Sign &in"
+msgstr "登录(&I)"
+
+#. Translators: Label for the signed-in Tiantan Clipboard account.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:93
+msgid "Account:"
+msgstr "账户："
+
+#. Translators: Button to log out of ClipDataCloud.
+#. Translators: Button to sign out of OneDrive synchronization.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:101
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:141
+msgid "Sign &out"
+msgstr "退出登录(&O)"
+
+#. Translators: Button to close the Tiantan Clipboard account dialog.
+#. Translators: Button to close the OneDrive account dialog.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:113
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:153
+msgid "&Close"
+msgstr "关闭(&C)"
+
+#. Translators: Progress message while signing in to Tiantan Clipboard.
+#. Translators: OneDrive status while the system browser handles Microsoft login.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:180
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1037
+msgid "Signing in..."
+msgstr "正在登录..."
+
+#. Translators: Progress message while signing out of Tiantan Clipboard.
+#. Translators: OneDrive status while cached Microsoft credentials are removed.
+#: addon\globalPlugins\nvdaClipboard\cloudDialog.py:189
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:123
+msgid "Signing out..."
+msgstr "正在退出..."
+
+#. Translators: Error shown when the native cloud clipboard library cannot be used.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:51
+msgid "Tiantan is unavailable. Check ClipDataCloud.SDK.dll."
+msgstr "天坦不可用，请检查 ClipDataCloud.SDK.dll。"
+
+#. Translators: Message shown when another cloud account action is still running.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:56
+msgid "Another Tiantan account action is in progress"
+msgstr "另一个天坦账户操作正在进行"
+
+#. Translators: Initial cloud clipboard status before the persisted login is checked.
+#. Translators: OneDrive status while cached Microsoft sign-in is checked.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:89
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:117
+msgid "Checking..."
+msgstr "正在检查..."
+
+#. Translators: Membership label for a paid cloud clipboard account.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:146
+msgid "VIP account"
+msgstr "VIP 账户"
+
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:146
+msgid "standard account"
+msgstr "普通账户"
+
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:147
+#, python-brace-format
+msgid "{nickname}, {memberStatus}"
+msgstr "{nickname}，{memberStatus}"
+
+#. Translators: Tiantan account status when signed in without profile details.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:152
+msgid "Signed in"
+msgstr "已登录"
+
+#. Translators: Cloud clipboard account status when no account is signed in.
+#. Translators: Cloud clipboard status when no account is signed in.
+#. Translators: Cloud clipboard status reported by the native SDK.
+#. Translators: OneDrive account status when no Microsoft account is signed in.
+#. Translators: OneDrive status when no cached Microsoft account is usable.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:154
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:224
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:539
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:223
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:119
+msgid "Not signed in"
+msgstr "未登录"
+
+#. Translators: Validation message in the cloud clipboard login dialog.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:163
+msgid "Enter a phone number and password"
+msgstr "请输入手机号和密码"
+
+#. Translators: Error prefix for a failed cloud clipboard login.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:176
+#, python-brace-format
+msgid "Sign-in failed: {error}"
+msgstr "登录失败：{error}"
+
+#. Translators: Status shown after signing out of cloud clipboard.
+#. Translators: Status after removing the cached Microsoft account.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:196
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1211
+msgid "Signed out"
+msgstr "已退出"
+
+#. Translators: Error prefix for a failed cloud clipboard logout.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:200
+#, python-brace-format
+msgid "Sign-out failed: {error}"
+msgstr "退出登录失败：{error}"
+
+#. Translators: Error prefix when checking cloud clipboard account status fails.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:228
+#, python-brace-format
+msgid "Status check failed: {error}"
+msgstr "状态检查失败：{error}"
+
+#. Translators: Message shown when a manual Tiantan send is still running.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:253
+msgid "Tiantan send is in progress"
+msgstr "正在发送到天坦"
+
+#. Translators: Confirmation after manually uploading clipboard text.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:274
+msgid "Sent to Tiantan"
+msgstr "已发送到天坦"
+
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:280
+#, python-brace-format
+msgid "Send failed: {error}"
+msgstr "发送失败：{error}"
+
+#. Translators: Error prefix for a failed cloud clipboard fetch.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:297
+#, python-brace-format
+msgid "Receive failed: {error}"
+msgstr "接收失败：{error}"
+
+#. Translators: Message shown when the cloud clipboard contains no text.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:598
+msgid "Tiantan clipboard is empty"
+msgstr "天坦剪贴板为空"
+
+#. Translators: Error shown when downloaded cloud text cannot be written locally.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:608
+#, python-brace-format
+msgid "Could not update the clipboard: {error}"
+msgstr "无法更新剪贴板：{error}"
+
+#. Translators: Confirmation after downloading text from cloud clipboard.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:612
+msgid "Received from Tiantan"
+msgstr "已从天坦接收"
+
+#. Translators: Status shown when automatic upload stops because the account signed out.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:690
+msgid "Tiantan signed out. Automatic sync stopped."
+msgstr "天坦已退出，自动同步已停止。"
+
+#. Translators: Message shown when there is no clipboard text to upload.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:716
+msgid "There is no clipboard text to upload"
+msgstr "没有可上传的剪贴板文本"
+
+#. Translators: Message shown when clipboard text contains a NUL character.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:719
+msgid "Text contains a NUL character and was not uploaded"
+msgstr "文本包含 NUL 字符，未能上传"
+
+#. Translators: Message shown when clipboard text exceeds the cloud size limit.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:722
+msgid "Text exceeds 1 MB and was not uploaded"
+msgstr "文本超过 1 MB，未能上传"
+
+#. Translators: Message shown when clipboard text contains invalid Unicode data.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:725
+msgid "Text contains invalid Unicode data and was not uploaded"
+msgstr "文本包含无效的 Unicode 数据，未能上传"
+
+#. Translators: Cloud SDK error description.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:734
+msgid "Invalid argument"
+msgstr "参数无效"
+
+#. Translators: Cloud SDK error description.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:737
+msgid "The output buffer is too small"
+msgstr "输出缓冲区过小"
+
+#. Translators: Cloud SDK error description.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:740
+msgid "The account is not signed in"
+msgstr "账户未登录"
+
+#. Translators: Fallback description when the cloud SDK returns no error text.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:742
+msgid "Unknown Tiantan error"
+msgstr "未知的天坦错误"
+
+#. Translators: Generic cloud SDK error with a numeric error code.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:744
+#, python-brace-format
+msgid "{message} (error code {code})"
+msgstr "{message}（错误代码 {code}）"
+
+#. Translators: Tiantan automatic synchronization status when enabled.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:774
+msgid "Auto sync: on"
+msgstr "自动同步：开"
+
+#. Translators: Tiantan automatic synchronization status when disabled.
+#: addon\globalPlugins\nvdaClipboard\cloudSync.py:776
+msgid "Auto sync: off"
+msgstr "自动同步：关"
+
+#. Translators: Error shown when an add-on window cannot open because NVDA's main window is unavailable.
+#: addon\globalPlugins\nvdaClipboard\controller.py:95
+msgid "NVDA's main window is unavailable"
+msgstr "NVDA 主窗口不可用"
+
+#. Translators: Name of the built-in category containing recent clipboard text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:98
+msgid "Clipboard history"
+msgstr "剪贴板历史"
+
+#. Translators: Error shown when supported clipboard formats cannot be restored.
+#: addon\globalPlugins\nvdaClipboard\controller.py:207
+#: addon\globalPlugins\nvdaClipboard\controller.py:1054
+#: addon\globalPlugins\nvdaClipboard\controller.py:1059
+#: addon\globalPlugins\nvdaClipboard\controller.py:1083
+#: addon\globalPlugins\nvdaClipboard\controller.py:1967
+msgid "Could not write to the system clipboard"
+msgstr "无法写入系统剪贴板"
+
+#. Translators: Summary used when the system clipboard is empty.
+#: addon\globalPlugins\nvdaClipboard\controller.py:259
+#: addon\globalPlugins\nvdaClipboard\controller.py:2365
+msgid "Clipboard is empty"
+msgstr "剪贴板为空"
+
+#. Translators: Message shown when another Tiantan receive is still running.
+#: addon\globalPlugins\nvdaClipboard\controller.py:418
+#: addon\globalPlugins\nvdaClipboard\controller.py:461
+msgid "A Tiantan receive is already in progress"
+msgstr "已有一个天坦接收操作正在进行"
+
+#. Translators: Cloud paste cancellation because keyboard focus could not be identified safely.
+#: addon\globalPlugins\nvdaClipboard\controller.py:423
+msgid "Keyboard focus could not be identified. Tiantan paste was cancelled."
+msgstr "无法确定键盘焦点，已取消天坦粘贴。"
+
+#. Translators: Cloud paste cancellation because focus changed while downloading.
+#. Translators: Cloud paste cancellation because focus changed before pasting.
+#: addon\globalPlugins\nvdaClipboard\controller.py:431
+#: addon\globalPlugins\nvdaClipboard\controller.py:2556
+msgid "Focus changed. Tiantan paste was cancelled."
+msgstr "焦点已改变，已取消天坦粘贴。"
+
+#. Translators: Number of regular files included in a clipboard size calculation.
+#: addon\globalPlugins\nvdaClipboard\controller.py:548
+#, python-brace-format
+msgid "{count} file"
+msgid_plural "{count} files"
+msgstr[0] "{count} 个文件"
+
+#. Translators: Number of folders included in a clipboard size calculation.
+#: addon\globalPlugins\nvdaClipboard\controller.py:557
+#, python-brace-format
+msgid "{count} folder"
+msgid_plural "{count} folders"
+msgstr[0] "{count} 个文件夹"
+
+#. Translators: Separator between file size, file count, and folder count.
+#. Translators: Separator between exact clipboard text statistics.
+#. Translators: Separator between file names in a clipboard summary.
+#: addon\globalPlugins\nvdaClipboard\controller.py:563
+#: addon\globalPlugins\nvdaClipboard\controller.py:2309
+#: addon\globalPlugins\nvdaClipboard\controller.py:2314
+#: addon\globalPlugins\nvdaClipboard\controller.py:2339
+msgid ", "
+msgstr "，"
+
+#. Translators: Clipboard file calculation with partial size and item counts.
+#: addon\globalPlugins\nvdaClipboard\controller.py:567
+#, python-brace-format
+msgid "{summary}: about {details}"
+msgstr "{summary}：大约 {details}"
+
+#. Translators: Completed clipboard file calculation with size and item counts.
+#. Translators: Clipboard content type followed by exact text statistics.
+#: addon\globalPlugins\nvdaClipboard\controller.py:573
+#: addon\globalPlugins\nvdaClipboard\controller.py:2317
+#, python-brace-format
+msgid "{summary}: {details}"
+msgstr "{summary}：{details}"
+
+#. Translators: Clipboard file calculation with size and item counts accumulated so far.
+#: addon\globalPlugins\nvdaClipboard\controller.py:579
+#, python-brace-format
+msgid "{summary}: calculating, {details}"
+msgstr "{summary}：正在计算，{details}"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:587
+#, python-brace-format
+msgid "{summary}: could not calculate size, file count, or folder count"
+msgstr "{summary}：无法统计大小、文件数和文件夹数"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:592
+#, python-brace-format
+msgid "{summary}: calculating, {count} item"
+msgid_plural "{summary}: calculating, {count} items"
+msgstr[0] "{summary}：正在计算，{count} 个项目"
+
+#. Translators: Clipboard text summary while exact statistics are still being calculated.
+#: addon\globalPlugins\nvdaClipboard\controller.py:616
+#, python-brace-format
+msgid "{summary}: calculating; check again shortly"
+msgstr "{summary}：正在计算，请稍后再次查询"
+
+#. Translators: Message shown when another last-spoken paste is still running.
+#: addon\globalPlugins\nvdaClipboard\controller.py:707
+msgid "A last spoken paste is already in progress"
+msgstr "已有一个最后朗读文本的粘贴操作正在进行"
+
+#. Translators: Message shown when append is requested without selected text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:721
+msgid "No text is selected"
+msgstr "未选择文本"
+
+#. Translators: Confirmation after selected text is appended to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:725
+msgid "Selected text appended"
+msgstr "已追加所选文本"
+
+#. Translators: Message shown when a screenshot is blocked by screen curtain.
+#: addon\globalPlugins\nvdaClipboard\controller.py:731
+msgid "Disable screen curtain before taking a screenshot"
+msgstr "请先关闭黑屏再进行截屏"
+
+#. Translators: Error shown when a navigator object screenshot cannot be copied.
+#: addon\globalPlugins\nvdaClipboard\controller.py:738
+#: addon\globalPlugins\nvdaClipboard\controller.py:742
+msgid "Could not copy the navigator object image"
+msgstr "无法复制导航对象图像"
+
+#. Translators: Error shown when a navigator object screenshot cannot be encoded for history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:747
+msgid "Could not prepare the navigator object image"
+msgstr "无法处理导航对象图像"
+
+#. Translators: Confirmation after a navigator object screenshot is copied.
+#: addon\globalPlugins\nvdaClipboard\controller.py:761
+msgid "Navigator object image copied to the clipboard"
+msgstr "导航对象图像已复制到剪贴板"
+
+#. Translators: Disambiguates a synchronized user category from the built-in history view.
+#: addon\globalPlugins\nvdaClipboard\controller.py:805
+#, python-brace-format
+msgid "{name} (OneDrive category)"
+msgstr "{name}（OneDrive 类别）"
+
+#. Translators: Error shown when a draft is saved directly to history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:958
+msgid "Clipboard history can only be changed through the system clipboard"
+msgstr "只能通过系统剪贴板更改剪贴板历史"
+
+#. Translators: Error shown when an empty category entry is requested.
+#: addon\globalPlugins\nvdaClipboard\controller.py:961
+msgid "An empty entry cannot be saved"
+msgstr "无法保存空条目"
+
+#. Translators: Error shown when another application changes the clipboard during a restore.
+#. Translators: Error shown when another application changes the clipboard during an append action.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1063
+#: addon\globalPlugins\nvdaClipboard\controller.py:1074
+#: addon\globalPlugins\nvdaClipboard\controller.py:1930
+#: addon\globalPlugins\nvdaClipboard\controller.py:1956
+#: addon\globalPlugins\nvdaClipboard\controller.py:2018
+msgid "The clipboard changed before it could be updated. Try again."
+msgstr "剪贴板在更新前发生了变化，请重试。"
+
+#. Translators: Error shown when an item is moved into clipboard history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1096
+msgid "Entries cannot be moved into clipboard history"
+msgstr "无法将条目移动到剪贴板历史"
+
+#. Translators: Error shown when the current clipboard image cannot be read.
+#. Translators: Error shown when an expected clipboard image cannot be read.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1152
+#: addon\globalPlugins\nvdaClipboard\controller.py:1163
+#: addon\globalPlugins\nvdaClipboard\controller.py:1172
+msgid "Could not read the clipboard image"
+msgstr "无法读取剪贴板图像"
+
+#. Translators: Message shown when no clipboard image is available to save.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1155
+msgid "There is no clipboard image to save"
+msgstr "剪贴板中没有可保存的图像"
+
+#. Translators: Title of the dialog used to save the current clipboard image.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1166
+msgid "Save clipboard image"
+msgstr "保存剪贴板图像"
+
+#. Translators: Error shown when the clipboard image cannot be saved.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1169
+msgid "Could not save the clipboard image"
+msgstr "无法保存剪贴板图像"
+
+#. Translators: Confirmation after saving a clipboard image.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1176
+msgid "Clipboard image saved"
+msgstr "剪贴板图像已保存"
+
+#. Translators: Error shown when a selected history entry has no exportable image.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1183
+msgid "The selected entry does not contain a saved image"
+msgstr "所选条目不包含已保存的图像"
+
+#. Translators: Title of the dialog used to save an image selected in clipboard history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1186
+msgid "Save selected image"
+msgstr "保存所选图像"
+
+#. Translators: Error shown when a stored clipboard image cannot be saved.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1189
+msgid "Could not save the selected image"
+msgstr "无法保存所选图像"
+
+#. Translators: Error shown when stored PNG image data is invalid.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1192
+msgid "The saved image data is invalid"
+msgstr "保存的图像数据无效"
+
+#. Translators: Confirmation after saving an image selected from clipboard history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1195
+msgid "Selected image saved"
+msgstr "所选图像已保存"
+
+#. Translators: Message shown when oversized rich formats are omitted from a history entry.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1261
+msgid "Some text formatting was too large and was not saved in history"
+msgstr "部分文本格式数据过大，未保存到历史记录"
+
+#. Translators: Message shown when a clipboard image could not be normalized for history.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1329
+#: addon\globalPlugins\nvdaClipboard\controller.py:1437
+msgid "The image could not be added to clipboard history"
+msgstr "无法将图像添加到剪贴板历史"
+
+#. Translators: Error shown when clipboard content changed but history could not be saved.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1424
+msgid "Clipboard updated, but history could not be saved"
+msgstr "剪贴板已更新，但无法保存历史记录"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:1431
+#, python-brace-format
+msgid "The image was not added because it exceeds the {limit} MB history limit"
+msgstr "图像超过 {limit} MB 的历史记录大小上限，未能添加"
+
+#. Translators: Message shown when an image exceeds the total history storage limit.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1440
+msgid "The image was not added because image history storage is full"
+msgstr "图像历史存储空间已满，未能添加图像"
+
+#. Translators: Message shown when mixed clipboard content is retained as text only.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1445
+msgid "The text was saved in history, but its image could not be stored"
+msgstr "文本已保存到历史记录，但无法保存其中的图像"
+
+#. Translators: Error shown when a last-spoken command has no captured speech text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1566
+msgid "No spoken text is available"
+msgstr "没有可用的朗读文本"
+
+#. Translators: Error shown when text cannot be appended because the clipboard is busy.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1574
+msgid "Could not read the current clipboard"
+msgstr "无法读取当前剪贴板"
+
+#. Translators: Error shown when last spoken text would replace non-text clipboard content.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1590
+msgid "Last spoken text can only be appended to an empty or text clipboard"
+msgstr "最后朗读的文本只能追加到空剪贴板或文本剪贴板"
+
+#. Translators: Error shown when temporary last-spoken text cannot be prepared for pasting.
+#. Translators: Error shown when temporary last-spoken text cannot be written.
+#. Translators: Error shown when the last-spoken paste gesture cannot be sent.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1628
+#: addon\globalPlugins\nvdaClipboard\controller.py:1651
+#: addon\globalPlugins\nvdaClipboard\controller.py:1688
+#: addon\globalPlugins\nvdaClipboard\controller.py:1702
+#: addon\globalPlugins\nvdaClipboard\controller.py:1708
+#: addon\globalPlugins\nvdaClipboard\controller.py:1734
+msgid "Could not paste the last spoken text"
+msgstr "无法粘贴最后朗读的文本"
+
+#. Translators: Message shown when a paste shortcut remains held until timeout.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1635
+msgid "The keyboard shortcut was not released, so the paste was cancelled"
+msgstr "键盘快捷键未释放，因此已取消粘贴。"
+
+#. Translators: Error shown when the clipboard keeps changing before a last-spoken paste.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1675
+#: addon\globalPlugins\nvdaClipboard\controller.py:1723
+msgid ""
+"The clipboard kept changing, so the last spoken text could not be pasted"
+msgstr "剪贴板持续发生变化，无法粘贴最后朗读的文本"
+
+#. Translators: Error shown after text was pasted but clipboard restoration could not be scheduled.
+#. Translators: Error shown after text was pasted but no clipboard content could be restored.
+#: addon\globalPlugins\nvdaClipboard\controller.py:1747
+#: addon\globalPlugins\nvdaClipboard\controller.py:1861
+msgid "The text was pasted, but the clipboard could not be restored"
+msgstr "文本已粘贴，但无法恢复剪贴板"
+
+#. Translators: Error shown when the system clipboard cannot be cleared.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2024
+msgid "Could not clear the system clipboard"
+msgstr "无法清空系统剪贴板"
+
+#. Translators: Confirmation before clearing the system clipboard from an empty editor.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2075
+msgid "The editor is empty. Clear the system clipboard?"
+msgstr "编辑框为空，是否清空系统剪贴板？"
+
+#. Translators: Title of the clear clipboard confirmation dialog.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2077
+msgid "Clear Clipboard"
+msgstr "清空剪贴板"
+
+#. Translators: Message shown when text navigation is attempted on an image.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2109
+msgid "Image content cannot be browsed as text"
+msgstr "无法以文本方式浏览图像内容"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:2156
+#, python-brace-format
+msgid "{index}. {summary}"
+msgstr "{index}. {summary}"
+
+#. Translators: Message shown when global clipboard history contains no entries.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2165
+msgid "Clipboard history is empty"
+msgstr "剪贴板历史为空"
+
+#. Translators: Clipboard list summary when text contains no visible characters.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2209
+msgid "No visible text"
+msgstr "无可见文本"
+
+#. Translators: Clipboard file summary when additional file names are omitted.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2215
+#, python-brace-format
+msgid "{names}, …"
+msgstr "{names}，……"
+
+#. Translators: Concise image metadata used inside clipboard list labels.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2220
+#, python-brace-format
+msgid "{width} by {height} pixels, {size}"
+msgstr "{width} × {height} 像素，{size}"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:2229
+#, python-brace-format
+msgid ""
+"Image\n"
+"Dimensions: {width} by {height} pixels\n"
+"Color depth: {depth} bits\n"
+"Stored size: {size}"
+msgstr ""
+"图像\n"
+"尺寸：{width} × {height} 像素\n"
+"色深：{depth} 位\n"
+"存储大小：{size}"
+
+#. Translators: Binary data size in terabytes.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2241
+#, python-brace-format
+msgid "{size:.1f} TB"
+msgstr "{size:.1f} TB"
+
+#. Translators: Binary data size in gigabytes.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2244
+#, python-brace-format
+msgid "{size:.1f} GB"
+msgstr "{size:.1f} GB"
+
+#. Translators: Binary data size in megabytes.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2247
+#, python-brace-format
+msgid "{size:.1f} MB"
+msgstr "{size:.1f} MB"
+
+#. Translators: Binary data size in kilobytes.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2250
+#, python-brace-format
+msgid "{size:.1f} KB"
+msgstr "{size:.1f} KB"
+
+#. Translators: Binary data size in bytes.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2253
+#, python-brace-format
+msgid "{count} byte"
+msgid_plural "{count} bytes"
+msgstr[0] "{count} 字节"
+
+#. Translators: Number of explicit text lines, as distinct from visually wrapped lines.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2263
+#, python-brace-format
+msgid "{count} text line"
+msgid_plural "{count} text lines"
+msgstr[0] "{count} 行"
+
+#. Translators: Number of user-perceived Unicode characters including whitespace; line breaks are excluded.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2269
+#, python-brace-format
+msgid "{count} character (including whitespace)"
+msgid_plural "{count} characters (including whitespace)"
+msgstr[0] "{count} 个字符（含空白）"
+
+#. Translators: Number of user-perceived Unicode characters excluding whitespace and line breaks.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2275
+#, python-brace-format
+msgid "{count} character (excluding whitespace)"
+msgid_plural "{count} characters (excluding whitespace)"
+msgstr[0] "{count} 个字符（不含空白）"
+
+#. Translators: Number of Han ideographic code points in clipboard text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2285
+#, python-brace-format
+msgid "{count} Han character"
+msgid_plural "{count} Han characters"
+msgstr[0] "{count} 个汉字"
+
+#. Translators: Number of Unicode punctuation grapheme clusters in clipboard text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2294
+#, python-brace-format
+msgid "{count} punctuation mark"
+msgid_plural "{count} punctuation marks"
+msgstr[0] "{count} 个标点"
+
+#. Translators: Number of Unicode symbol grapheme clusters in clipboard text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2303
+#, python-brace-format
+msgid "{count} symbol"
+msgid_plural "{count} symbols"
+msgstr[0] "{count} 个符号"
+
+#. Translators: Selected character attributes follow the main, additive text statistics.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2312
+#, python-brace-format
+msgid "{details}; including {attributes}"
+msgstr "{details}；其中 {attributes}"
+
+#. Translators: Type-only summary of plain text before exact statistics are available.
+#. Translators: Kind of stored plain text in the manager.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2323
+#: addon\globalPlugins\nvdaClipboard\manager.py:1286
+msgid "Plain text"
+msgstr "纯文本"
+
+#. Translators: Type-only summary of formatted text before exact statistics are available.
+#. Translators: Kind of stored formatted text in the manager.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2326
+#: addon\globalPlugins\nvdaClipboard\manager.py:1289
+msgid "Formatted text"
+msgstr "格式化文本"
+
+#. Translators: Type-only summary of mixed clipboard content when image dimensions are unavailable.
+#. Translators: Kind of stored text-and-image content in the manager.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2330
+#: addon\globalPlugins\nvdaClipboard\manager.py:1292
+msgid "Text and image"
+msgstr "文本和图像"
+
+#. Translators: Mixed clipboard content with known image dimensions.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2332
+#, python-brace-format
+msgid "Text and image, {width} by {height} pixels"
+msgstr "文本和图像，{width} × {height} 像素"
+
+#. Translators: File names summary when additional clipboard items are omitted.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2342
+#, python-brace-format
+msgid "{names}, and others"
+msgstr "{names}等"
+
+#. Translators: Summary of an image with known dimensions and color depth.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2348
+#, python-brace-format
+msgid "Image, {width} by {height} pixels, {depth}-bit color"
+msgstr "图像，{width} × {height} 像素，{depth} 位色"
+
+#. Translators: Summary of an image with known dimensions but unknown color depth.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2354
+#, python-brace-format
+msgid "Image, {width} by {height} pixels"
+msgstr "图像，{width} × {height} 像素"
+
+#. Translators: Type-only image summary when dimensions are unavailable.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2359
+msgid "Image"
+msgstr "图像"
+
+#. Translators: Summary for clipboard content excluded from monitoring by its source application.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2362
+msgid "Protected clipboard content is not available"
+msgstr "受保护的剪贴板内容不可用"
+
+#. Translators: Summary used for clipboard data this add-on cannot navigate.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2367
+msgid "Unsupported clipboard content"
+msgstr "不支持的剪贴板内容"
+
+#. Translators: Confirmation after restoring one or multiple files to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2374
+#, python-brace-format
+msgid "{count} file placed on the clipboard"
+msgid_plural "{count} files placed on the clipboard"
+msgstr[0] "已将 {count} 个文件放入剪贴板"
+
+#. Translators: Confirmation after restoring an image to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2380
+msgid "Image placed on the clipboard"
+msgstr "已将图像放入剪贴板"
+
+#. Translators: Confirmation after restoring mixed text and image content.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2383
+msgid "Text and image placed on the clipboard"
+msgstr "已将文本和图像放入剪贴板"
+
+#. Translators: Confirmation after restoring plain or formatted text.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2385
+msgid "Text placed on the clipboard"
+msgstr "已将文本放入剪贴板"
+
+#. Translators: Navigable clipboard file entry with name, position, and full path.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2393
+#, python-brace-format
+msgid "{name}, item {index} of {count}, {path}"
+msgstr "{name}，第 {index} 项，共 {count} 项，{path}"
+
+#. Translators: Summary used when a file-list clipboard format contains no paths.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2401
+msgid "No files in clipboard"
+msgstr "剪贴板中没有文件"
+
+#. Translators: Error shown when a clipboard category name is empty.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2407
+msgid "The category name cannot be empty"
+msgstr "类别名称不能为空"
+
+#. Translators: Error shown when the built-in history name is used for a category.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2410
+msgid "That category name is reserved"
+msgstr "该类别名称已被保留"
+
+#. Translators: Error shown when a clipboard category already exists.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2413
+msgid "A category with that name already exists"
+msgstr "已存在同名类别"
+
+#. Translators: Error shown when a clipboard category no longer exists.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2416
+msgid "The selected category no longer exists"
+msgstr "所选类别已不存在"
+
+#. Translators: Error shown when deletion of a non-empty category is attempted.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2419
+msgid "Delete all entries before deleting this category"
+msgstr "请先删除该类别中的所有条目"
+
+#. Translators: Error shown when a collected image cannot fit in clipboard storage.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2422
+msgid "The image cannot fit in clipboard history storage"
+msgstr "剪贴板历史存储空间不足，无法保存该图像"
+
+#. Translators: Error shown when stored clipboard entry data is invalid or missing.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2425
+msgid "The selected clipboard entry is no longer available"
+msgstr "所选剪贴板条目已不可用"
+
+#. Translators: Error shown for an invalid clipboard category operation.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2428
+msgid "The requested category operation is not valid"
+msgstr "请求的类别操作无效"
+
+#. Translators: Generic clipboard storage operation error.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2430
+msgid "Could not update clipboard storage"
+msgstr "无法更新剪贴板存储"
+
+#. Translators: Error shown when current clipboard upload policy cannot be checked.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2473
+msgid "Could not verify the current clipboard for upload"
+msgstr "无法验证当前剪贴板是否允许上传"
+
+#. Translators: Message shown when an application forbids cloud upload of clipboard content.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2478
+msgid "The current clipboard content is protected from cloud upload"
+msgstr "当前剪贴板内容受保护，禁止上传到云端"
+
+#. Translators: Cloud paste cancellation because another application changed the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2560
+#: addon\globalPlugins\nvdaClipboard\controller.py:2592
+msgid "Clipboard changed. Tiantan paste was cancelled."
+msgstr "剪贴板已改变，已取消天坦粘贴。"
+
+#: addon\globalPlugins\nvdaClipboard\controller.py:2580
+msgid ""
+"The keyboard shortcut was not released. Tiantan text was left on the "
+"clipboard without pasting."
+msgstr "键盘快捷键未释放。天坦文本已保留在剪贴板中，但未执行粘贴。"
+
+#. Translators: Confirmation after downloaded cloud text is pasted.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2596
+msgid "Pasted from Tiantan"
+msgstr "已从天坦粘贴"
+
+#. Translators: Error shown when the cloud paste keyboard gesture fails.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2600
+msgid "Tiantan paste failed"
+msgstr "天坦粘贴失败"
+
+#. Translators: File type filter in the save clipboard image dialog.
+#: addon\globalPlugins\nvdaClipboard\images.py:103
+msgid "PNG images (*.png)|*.png"
+msgstr "PNG 图像 (*.png)|*.png"
+
+#. Translators: Accessible description for the clipboard manager entry list.
+#: addon\globalPlugins\nvdaClipboard\manager.py:88
+msgid "Press Alt+S to search the current category"
+msgstr "按 Alt+S 搜索当前类别"
+
+#. Translators: Title of the clipboard manager window.
+#: addon\globalPlugins\nvdaClipboard\manager.py:99
+msgid "Clipboard Manager"
+msgstr "剪贴板管理器"
+
+#. Translators: Label for the clipboard category list.
+#: addon\globalPlugins\nvdaClipboard\manager.py:171
+msgid "&Category:"
+msgstr "类别(&C)："
+
+#. Translators: Label for searching entries in the selected clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:182
+msgid "&Search:"
+msgstr "搜索(&S)："
+
+#. Translators: Button that exits clipboard manager entry search.
+#: addon\globalPlugins\nvdaClipboard\manager.py:188
+msgid "C&lear Search"
+msgstr "清空搜索(&L)"
+
+#. Translators: Label for the stored clipboard entry list.
+#: addon\globalPlugins\nvdaClipboard\manager.py:201
+#: addon\globalPlugins\nvdaClipboard\manager.py:837
+msgid "En&tries:"
+msgstr "条目(&T)："
+
+#. Translators: Label for the selected clipboard entry content.
+#: addon\globalPlugins\nvdaClipboard\manager.py:218
+msgid "C&ontent:"
+msgstr "内容(&O)："
+
+#. Translators: File menu command to open a text file as a draft.
+#: addon\globalPlugins\nvdaClipboard\manager.py:248
+msgid "&Open Text File...\tCtrl+O"
+msgstr "打开文本文件(&O)...\tCtrl+O"
+
+#. Translators: File menu command to save visible text to a file.
+#: addon\globalPlugins\nvdaClipboard\manager.py:253
+msgid "Save &Text As...\tCtrl+Shift+S"
+msgstr "文本另存为(&T)...\tCtrl+Shift+S"
+
+#. Translators: File menu command to put edited plain text on the clipboard.
+#: addon\globalPlugins\nvdaClipboard\manager.py:258
+msgid "Put &Text on System Clipboard\tCtrl+S"
+msgstr "将文本放入系统剪贴板(&T)\tCtrl+S"
+
+#. Translators: File menu command to save a plain-text copy in the selected category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:263
+msgid "Save Text to Current &Category\tCtrl+Shift+Enter"
+msgstr "将文本保存到当前类别(&C)\tCtrl+Shift+Enter"
+
+#. Translators: File menu command to hide the clipboard manager.
+#: addon\globalPlugins\nvdaClipboard\manager.py:269
+msgid "E&xit\tCtrl+E"
+msgstr "退出(&X)\tCtrl+E"
+
+#. Translators: Name of the File menu.
+#: addon\globalPlugins\nvdaClipboard\manager.py:274
+msgid "&File"
+msgstr "文件(&F)"
+
+#. Translators: Edit menu command to find text in selected content.
+#: addon\globalPlugins\nvdaClipboard\manager.py:281
+msgid "&Find...\tCtrl+F"
+msgstr "查找(&F)...\tCtrl+F"
+
+#. Translators: Edit menu command to find the next occurrence.
+#: addon\globalPlugins\nvdaClipboard\manager.py:286
+msgid "Find &Next\tF3"
+msgstr "查找下一个(&N)\tF3"
+
+#. Translators: Edit menu command to find the previous occurrence.
+#: addon\globalPlugins\nvdaClipboard\manager.py:291
+msgid "Find &Previous\tShift+F3"
+msgstr "查找上一个(&P)\tShift+F3"
+
+#. Translators: Edit menu command to replace editable plain text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:296
+msgid "&Replace...\tCtrl+H"
+msgstr "替换(&R)...\tCtrl+H"
+
+#. Translators: Edit menu command to move to a line in content.
+#: addon\globalPlugins\nvdaClipboard\manager.py:301
+msgid "&Go to Line...\tCtrl+G"
+msgstr "转到行(&G)...\tCtrl+G"
+
+#. Translators: Name of the Edit menu.
+#: addon\globalPlugins\nvdaClipboard\manager.py:306
+msgid "&Edit"
+msgstr "编辑(&E)"
+
+#. Translators: View filter showing all clipboard entry types.
+#: addon\globalPlugins\nvdaClipboard\manager.py:312
+msgid "&All Types"
+msgstr "所有类型（&A）"
+
+#. Translators: View filter showing plain-text clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:314
+msgid "&Plain Text"
+msgstr "纯文本(&P)"
+
+#. Translators: View filter showing formatted-text clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:316
+msgid "&Formatted Text"
+msgstr "格式化文本(&F)"
+
+#. Translators: View filter showing image-only clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:318
+msgid "&Image"
+msgstr "图像(&I)"
+
+#. Translators: View filter showing text-and-image clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:320
+msgid "Text and I&mage"
+msgstr "文本和图像(&M)"
+
+#. Translators: View filter showing file-group clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:322
+msgid "File &Groups"
+msgstr "文件组(&G)"
+
+#. Translators: Name of the View menu.
+#: addon\globalPlugins\nvdaClipboard\manager.py:332
+msgid "&View"
+msgstr "查看(&V)"
+
+#. Translators: Menu command to open the Tiantan Clipboard account dialog.
+#: addon\globalPlugins\nvdaClipboard\manager.py:343
+msgid "&Tiantan Clipboard..."
+msgstr "天坦剪贴板(&T)..."
+
+#. Translators: Checkable menu command to automatically send clipboard text to Tiantan.
+#: addon\globalPlugins\nvdaClipboard\manager.py:349
+msgid "&Auto-sync Tiantan"
+msgstr "自动同步天坦(&A)"
+
+#. Translators: Menu command to send current clipboard text to Tiantan.
+#: addon\globalPlugins\nvdaClipboard\manager.py:354
+msgid "&Send to Tiantan"
+msgstr "发送到天坦(&S)"
+
+#. Translators: Menu command to receive Tiantan text into the system clipboard.
+#: addon\globalPlugins\nvdaClipboard\manager.py:359
+msgid "&Receive from Tiantan"
+msgstr "从天坦接收(&R)"
+
+#. Translators: Menu command to open the OneDrive account dialog.
+#: addon\globalPlugins\nvdaClipboard\manager.py:368
+msgid "&OneDrive..."
+msgstr "OneDrive(&O)..."
+
+#. Translators: Menu command to synchronize with OneDrive immediately.
+#: addon\globalPlugins\nvdaClipboard\manager.py:373
+msgid "S&ync OneDrive"
+msgstr "同步 OneDrive(&Y)"
+
+#. Translators: Name of the Cloud menu.
+#: addon\globalPlugins\nvdaClipboard\manager.py:378
+msgid "Clo&ud"
+msgstr "云(&Y)"
+
+#. Translators: Label shown while clipboard manager search results are being updated.
+#: addon\globalPlugins\nvdaClipboard\manager.py:827
+msgid "Search resul&ts:"
+msgstr "搜索结果(&T)："
+
+#. Translators: Label for one or multiple clipboard manager search results.
+#: addon\globalPlugins\nvdaClipboard\manager.py:831
+#, python-brace-format
+msgid "Search resul&t ({count}):"
+msgid_plural "Search resul&ts ({count}):"
+msgstr[0] "搜索结果(&T)（{count} 条）："
+
+#. Translators: Message reported when a clipboard manager search has no results.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1013
+msgid "No matching entries."
+msgstr "没有匹配的条目。"
+
+#. Translators: Error shown when a selected clipboard item changed unexpectedly.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1216
+msgid "The selected clipboard entry changed before it could be loaded."
+msgstr "所选剪贴板条目在加载前发生了变化。"
+
+#. Translators: Dynamic label for manager content. ``kind`` describes the selected content type.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1264
+#, python-brace-format
+msgid "C&ontent ({kind}):"
+msgstr "内容(&O)（{kind}）："
+
+#. Translators: Kind of a plain-text draft in the manager.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1283
+msgid "Plain-text draft"
+msgstr "纯文本草稿"
+
+#. Translators: Kind of a stored image summary in the manager.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1295
+msgid "Image summary"
+msgstr "图像摘要"
+
+#. Translators: Kind of a stored file group in the manager.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1298
+msgid "File group"
+msgstr "文件组"
+
+#. Translators: Kind of an empty manager content control.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1300
+msgid "Empty"
+msgstr "空"
+
+#. Translators: Button that puts modified text on the system clipboard.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1391
+msgid "Put on Clipboard"
+msgstr "放入剪贴板"
+
+#. Translators: Button that saves modified text in the selected user category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1394
+msgid "Save to Current Category"
+msgstr "保存到当前类别"
+
+#. Translators: Prompt shown before leaving modified plain text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1398
+msgid ""
+"The content has unsaved text changes. Choose an action before continuing."
+msgstr "内容中有尚未保存的文本更改，请选择一项操作后再继续。"
+
+#. Translators: Button that discards modified clipboard manager text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1405
+msgid "Discard"
+msgstr "放弃"
+
+#. Translators: Button that cancels leaving modified clipboard manager text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1407
+msgid "Cancel"
+msgstr "取消"
+
+#. Translators: Generic clipboard manager error.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1532
+msgid "The operation failed."
+msgstr "操作失败。"
+
+#. Translators: Context menu command to create a clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1577
+msgid "&New..."
+msgstr "新建(&N)..."
+
+#. Translators: Context menu command to rename a clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1582
+msgid "&Rename..."
+msgstr "重命名(&R)..."
+
+#. Translators: Context menu command to delete a clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1587
+msgid "&Delete"
+msgstr "删除(&D)"
+
+#. Translators: Context menu command to restore an entry to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1674
+msgid "&Put on Clipboard"
+msgstr "放入剪贴板(&P)"
+
+#. Translators: Context menu command to move or collect selected entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1680
+msgid "&Move or Collect..."
+msgstr "移动或收藏(&M)..."
+
+#. Translators: Context menu command to delete one or multiple clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1686
+#, python-brace-format
+msgid "De&lete Entry"
+msgid_plural "De&lete {count} Entries"
+msgstr[0] "删除 {count} 个条目(&L)"
+
+#. Translators: Context command to save the image from the selected entry.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1698
+msgid "Save Selected &Image..."
+msgstr "保存所选图像(&I)..."
+
+#. Translators: Prompt for the name of a new clipboard category.
+#. Translators: Prompt for a new name for a clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1863
+#: addon\globalPlugins\nvdaClipboard\manager.py:1886
+msgid "Enter the new category name:"
+msgstr "请输入新的类别名称："
+
+#. Translators: Error shown when a clipboard category name is empty.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1868
+#: addon\globalPlugins\nvdaClipboard\manager.py:1891
+msgid "The category name cannot be empty."
+msgstr "类别名称不能为空。"
+
+#. Translators: Confirmation before deleting an empty clipboard category.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1915
+msgid "Delete the selected category?"
+msgstr "是否删除所选类别？"
+
+#. Translators: Message shown when no user category can receive an entry.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1960
+msgid "Create another user category first."
+msgstr "请先创建另一个用户类别。"
+
+#. Translators: Prompt for the destination category of selected entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1965
+msgid "Choose the destination category:"
+msgstr "请选择目标类别："
+
+#. Translators: Confirmation before deleting one or multiple clipboard entries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2011
+#, python-brace-format
+msgid "Delete the selected entry?"
+msgid_plural "Delete the {count} selected entries?"
+msgstr[0] "是否删除选中的 {count} 个条目？"
+
+#. Translators: Title of the file dialog for opening text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2053
+msgid "Open Text File"
+msgstr "打开文本文件"
+
+#. Translators: File type filter for clipboard manager text files.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2055
+#: addon\globalPlugins\nvdaClipboard\manager.py:2109
+msgid "Text files (*.txt)|*.txt|All files (*.*)|*.*"
+msgstr "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*"
+
+#. Translators: Error shown when a selected text file exceeds the manager's size limit.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2063
+#, python-brace-format
+msgid "The text file exceeds the {limit} MB size limit."
+msgstr "文本文件超过 {limit} MB 的大小限制。"
+
+#. Translators: Title of the file dialog for saving visible text.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2107
+msgid "Save Text File"
+msgstr "保存文本文件"
+
+#. Translators: Message shown after visible content is saved to a file.
+#: addon\globalPlugins\nvdaClipboard\manager.py:2117
+msgid "The text file was saved."
+msgstr "文本文件已保存。"
+
+#. Translators: Title of the text search dialog in the clipboard manager.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:37
+msgid "Find Text"
+msgstr "查找文本"
+
+#. Translators: Label for the text to find in clipboard manager content.
+#. Translators: Label for the text to find in the replacement dialog.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:43
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:96
+msgid "&Find:"
+msgstr "查找(&F)："
+
+#. Translators: Checkbox enabling case-sensitive text search.
+#. Translators: Checkbox enabling case-sensitive replacement matching.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:51
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:114
+msgid "Match &case"
+msgstr "区分大小写(&C)"
+
+#. Translators: Checkbox selecting backward text search.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:57
+msgid "Search &backward"
+msgstr "反向查找(&B)"
+
+#. Translators: Title of the text replacement dialog.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:90
+msgid "Replace Text"
+msgstr "替换文本"
+
+#. Translators: Label for replacement text in the replacement dialog.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:105
+msgid "&Replace with:"
+msgstr "替换为(&R)："
+
+#. Translators: Checkbox enabling regular expressions in replacement.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:121
+msgid "Use regular e&xpressions"
+msgstr "使用正则表达式(&X)"
+
+#. Translators: Button replacing one text match.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:130
+msgid "Re&place"
+msgstr "替换(&P)"
+
+#. Translators: Button replacing all text matches.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:136
+msgid "Replace &All"
+msgstr "全部替换(&A)"
+
+#. Translators: Error shown when no find text was entered.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:197
+msgid "Enter text to find."
+msgstr "请输入要查找的文本。"
+
+#. Translators: Message shown when search text is absent.
+#. Translators: Message shown when replacement text is absent.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:252
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:300
+msgid "Text not found."
+msgstr "未找到文本。"
+
+#. Translators: Error shown when no replacement search text was entered.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:275
+msgid "Enter text to replace."
+msgstr "请输入要替换的文本。"
+
+#. Translators: Message reporting one or multiple text replacements.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:307
+#, python-brace-format
+msgid "{count} replacement made."
+msgid_plural "{count} replacements made."
+msgstr[0] "已完成 {count} 处替换。"
+
+#. Translators: Prompt for a line number in clipboard content.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:357
+msgid "Enter a line number:"
+msgstr "请输入行号："
+
+#. Translators: Label for the line number field.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:359
+msgid "&Line:"
+msgstr "行(&L)："
+
+#. Translators: Title of the go-to-line dialog.
+#: addon\globalPlugins\nvdaClipboard\managerEditor.py:361
+msgid "Go to Line"
+msgstr "转到行"
+
+#. Translators: Title of the OneDrive account dialog.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:46
+msgid "OneDrive"
+msgstr "OneDrive"
+
+#. Translators: Label for the Microsoft account used by OneDrive.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:69
+msgid "&Account:"
+msgstr "账户(&A)："
+
+#. Translators: Label for the current OneDrive status.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:74
+msgid "&Status:"
+msgstr "状态(&S)："
+
+#. Translators: Label for a short description of OneDrive synchronization.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:80
+msgid "A&bout:"
+msgstr "说明(&B)："
+
+#. Translators: Short description of OneDrive backup and synchronization.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:83
+msgid ""
+"Backs up and syncs eligible history and categories. Deletions are also "
+"synchronized."
+msgstr "备份并同步符合条件的历史记录和分类。删除操作也会同步。"
+
+#. Translators: Button to use Microsoft's device-code sign-in fallback.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:98
+msgid "&Device code sign-in"
+msgstr "设备代码登录(&D)"
+
+#. Translators: Label for the selectable Microsoft device sign-in code.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:110
+msgid "Cod&e:"
+msgstr "代码(&M)："
+
+#. Translators: Label for the selectable Microsoft device sign-in address.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:116
+msgid "Add&ress:"
+msgstr "地址(&Z)："
+
+#. Translators: Button to open the Microsoft device sign-in page.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:123
+msgid "&Open page"
+msgstr "打开网页(&O)"
+
+#. Translators: Button to cancel Microsoft device-code sign-in.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:128
+msgid "Ca&ncel sign-in"
+msgstr "取消登录(&Q)"
+
+#. Translators: Fallback account label when Microsoft did not provide an account name.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:220
+msgid "Microsoft account"
+msgstr "Microsoft 账户"
+
+#. Translators: Error shown when the Microsoft device sign-in page cannot be opened.
+#: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:318
+msgid "Could not open the Microsoft sign-in page"
+msgstr "无法打开 Microsoft 登录页面"
+
+#. Translators: Error shown when OneDrive synchronization data fails validation.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:52
+msgid "OneDrive synchronization data is invalid"
+msgstr "OneDrive 同步数据无效"
+
+#. Translators: Error shown when the combined history/category manifest is too large.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:163
+msgid "The OneDrive synchronization index exceeds the supported size"
+msgstr "OneDrive 同步索引超出支持的大小"
+
+#. Translators: Error shown when a OneDrive synchronization file is malformed.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:175
+msgid "The OneDrive synchronization index is not valid JSON"
+msgstr "OneDrive 同步索引不是有效的 JSON"
+
+#. Translators: Error shown for an unknown OneDrive synchronization schema.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:181
+msgid "The OneDrive synchronization index uses an unsupported version"
+msgstr "OneDrive 同步索引使用了不支持的版本"
+
+#. Translators: Error shown when one history record cannot fit in the cloud format.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:316
+msgid "A clipboard history item exceeds the supported OneDrive size"
+msgstr "剪贴板历史记录条目超出 OneDrive 支持的大小"
+
+#. Translators: Error shown when a OneDrive history item is malformed.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:328
+msgid "A OneDrive clipboard history item is not valid JSON"
+msgstr "OneDrive 剪贴板历史记录条目不是有效的 JSON"
+
+#. Translators: Error shown for an unknown OneDrive history-item schema.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:333
+msgid "A OneDrive clipboard history item uses an unsupported version"
+msgstr "OneDrive 剪贴板历史记录条目使用了不支持的版本"
+
+#. Translators: Error shown when cloud item content does not match its manifest hash.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:361
+msgid "A OneDrive clipboard history item failed its integrity check"
+msgstr "OneDrive 剪贴板历史记录条目未通过完整性检查"
+
+#. Translators: Error shown when a prohibited clipboard item reaches cloud synchronization.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:373
+msgid "A clipboard history item is not permitted for OneDrive synchronization"
+msgstr "不允许将剪贴板历史记录条目同步到 OneDrive"
+
+#. Translators: Error shown when a cloud image fails PNG validation.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:385
+msgid "A OneDrive clipboard image is invalid"
+msgstr "OneDrive 剪贴板图像无效"
+
+#. Translators: Error shown when merged OneDrive category images exceed the local limit.
+#: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:623
+msgid "OneDrive image data exceeds the 256 MB storage limit"
+msgstr "OneDrive 图像数据超出 256 MB 存储限制"
+
+#. Translators: Error shown when bundled Microsoft sign-in support cannot load.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:102
+msgid "Microsoft sign-in support is unavailable"
+msgstr "Microsoft 登录支持不可用"
+
+#. Translators: Error shown when a downloaded OneDrive manifest or item file is too large.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:104
+msgid "A OneDrive synchronization file exceeds the supported size"
+msgstr "OneDrive 同步文件超出支持的大小"
+
+#. Translators: Error shown when OneDrive returns malformed app-folder file-list data.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:106
+msgid "OneDrive returned an invalid file list"
+msgstr "OneDrive 返回了无效的文件列表"
+
+#. Translators: Error used when another device changes the OneDrive manifest during synchronization.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:108
+msgid "The OneDrive synchronization data changed on another device"
+msgstr "另一台设备上的 OneDrive 同步数据已更改"
+
+#. Translators: Error shown when Microsoft sign-in can no longer authorize OneDrive.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:110
+msgid "Sign-in expired"
+msgstr "登录已过期"
+
+#. Translators: Generic error shown when Microsoft sign-in fails.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:112
+msgid "Sign-in failed"
+msgstr "登录失败"
+
+#. Translators: Error shown when OneDrive synchronization is requested without signing in.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:114
+msgid "Sign in to OneDrive before synchronizing"
+msgstr "请先登录 OneDrive 再进行同步"
+
+#. Translators: OneDrive progress while cloud synchronization metadata is read.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:121
+msgid "Reading OneDrive synchronization data..."
+msgstr "正在读取 OneDrive 同步数据..."
+
+#. Translators: OneDrive status while synchronization is running or about to start.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:125
+msgid "Synchronizing..."
+msgstr "正在同步..."
+
+#. Translators: Error when Microsoft sign-in succeeded but its encrypted cache could not be saved.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:400
+msgid "Could not save Microsoft sign-in data"
+msgstr "无法保存 Microsoft 登录数据"
+
+#. Translators: Error shown when Microsoft sign-in did not return a usable account.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:410
+msgid "Microsoft sign-in did not return a usable account"
+msgstr "Microsoft 登录未返回可用账户"
+
+#. Translators: Error shown when Microsoft sign-in did not retain an account.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:436
+msgid "Microsoft sign-in did not retain the selected account"
+msgstr "Microsoft 登录未保留所选账户"
+
+#. Translators: Error when browser-based Microsoft sign-in is not completed in time.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:481
+msgid "Microsoft sign-in timed out before it was completed"
+msgstr "Microsoft 登录未完成，已超时"
+
+#. Translators: Error shown when Microsoft device-code sign-in cannot start.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:498
+msgid "Microsoft did not provide a device sign-in address"
+msgstr "Microsoft 未提供设备登录地址"
+
+#. Translators: Status after the user cancels Microsoft device-code sign-in.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:522
+msgid "Microsoft sign-in was canceled"
+msgstr "已取消 Microsoft 登录"
+
+#. Translators: Error when locally saved Microsoft sign-in data cannot be removed.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:550
+msgid "Could not remove Microsoft sign-in data"
+msgstr "无法删除 Microsoft 登录数据"
+
+#. Translators: Microsoft authentication failure. {error} is a Microsoft description or code.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:561
+#, python-brace-format
+msgid "Microsoft sign-in failed: {error}"
+msgstr "Microsoft 登录失败：{error}"
+
+#. Translators: Generic Microsoft authentication failure.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:565
+msgid "Microsoft sign-in failed"
+msgstr "Microsoft 登录失败"
+
+#. Translators: Error shown when OneDrive cannot be reached.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:807
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:851
+msgid "Could not connect to OneDrive"
+msgstr "无法连接到 OneDrive"
+
+#. Translators: Error shown when the Microsoft account denies OneDrive app-folder access.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:876
+msgid "Microsoft denied access to the OneDrive application folder"
+msgstr "Microsoft 拒绝访问 OneDrive 应用文件夹"
+
+#. Translators: Error shown when a file referenced by the OneDrive manifest is missing.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:879
+msgid "OneDrive synchronization data is incomplete"
+msgstr "OneDrive 同步数据不完整"
+
+#. Translators: Error shown when Microsoft asks the add-on to reduce request frequency.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:884
+msgid "OneDrive is temporarily limiting synchronization requests"
+msgstr "OneDrive 正在暂时限制同步请求"
+
+#. Translators: Error shown when the user's OneDrive has insufficient storage.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:887
+msgid "OneDrive does not have enough free storage"
+msgstr "OneDrive 可用存储空间不足"
+
+#. Translators: Generic Microsoft Graph failure. {status} is an HTTP status and {code} a safe code.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:890
+#, python-brace-format
+msgid "OneDrive request failed ({status}{code})"
+msgstr "OneDrive 请求失败（{status}{code}）"
+
+#. Translators: Generic error when startup OneDrive initialization fails unexpectedly.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:992
+msgid "OneDrive setup failed"
+msgstr "OneDrive 设置失败"
+
+#. Translators: OneDrive status while Microsoft device-code login is running.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1070
+msgid "Waiting for sign-in..."
+msgstr "正在等待登录..."
+
+#. Translators: Generic error when OneDrive sign-out fails unexpectedly.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1124
+msgid "Sign-out failed"
+msgstr "退出失败"
+
+#. Translators: Confirmation before linking this NVDA configuration to a different account.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1177
+#, python-brace-format
+msgid ""
+"This NVDA configuration is linked to another Microsoft account. Switching to "
+"{account} resets its synchronization baseline and merges the current local "
+"history and categories with that account's OneDrive. Continue?"
+msgstr ""
+"此 NVDA 配置已关联到另一个 Microsoft 账户。切换到 {account} 会重置当前配置的"
+"同步基线，并将当前本地历史记录和分类与该账户的 OneDrive 合并。是否继续？"
+
+#. Translators: Title of the OneDrive account-switch confirmation.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1182
+msgid "Switch OneDrive account"
+msgstr "切换 OneDrive 账户"
+
+#. Translators: Confirmation button that switches the OneDrive account.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1184
+msgid "&Switch account"
+msgstr "切换账户(&S)"
+
+#. Translators: Status after canceling a OneDrive account switch.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1191
+msgid "OneDrive account switch was canceled"
+msgstr "已取消切换 OneDrive 账户"
+
+#. Translators: Generic error when OneDrive synchronization fails unexpectedly.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1235
+msgid "Sync failed"
+msgstr "同步失败"
+
+#. Translators: Status after a complete OneDrive synchronization succeeds.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1254
+msgid "Sync complete"
+msgstr "同步完成"
+
+#. Translators: OneDrive synchronization phase while the cloud index is committed.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1353
+msgid "Saving the OneDrive synchronization index..."
+msgstr "正在保存 OneDrive 同步索引..."
+
+#. Translators: OneDrive synchronization phase while merged data is saved on this device.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1364
+msgid "Saving synchronized data on this device..."
+msgstr "正在此设备上保存同步数据..."
+
+#. Translators: Error after repeated local or cloud changes prevent a stable synchronization.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1381
+msgid "Clipboard or OneDrive data kept changing; try again"
+msgstr "剪贴板或 OneDrive 数据不断发生变化；请重试"
+
+#. Translators: OneDrive download progress. {current} and {total} are item counts.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1462
+#, python-brace-format
+msgid "Downloading OneDrive items ({current}/{total})..."
+msgstr "正在下载 OneDrive 项目（{current}/{total}）..."
+
+#. Translators: Progress while existing files are verified and missing files are uploaded.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1547
+#, python-brace-format
+msgid "Ensuring OneDrive items are uploaded ({current}/{total})..."
+msgstr "正在确认 OneDrive 项目已上传（{current}/{total}）..."
+
+#. Translators: Progress while old unreferenced OneDrive payload files are removed.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1592
+#, python-brace-format
+msgid "Cleaning up old OneDrive items ({current}/{total})..."
+msgstr "正在清理旧的 OneDrive 项目（{current}/{total}）..."
+
+#. Translators: Error when OneDrive is used before its service starts.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1626
+msgid "OneDrive synchronization is not initialized"
+msgstr "OneDrive 同步尚未初始化"
+
+#. Translators: Error when another OneDrive action is already running.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1635
+msgid "Another OneDrive operation is already in progress"
+msgstr "另一个 OneDrive 操作正在进行"
+
+#. Translators: Error shown when this clipboard database is linked to another account.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1740
+msgid "This clipboard database is linked to another Microsoft account"
+msgstr "此剪贴板数据库已关联到另一个 Microsoft 账户"
+
+#. Translators: Error when downloaded OneDrive images cannot fit in local storage.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1743
+msgid "OneDrive image data cannot fit in the 256 MB local storage limit"
+msgstr "OneDrive 图像数据无法存入限额为 256 MB 的本地存储"
+
+#. Translators: Error when synchronized data cannot be saved locally.
+#: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1748
+msgid "Could not update local clipboard storage"
+msgstr "无法更新本地剪贴板存储"
+
+#. Translators: Name of the NVDA Clipboard command category in NVDA's Input Gestures dialog.
+#. Add-on summary/title, usually the user visible name of the add-on
+#. Translators: Summary/title for this add-on
+#. to be shown on installation and add-on information found in add-on store
+#: addon\globalPlugins\nvdaClipboard\__init__.py:29 buildVars.py:30
+msgid "NVDA Clipboard"
+msgstr "NVDA 剪贴板"
+
+#. Translators: Generic error reported when an add-on command fails.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:88
+msgid "The NVDA Clipboard command failed"
+msgstr "NVDA 剪贴板命令执行失败"
+
+#. Translators: Input help description for reporting a clipboard summary.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:93
+msgid "Reports a summary of the current clipboard content"
+msgstr "读出当前剪贴板内容摘要"
+
+#. Translators: Input help description for moving to the first clipboard line.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:103
+msgid "Moves to and reports the first clipboard line"
+msgstr "移动到剪贴板第一行并读出"
+
+#. Translators: Input help description for moving to the last clipboard line.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:113
+msgid "Moves to and reports the last clipboard line"
+msgstr "移动到剪贴板最后一行并读出"
+
+#. Translators: Input help description for moving to the previous clipboard line.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:123
+msgid "Moves to and reports the previous clipboard line"
+msgstr "移动到剪贴板上一行并读出"
+
+#. Translators: Input help description for moving to the next clipboard line.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:133
+msgid "Moves to and reports the next clipboard line"
+msgstr "移动到剪贴板下一行并读出"
+
+#. Translators: Input help description for reporting the current clipboard line.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:144
+msgid ""
+"Reports the current clipboard line. Press twice to spell it and three times "
+"for character descriptions."
+msgstr "读出当前剪贴板行。连按两次逐字朗读，连按三次逐字解释。"
+
+#. Translators: Input help description for moving to the previous clipboard word.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:155
+msgid "Moves to and reports the previous clipboard word"
+msgstr "移动到剪贴板上一个单词并读出"
+
+#. Translators: Input help description for moving to the next clipboard word.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:165
+msgid "Moves to and reports the next clipboard word"
+msgstr "移动到剪贴板下一个单词并读出"
+
+#. Translators: Input help description for reporting the current clipboard word.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:176
+msgid ""
+"Reports the current clipboard word. Press twice to spell it and three times "
+"for character descriptions."
+msgstr "读出当前剪贴板单词。连按两次逐字朗读，连按三次逐字解释。"
+
+#. Translators: Input help description for moving to the previous clipboard character.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:187
+msgid "Moves to and reports the previous clipboard character"
+msgstr "移动到剪贴板上一个字符并读出"
+
+#. Translators: Input help description for moving to the next clipboard character.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:197
+msgid "Moves to and reports the next clipboard character"
+msgstr "移动到剪贴板下一个字符并读出"
+
+#. Translators: Input help description for reporting the current clipboard character.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:208
+msgid ""
+"Reports the current clipboard character. Press twice for a description and "
+"three times for its numeric value."
+msgstr "读出当前剪贴板字符。连按两次读出字符解释，连按三次读出其数值。"
+
+#. Translators: Input help description for opening the clipboard manager.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:219
+msgid "Opens the Clipboard Manager"
+msgstr "打开剪贴板管理器"
+
+#. Translators: Input help description for appending selected text to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:230
+msgid "Appends selected text to the clipboard"
+msgstr "将所选文本追加到剪贴板"
+
+#. Translators: Input help description for copying the last spoken text.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:241
+msgid "Copies the last spoken text to the clipboard"
+msgstr "将最后朗读的文本复制到剪贴板"
+
+#. Translators: Input help description for appending the last spoken text.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:250
+msgid "Appends the last spoken text to the clipboard"
+msgstr "将最后朗读的文本追加到剪贴板"
+
+#. Translators: Input help description for temporarily pasting the last spoken text.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:259
+msgid "Pastes the last spoken text without keeping it in clipboard history"
+msgstr "粘贴最后朗读的文本，但不将其保留在剪贴板历史中"
+
+#. Translators: Input help description for receiving and pasting Tiantan clipboard text.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:268
+msgid "Receives and pastes from Tiantan"
+msgstr "从天坦接收并粘贴"
+
+#. Translators: Input help description for copying a navigator object screenshot.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:278
+msgid "Copies an image of the current navigator object to the clipboard"
+msgstr "将当前导航对象的图像复制到剪贴板"
+
+#. Translators: Input help description for moving to the next clipboard history entry.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:288
+msgid "Moves to the next clipboard history entry"
+msgstr "移动到下一条剪贴板历史记录"
+
+#. Translators: Input help description for moving to the previous clipboard history entry.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:298
+msgid "Moves to the previous clipboard history entry"
+msgstr "移动到上一条剪贴板历史记录"
+
+#. Translators: Input help description for restoring the selected clipboard history entry.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:308
+msgid "Puts the selected clipboard history entry on the system clipboard"
+msgstr "将所选剪贴板历史记录放入系统剪贴板"
+
+#. Translators: Input help description for saving a clipboard image.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:318
+msgid "Saves the clipboard image to a file"
+msgstr "将剪贴板图像保存到文件"
+
+#. Add-on description
+#. Translators: Long description to be shown for this add-on on add-on information from add-on store
+#: buildVars.py:33
+msgid ""
+"NVDA Clipboard adds accessible navigation and bounded SQLite history for the "
+"Windows clipboard.\n"
+"History supports Unicode text with optional HTML or RTF, PNG or DIB images, "
+"mixed text and images, and real file groups, with user categories and a type-"
+"aware manager.\n"
+"Unassigned commands can copy, append, or temporarily paste NVDA's last "
+"spoken text.\n"
+"Optional Tiantan Clipboard synchronization uploads only permitted Unicode "
+"text."
+msgstr ""
+"NVDA 剪贴板为 Windows 剪贴板提供无障碍浏览和容量受限的 SQLite 历史记录。\n"
+"历史记录支持 Unicode 文本及可选的 HTML 或 RTF 格式、PNG 或 DIB 图像、文本与图"
+"像混合内容和原生文件组，并提供用户类别及可识别内容类型的管理器。\n"
+"未分配默认手势的命令可以复制、追加或临时粘贴 NVDA 最后朗读的文本。\n"
+"可选的天坦剪贴板同步仅上传符合要求的 Unicode 文本。"
+
+#. Brief changelog for this version
+#. Translators: what's new content for the add-on version to be shown in the add-on store
+#: buildVars.py:41
+msgid ""
+"### 0.1.0\n"
+"\n"
+"Initial development release with accessible clipboard navigation, bounded "
+"SQLite history, a type-aware manager, image and file support, last-spoken "
+"text commands, and optional cloud synchronization."
+msgstr ""
+"### 0.1.0\n"
+"\n"
+"首次开发版本，包含无障碍剪贴板浏览、容量受限的 SQLite 历史记录、类型感知管理器、"
+"图像和文件支持、最后朗读文本命令以及可选的云同步。"
+
+#~ msgid "Cloud clipboard"
+#~ msgstr "云剪贴板"
+
+#~ msgid "After sign-in, new local clipboard text is uploaded automatically."
+#~ msgstr "登录后，新复制到本地剪贴板的文本会自动上传。"
+
+#~ msgid "&Upload current clipboard"
+#~ msgstr "上传当前剪贴板(&U)"
+
+#~ msgid "Signing in to cloud clipboard..."
+#~ msgstr "正在登录云剪贴板……"
+
+#~ msgid "Signing out of cloud clipboard..."
+#~ msgstr "正在退出云剪贴板……"
+
+#~ msgid "Uploading current clipboard text..."
+#~ msgstr "正在上传当前剪贴板文本……"
+
+#~ msgid "Cloud clipboard is unavailable. Check ClipDataCloud.SDK.dll."
+#~ msgstr "云剪贴板不可用，请检查 ClipDataCloud.SDK.dll。"
+
+#~ msgid "Another cloud clipboard account operation is already in progress"
+#~ msgstr "另一个云剪贴板账户操作正在进行"
+
+#~ msgid "Cloud clipboard status has not been checked"
+#~ msgstr "尚未检查云剪贴板状态"
+
+#~ msgid "Not signed in to cloud clipboard"
+#~ msgstr "未登录云剪贴板"
+
+#~ msgid "Signed out. Automatic upload is disabled."
+#~ msgstr "已退出登录，自动上传已禁用。"
+
+#, python-brace-format
+#~ msgid "Could not check cloud clipboard status: {error}"
+#~ msgstr "无法检查云剪贴板状态：{error}"
+
+#~ msgid "Text uploaded to cloud clipboard"
+#~ msgstr "文本已上传到云剪贴板"
+
+#, python-brace-format
+#~ msgid "Upload failed: {error}"
+#~ msgstr "上传失败：{error}"
+
+#, python-brace-format
+#~ msgid "Download failed: {error}"
+#~ msgstr "下载失败：{error}"
+
+#~ msgid "The cloud clipboard account is not signed in"
+#~ msgstr "云剪贴板账户未登录"
+
+#~ msgid "Cloud clipboard is empty"
+#~ msgstr "云剪贴板为空"
+
+#, python-brace-format
+#~ msgid "Could not write to the local clipboard: {error}"
+#~ msgstr "无法写入本地剪贴板：{error}"
+
+#~ msgid "Cloud text copied to the local clipboard"
+#~ msgstr "云端文本已复制到本地剪贴板"
+
+#~ msgid "Cloud clipboard is signed out. Automatic upload has stopped."
+#~ msgstr "云剪贴板已退出登录，自动上传已停止。"
+
+#~ msgid "Unknown cloud clipboard error"
+#~ msgstr "未知的云剪贴板错误"
+
+#, python-brace-format
+#~ msgid "Signed in as {nickname}. Automatic upload is enabled."
+#~ msgstr "已以 {nickname} 的身份登录，自动上传已启用。"
+
+#, python-brace-format
+#~ msgid ""
+#~ "Signed in as {nickname}, {memberStatus}. Automatic upload is enabled."
+#~ msgstr "已以 {nickname} 的身份登录，{memberStatus}，自动上传已启用。"
+
+#~ msgid "Signed in. Automatic upload is enabled."
+#~ msgstr "已登录，自动上传已启用。"
+
+#~ msgid "A cloud paste is already in progress"
+#~ msgstr "已有一个云剪贴板粘贴操作正在进行"
+
+#~ msgid "Keyboard focus could not be identified. Cloud paste was cancelled."
+#~ msgstr "无法确定键盘焦点，已取消云剪贴板粘贴。"
+
+#~ msgid "Focus changed. Cloud paste was cancelled."
+#~ msgstr "焦点已改变，已取消云剪贴板粘贴。"
+
+#~ msgid "Could not start the last spoken paste"
+#~ msgstr "无法开始粘贴最后朗读的文本"
+
+#~ msgid "Clipboard changed. Cloud paste was cancelled."
+#~ msgstr "剪贴板已改变，已取消云剪贴板粘贴。"
+
+#~ msgid "Pasted from cloud clipboard"
+#~ msgstr "已从云剪贴板粘贴"
+
+#~ msgid "Cloud paste failed"
+#~ msgstr "云剪贴板粘贴失败"
+
+#~ msgid "&Cloud Clipboard..."
+#~ msgstr "云剪贴板(&C)..."
+
+#~ msgid "&OneDrive History and Categories..."
+#~ msgstr "OneDrive 历史记录和分类(&O)..."
+
+#~ msgid "C&loud Sync"
+#~ msgstr "云同步(&L)"
+
+#~ msgid "OneDrive history and categories"
+#~ msgstr "OneDrive 历史记录和分类"
+
+#~ msgid "Microsoft &account:"
+#~ msgstr "Microsoft 账户(&A)："
+
+#~ msgid "Synchronization &status:"
+#~ msgstr "同步状态(&S)："
+
+#~ msgid "&Privacy:"
+#~ msgstr "隐私(&P)："
+
+#~ msgid ""
+#~ "Category names and clipboard entries allowed for cloud upload are stored "
+#~ "in your OneDrive application folder. File groups and protected entries "
+#~ "stay on this device. The add-on does not add end-to-end encryption. "
+#~ "Microsoft receives the data required for sign-in and file transfer."
+#~ msgstr ""
+#~ "允许上传到云端的分类名称和剪贴板条目会存储在 OneDrive 应用文件夹中。文件组"
+#~ "和受保护的条目会保留在此设备上。此插件不会添加端到端加密。Microsoft 会接收"
+#~ "登录和文件传输所需的数据。"
+
+#~ msgid "Sign in with &Microsoft"
+#~ msgstr "使用 Microsoft 登录(&M)"
+
+#~ msgid "Use a &device code"
+#~ msgstr "使用设备代码(&D)"
+
+#~ msgid "Device &code:"
+#~ msgstr "设备代码(&C)："
+
+#~ msgid "Sign-in add&ress:"
+#~ msgstr "登录地址(&R)："
+
+#~ msgid "&Open sign-in page"
+#~ msgstr "打开登录页面(&O)"
+
+#~ msgid "Cancel de&vice sign-in"
+#~ msgstr "取消设备登录(&V)"
+
+#~ msgid "Sync &now"
+#~ msgstr "立即同步(&N)"
+
+#~ msgid "A local clipboard history item failed validation"
+#~ msgstr "本地剪贴板历史记录条目验证失败"
+
+#~ msgid "Microsoft sign-in has expired"
+#~ msgstr "Microsoft 登录已过期"
+
+#~ msgid "OneDrive sign-in has not been checked"
+#~ msgstr "尚未检查 OneDrive 登录状态"
+
+#~ msgid "Checking OneDrive sign-in..."
+#~ msgstr "正在检查 OneDrive 登录状态..."
+
+#~ msgid "Could not initialize OneDrive synchronization"
+#~ msgstr "无法初始化 OneDrive 同步"
+
+#~ msgid "Signing in to Microsoft..."
+#~ msgstr "正在登录 Microsoft..."
+
+#~ msgid "Waiting for Microsoft device sign-in..."
+#~ msgstr "正在等待 Microsoft 设备登录..."
+
+#~ msgid "Microsoft device sign-in failed"
+#~ msgstr "Microsoft 设备登录失败"
+
+#~ msgid "Signing out of OneDrive..."
+#~ msgstr "正在退出 OneDrive..."
+
+#~ msgid "Could not sign out of OneDrive"
+#~ msgstr "无法退出 OneDrive"
+
+#~ msgid "Not signed in to OneDrive"
+#~ msgstr "未登录 OneDrive"
+
+#~ msgid "OneDrive synchronization is up to date"
+#~ msgstr "OneDrive 同步内容已是最新"
+
+#~ msgid "Signed in and synchronized with OneDrive"
+#~ msgstr "已登录并与 OneDrive 同步"
+
+#~ msgid "Signed out of OneDrive"
+#~ msgstr "已退出 OneDrive"
+
+#~ msgid "Synchronizing history and categories with OneDrive..."
+#~ msgstr "正在与 OneDrive 同步历史记录和分类..."
+
+#~ msgid "Cleaning old OneDrive items..."
+#~ msgstr "正在清理旧的 OneDrive 项目..."
+
+#~ msgid "OneDrive synchronization failed"
+#~ msgstr "OneDrive 同步失败"
+
+#~ msgid "OneDrive synchronization completed"
+#~ msgstr "OneDrive 同步已完成"
+
+#~ msgid "Downloads and pastes the latest cloud clipboard text"
+#~ msgstr "下载并粘贴最新的云剪贴板文本"
+
+#~ msgid ""
+#~ "### 3.0.0\n"
+#~ "\n"
+#~ "Rewritten for NVDA 2026.3 with fixed-format SQLite history for plain and "
+#~ "formatted text, images, mixed entries, and real file groups. Added a type-"
+#~ "aware manager, user categories, explicit restore commands, bounded image "
+#~ "and rich-text storage, distinct navigation sounds, unassigned last-spoken "
+#~ "text commands, and Unicode-only privacy-aware Tiantan Clipboard "
+#~ "synchronization."
+#~ msgstr ""
+#~ "### 3.0.0\n"
+#~ "\n"
+#~ "针对 NVDA 2026.3 完成重写，使用固定格式的 SQLite 历史记录保存纯文本、格式"
+#~ "化文本、图像、混合条目和原生文件组。新增可识别内容类型的管理器、用户类别、"
+#~ "专用的恢复命令、容量受限的图像和富文本存储、不同的导航音效、未分配默认手势"
+#~ "的最后朗读文本命令，以及兼顾隐私且仅同步 Unicode 文本的天坦剪贴板功能。"
+
+#~ msgid "OneDrive data kept changing on another device; try again"
+#~ msgstr "另一台设备上的 OneDrive 数据不断发生变化；请重试"
+
+#~ msgid "Edit a Plain Text &Copy"
+#~ msgstr "编辑纯文本副本(&C)"
