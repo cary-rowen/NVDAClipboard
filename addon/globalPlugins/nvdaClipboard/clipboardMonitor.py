@@ -562,7 +562,8 @@ class ClipboardMonitor:
 		finally:
 			if not _closeClipboard():
 				log.debugWarning(
-					"ClipboardMonitor failed to close clipboard after clearing.", exc_info=WinError()
+					"ClipboardMonitor failed to close clipboard after clearing.",
+					exc_info=WinError(),
 				)
 		sequenceNumber = self.getSequenceNumber()
 		if self.getOwnerHandle() != ownerHandle:
@@ -798,7 +799,7 @@ class ClipboardMonitor:
 			)
 		):
 			imageFormat, imageData, imageInfo, _imageDropped = self._readDibImageForSequence(
-				imageSnapshot.sequenceNumber
+				imageSnapshot.sequenceNumber,
 			)
 			if imageData is None or imageInfo is None:
 				return replace(
