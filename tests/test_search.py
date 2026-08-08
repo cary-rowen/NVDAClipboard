@@ -22,7 +22,8 @@ class SearchTests(unittest.TestCase):
 		text = "Needle needle NEEDLE"
 		self.assertEqual((7, 13), search.findPreviousLiteralMatch(text, "needle", len(text), matchCase=True))
 		self.assertEqual(
-			(14, 20), search.findPreviousLiteralMatch(text, "needle", len(text), matchCase=False)
+			(14, 20),
+			search.findPreviousLiteralMatch(text, "needle", len(text), matchCase=False),
 		)
 		self.assertEqual((7, 13), search.findPreviousLiteralMatch(text, "needle", 14, matchCase=False))
 		self.assertEqual((14, 20), search.findPreviousLiteralMatch(text, "needle", 0, matchCase=False))
@@ -37,10 +38,12 @@ class SearchTests(unittest.TestCase):
 			search.findPreviousLiteralMatch("aaa", "AA", 0, matchCase=False, currentMatch=True),
 		)
 		self.assertEqual(
-			(6, 13), search.findPreviousLiteralMatch("first\r\nNeedle\nlast", "\nneedle", 19, matchCase=False)
+			(6, 13),
+			search.findPreviousLiteralMatch("first\r\nNeedle\nlast", "\nneedle", 19, matchCase=False),
 		)
 		self.assertEqual(
-			(8, 14), search.findPreviousLiteralMatch("😀needle😀NEEDLE", "needle", 14, matchCase=False)
+			(8, 14),
+			search.findPreviousLiteralMatch("😀needle😀NEEDLE", "needle", 14, matchCase=False),
 		)
 		self.assertEqual((2, 3), search.findPreviousLiteralMatch("k K", "k", 3, matchCase=False))
 		boundaryStart = search._BACKWARD_SEARCH_CHUNK_SIZE - 2

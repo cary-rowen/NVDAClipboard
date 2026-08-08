@@ -1220,7 +1220,8 @@ def migrateVersion2History(
 			_moveAside(sourcePath, ".corrupt")
 		except OSError:
 			log.debugWarning(
-				"Could not preserve malformed legacy Clipboard Enhancement history.", exc_info=True
+				"Could not preserve malformed legacy Clipboard Enhancement history.",
+				exc_info=True,
 			)
 		else:
 			log.warning("Moved malformed legacy Clipboard Enhancement history aside.")

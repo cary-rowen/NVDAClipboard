@@ -314,7 +314,8 @@ class ClipboardMonitorTests(unittest.TestCase):
 			"_": lambda message: message,
 		}
 		exec(
-			compile(ast.Module(body=[writeSnapshotNode], type_ignores=[]), controllerPath, "exec"), namespace
+			compile(ast.Module(body=[writeSnapshotNode], type_ignores=[]), controllerPath, "exec"),
+			namespace,
 		)
 		writeSnapshot = namespace["_writeSnapshot"]
 		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
