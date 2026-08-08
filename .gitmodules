@@ -1,0 +1,3 @@
+[submodule "addon/globalPlugins/nvdaClipboard/_vendor"]
+	path = addon/globalPlugins/nvdaClipboard/_vendor
+	url = https://github.com/cary-rowen/clipboardEnhancement-python-deps.git

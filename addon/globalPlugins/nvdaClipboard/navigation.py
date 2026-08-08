@@ -1,0 +1,157 @@
+# A part of the NVDA Clipboard add-on for NVDA.
+# Copyright (C) 2026 Cary-rowen
+# This file is covered by the GNU General Public License.
+# See the file COPYING.txt for more details.
+
+"""Provide read-only navigation over clipboard text."""
+
+from dataclasses import dataclass
+from typing import override
+
+import textInfos
+from textInfos.offsets import Offsets, OffsetsTextInfo
+
+
+_SUPPORTED_UNITS = frozenset(
+	(
+		textInfos.UNIT_LINE,
+		textInfos.UNIT_WORD,
+		textInfos.UNIT_CHARACTER,
+	),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationResult:
+	"""Describe the position and boundaries after a navigation attempt."""
+
+	textInfo: textInfos.TextInfo
+	isAtBoundary: bool
+	hasCrossedLine: bool
+	isAtStoryBoundary: bool
+
+
+class _ClipboardTextOwner:
+	def __init__(self, text: str) -> None:
+		self.text = text
+
+
+class _ClipboardTextInfo(OffsetsTextInfo):
+	"""Expose clipboard text through NVDA's offset-based TextInfo implementation."""
+
+	encoding = None
+
+	def __init__(self, owner: _ClipboardTextOwner, position: object) -> None:
+		self._owner = owner
+		super().__init__(owner, position)
+
+	@override
+	def _getStoryText(self) -> str:
+		return self._owner.text
+
+	@override
+	def _getStoryLength(self) -> int:
+		return len(self._owner.text)
+
+
+class ClipboardNavigator:
+	"""Maintain an independent read-only position in clipboard text."""
+
+	def __init__(self, text: str = "") -> None:
+		self._owner = _ClipboardTextOwner(text)
+		self._position: _ClipboardTextInfo
+		self.reset()
+
+	def setText(self, text: str) -> None:
+		"""Replace the clipboard snapshot and reset navigation to its first position."""
+		self._owner = _ClipboardTextOwner(text)
+		self.reset()
+
+	def reset(self) -> None:
+		"""Reset navigation to the first position of the current clipboard snapshot."""
+		self._position = _ClipboardTextInfo(self._owner, textInfos.POSITION_FIRST)
+
+	def getPosition(self) -> int:
+		"""Return the current Python string offset."""
+		return self._position.bookmark.startOffset
+
+	def setPosition(self, offset: int) -> None:
+		"""Move to a bounded Python string offset."""
+		maxOffset = max(len(self._owner.text) - 1, 0)
+		offset = min(max(offset, 0), maxOffset)
+		self._position = _ClipboardTextInfo(self._owner, Offsets(offset, offset))
+
+	def moveToFirstLine(self) -> textInfos.TextInfo:
+		"""Move to and return the first line in the clipboard snapshot."""
+		self.reset()
+		return self.getCurrentLine()
+
+	def moveToLastLine(self) -> textInfos.TextInfo:
+		"""Move to and return the last line in the clipboard snapshot."""
+		self._position = _ClipboardTextInfo(self._owner, textInfos.POSITION_LAST)
+		return self.getCurrentLine()
+
+	def getCurrentLine(self) -> textInfos.TextInfo:
+		"""Return a TextInfo expanded to the current line."""
+		return self._getCurrent(textInfos.UNIT_LINE)
+
+	def getCurrentWord(self) -> textInfos.TextInfo:
+		"""Return a TextInfo expanded to the current word."""
+		return self._getCurrent(textInfos.UNIT_WORD)
+
+	def getCurrentCharacter(self) -> textInfos.TextInfo:
+		"""Return a TextInfo expanded to the current character."""
+		return self._getCurrent(textInfos.UNIT_CHARACTER)
+
+	def move(self, unit: str, direction: int) -> NavigationResult:
+		"""Move by one supported text unit and report boundary transitions.
+
+		:param unit: One of ``UNIT_LINE``, ``UNIT_WORD`` or ``UNIT_CHARACTER``.
+		:param direction: ``-1`` to move backward or ``1`` to move forward.
+		"""
+		if unit not in _SUPPORTED_UNITS:
+			raise ValueError(f"Unsupported navigation unit: {unit!r}")
+		if direction not in (-1, 1):
+			raise ValueError(f"Direction must be -1 or 1, got {direction!r}")
+
+		originalPosition = self._position.copy()
+		originalUnit = self._getExpanded(originalPosition, unit)
+		originalLine = self._getExpanded(originalPosition, textInfos.UNIT_LINE)
+		newPosition = originalPosition.copy()
+		if direction < 0:
+			newPosition.expand(unit)
+			newPosition.collapse()
+
+		moveCount = newPosition.move(unit, direction)
+		newUnit = self._getExpanded(newPosition, unit)
+		if (
+			moveCount == 0
+			or not newUnit.text
+			or (direction > 0 and newUnit.compareEndPoints(originalUnit, "startToStart") <= 0)
+		):
+			return NavigationResult(
+				originalUnit,
+				isAtBoundary=True,
+				hasCrossedLine=False,
+				isAtStoryBoundary=True,
+			)
+
+		self._position = newPosition
+		newLine = self._getExpanded(newPosition, textInfos.UNIT_LINE)
+		story = _ClipboardTextInfo(self._owner, textInfos.POSITION_ALL)
+		boundaryComparison = "startToStart" if direction < 0 else "endToEnd"
+		return NavigationResult(
+			newUnit,
+			isAtBoundary=False,
+			hasCrossedLine=newLine.compareEndPoints(originalLine, "startToStart") != 0,
+			isAtStoryBoundary=newUnit.compareEndPoints(story, boundaryComparison) == 0,
+		)
+
+	def _getCurrent(self, unit: str) -> textInfos.TextInfo:
+		return self._getExpanded(self._position, unit)
+
+	@staticmethod
+	def _getExpanded(position: _ClipboardTextInfo, unit: str) -> _ClipboardTextInfo:
+		info = position.copy()
+		info.expand(unit)
+		return info
