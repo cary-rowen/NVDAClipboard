@@ -1197,27 +1197,11 @@ def _importVersion2History(connection: sqlite3.Connection, history: list[str]) -
 	_enforceHistoryLimits(connection)
 
 
-def _hasMigratedVersion2History(connection: sqlite3.Connection, sourcePath: Path) -> bool:
-	"""Return whether this legacy history source was already migrated."""
-	connection.execute(
-		"""
-		CREATE TABLE IF NOT EXISTS legacyMigrations (
-			sourcePath TEXT PRIMARY KEY
-		)
-		""",
-	)
-	row = connection.execute(
-		"SELECT 1 FROM legacyMigrations WHERE sourcePath = ?",
-		(str(sourcePath.resolve()),),
-	).fetchone()
-	return row is not None
-
-
 def migrateVersion2History(
 	dataPath: Path | str | None = None,
 	version2HistoryPath: Path | str | None = None,
 ) -> bool:
-	"""Migrate the JSON text history written by version 2 releases."""
+	"""Migrate and archive the JSON text history written by version 2 releases."""
 	targetPath = Path(dataPath) if dataPath is not None else getDefaultDataPath()
 	sourcePath = (
 		Path(version2HistoryPath)
@@ -1245,16 +1229,11 @@ def migrateVersion2History(
 	connection = _openDatabaseWithRecovery(targetPath)
 	try:
 		with connection:
-			if _hasMigratedVersion2History(connection, sourcePath):
-				return False
 			_importVersion2History(connection, history)
-			connection.execute(
-				"INSERT INTO legacyMigrations (sourcePath) VALUES (?)",
-				(str(sourcePath.resolve()),),
-			)
 		connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
 	finally:
 		connection.close()
+	_moveAside(sourcePath, ".bak")
 	return True
 
 

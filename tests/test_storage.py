@@ -514,7 +514,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			json.dumps(["older", "gap latest", "latest"]),
 			encoding="utf-8",
 		)
-		assert not migrateVersion2History(
+		assert migrateVersion2History(
 			dataPath,
 			version2HistoryPath,
 		)
@@ -523,15 +523,16 @@ def _runSelfCheck() -> None:  # noqa: C901
 			version2HistoryPath,
 		)
 		storage = ClipboardStorage(dataPath, version2HistoryPath)
-		assert version2HistoryPath.exists()
-		assert not Path(f"{version2HistoryPath}.bak").exists()
+		assert not version2HistoryPath.exists()
+		assert Path(f"{version2HistoryPath}.bak").exists()
 		assert tuple(item.textPreview for item in storage.history) == (
-			"latest",
 			"older",
+			"gap latest",
+			"latest",
 		)
 		positionedItem, positionedIndex, itemCount = storage.getHistorySummaryAt(99, -1)
 		assert positionedItem is not None
-		assert (positionedItem.textPreview, positionedIndex, itemCount) == ("latest", 0, 2)
+		assert (positionedItem.textPreview, positionedIndex, itemCount) == ("gap latest", 1, 3)
 		storage.createCategory("Saved")
 		plainLatestId = next(item.itemId for item in storage.history if item.textPreview == "latest")
 		storage.copyHistoryItemsToCategoryById((plainLatestId,), "Saved")
