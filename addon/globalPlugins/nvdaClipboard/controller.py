@@ -134,7 +134,6 @@ class _ClipboardChangeSource(Enum):
 	EXTERNAL = auto()
 	INITIAL = auto()
 	APPEND_TEXT = auto()
-	LAST_SPOKEN_COPY = auto()
 	LAST_SPOKEN_PASTE = auto()
 	LAST_SPOKEN_RESTORE = auto()
 	LOCAL_WRITE_FAILURE = auto()
@@ -685,13 +684,6 @@ class ClipboardController:
 		else:
 			self._reportCharacterCodePoints(info.text)
 
-	def copyLastSpokenText(self) -> None:
-		"""Copy the most recent NVDA speech text as a normal clipboard item."""
-		self._writeClipboardText(
-			self._requireLastSpokenText(),
-			_ClipboardChangeSource.LAST_SPOKEN_COPY,
-		)
-
 	def appendLastSpokenText(self) -> None:
 		"""Append the most recent NVDA speech text to text clipboard content."""
 		self._appendTextToClipboard(
@@ -1238,7 +1230,6 @@ class ClipboardController:
 		shouldRecord = source in {
 			_ClipboardChangeSource.EXTERNAL,
 			_ClipboardChangeSource.APPEND_TEXT,
-			_ClipboardChangeSource.LAST_SPOKEN_COPY,
 			_ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
 			_ClipboardChangeSource.HISTORY_RESTORE,
 			_ClipboardChangeSource.CATEGORY_RESTORE,
