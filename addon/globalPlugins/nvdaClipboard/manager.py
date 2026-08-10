@@ -242,6 +242,11 @@ class ClipboardManagerFrame(wx.Frame):
 	def _makeMenus(self) -> None:
 		menuBar = wx.MenuBar()
 		fileMenu = wx.Menu()
+		newItem = fileMenu.Append(
+			wx.ID_NEW,
+			# Translators: File menu command to start a blank clipboard text entry.
+			_("&New\tCtrl+N"),
+		)
 		openItem = fileMenu.Append(
 			wx.ID_OPEN,
 			# Translators: File menu command to open a text file as a draft.
@@ -382,6 +387,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self.refreshCloudMenuState()
 
 		self.SetMenuBar(menuBar)
+		self.Bind(wx.EVT_MENU, self._onNewEntry, newItem)
 		self.Bind(wx.EVT_MENU, self._onOpenFile, openItem)
 		self.Bind(wx.EVT_MENU, self._onSaveAs, self.saveAsItem)
 		self.Bind(wx.EVT_MENU, self._onReplaceClipboardWithText, self.replaceClipboardItem)
@@ -440,6 +446,7 @@ class ClipboardManagerFrame(wx.Frame):
 			previousCategory = self._selectedCategory
 			previousActiveKey, previousActiveIndex, previousSelectedKeys = self._getSearchListState()
 			wasDirty = self._hasDirtyChanges()
+			wasDraft = self._contentEditable and self._contentItemKey is None
 			preserveNavigationSync = False
 			if self._navigationSyncState is not None:
 				syncText, _syncOffset, expectedSequenceNumber = self._navigationSyncState
@@ -466,7 +473,10 @@ class ClipboardManagerFrame(wx.Frame):
 				),
 				selectedKeys=previousSelectedKeys if category == previousCategory else (),
 			)
-			if not wasDirty and not self._isSearchSessionActive:
+			if wasDraft and category == previousCategory:
+				self._contentActiveKey = self._getActiveItemKey()
+				self._updateUiState()
+			elif not wasDirty and not self._isSearchSessionActive:
 				self._loadActiveItem(confirmDirty=False)
 				self._restoreNavigationSyncOffsetInEditor()
 			else:
@@ -1272,6 +1282,24 @@ class ClipboardManagerFrame(wx.Frame):
 		self.editor.SetInsertionPoint(0)
 		self._updateUiState()
 
+	def _startPlainTextDraft(self, text: str = "") -> None:
+		"""Start an editable plain-text draft in the selected category."""
+		self._setContent(
+			text,
+			isEditable=True,
+			category=self._getSelectedCategory(),
+			itemKey=None,
+			kind=ClipboardItemType.PLAIN_TEXT,
+			hasImage=False,
+			canUpload=True,
+			isDraft=True,
+		)
+		self._navigationSyncState = None
+		self._baselineText = ""
+		self._isDirty = bool(text)
+		self._dirtyStateNeedsCheck = False
+		self._updateUiState()
+
 	def _getContentKindLabel(
 		self,
 		kind: ClipboardItemType | None,
@@ -2044,6 +2072,13 @@ class ClipboardManagerFrame(wx.Frame):
 		except Exception as error:
 			self._showError(error)
 
+	def _onNewEntry(self, event: wx.CommandEvent) -> None:
+		"""Start a blank plain-text entry in the selected category."""
+		if not self._confirmDirtyChanges():
+			return
+		self._startPlainTextDraft()
+		self.editor.SetFocus()
+
 	def _onOpenFile(self, event: wx.CommandEvent) -> None:
 		if not self._confirmDirtyChanges():
 			return
@@ -2074,21 +2109,7 @@ class ClipboardManagerFrame(wx.Frame):
 			except UnicodeDecodeError:
 				text = data.decode(locale.getencoding())
 			text = text.replace("\r\n", "\n").replace("\r", "\n")
-			self._setContent(
-				text,
-				isEditable=True,
-				category=self._getSelectedCategory(),
-				itemKey=None,
-				kind=ClipboardItemType.PLAIN_TEXT,
-				hasImage=False,
-				canUpload=True,
-				isDraft=True,
-			)
-			self._navigationSyncState = None
-			self._baselineText = ""
-			self._isDirty = bool(text)
-			self._dirtyStateNeedsCheck = False
-			self._updateUiState()
+			self._startPlainTextDraft(text)
 		except Exception as error:
 			self._showError(error)
 		finally:
