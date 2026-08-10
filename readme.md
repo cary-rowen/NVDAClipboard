@@ -7,16 +7,16 @@ NVDA Clipboard makes the Windows clipboard easier to explore and reuse with NVDA
 - NVDA 2026.3 or later, using the x64 (AMD64) build. Native ARM64 NVDA is not currently supported.
 - Tiantan Clipboard also requires .NET 8 or later.
 
-## Native ARM64 Support (TODO)
+## [ ] Native ARM64 Support
 
-Native ARM64 support requires new binary packages, not only a compatibility metadata change. The add-on currently ships x64 builds of `_sqlite3.pyd`, `sqlite3.dll`, and `ClipDataCloud.SDK.dll`. `_sqlite3.pyd` is imported when the add-on starts, so native ARM64 NVDA cannot load the add-on. The Tiantan SDK is optional, but Tiantan features are also unavailable until a compatible SDK is provided.
+The add-on currently ships x64 builds of `_sqlite3.pyd`, `sqlite3.dll`, and `ClipDataCloud.SDK.dll`. `_sqlite3.pyd` is imported when the add-on starts, so native ARM64 NVDA cannot load the add-on. The Tiantan SDK is optional, but Tiantan cloud clipboard features are unavailable until a compatible SDK is provided.
 
 Before native ARM64 can be declared supported:
 
 - Package ARM64 builds of `_sqlite3.pyd` and `sqlite3.dll` that match the Python version bundled with NVDA.
-- Package an ARM64 `ClipDataCloud.SDK.dll`, or keep Tiantan features cleanly disabled on ARM64 when no compatible SDK is available.
-- Make the add-on package select binaries matching the running NVDA architecture and reject mismatched binaries.
-- Verify add-on startup, SQLite history operations, upgrades, and Tiantan availability in native ARM64 NVDA.
+- Package an ARM64 `ClipDataCloud.SDK.dll`, or disable Tiantan cloud clipboard features on ARM64 when no compatible SDK is available.
+- Make the add-on package select binaries for the current NVDA architecture, or load them only when appropriate.
+- Verify add-on startup, SQLite history operations, and Tiantan cloud clipboard features in native ARM64 NVDA.
 
 ## Exploring the Clipboard
 
