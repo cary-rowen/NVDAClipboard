@@ -24,7 +24,7 @@ You can browse clipboard text by line, word, or character. If the clipboard cont
 
 Press the current line or word command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
-Use `NVDA+Alt+A` to append selected text to the clipboard. You can also copy, append, or temporarily paste the last text spoken by NVDA. Temporary paste attempts to restore the previous clipboard afterward. These three commands have no default gestures; you can assign them under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Alt+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 ## Clipboard History
 
@@ -94,9 +94,8 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Alt+Right Arrow` |
 | Open Clipboard Manager | `NVDA+E` | `NVDA+E` |
 | Append selected text | `NVDA+Alt+A` | `NVDA+Alt+A` |
-| Copy last spoken text | Not assigned | Not assigned |
-| Append last spoken text | Not assigned | Not assigned |
-| Temporarily paste last spoken text | Not assigned | Not assigned |
+| Append last spoken text | `NVDA+Alt+X` | `NVDA+Alt+X` |
+| Temporarily paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
 | Receive and paste Tiantan text | `NVDA+Alt+V` | `NVDA+Alt+V` |
 | Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
 | Next clipboard history entry | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |

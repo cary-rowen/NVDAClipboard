@@ -237,17 +237,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			self._runAction(self.controller.appendSelectedText)
 
 	@script(
-		# Translators: Input help description for copying the last spoken text.
-		description=_("Copies the last spoken text to the clipboard"),
-		speakOnDemand=True,
-	)
-	def script_copyLastSpokenText(self, gesture: inputCore.InputGesture) -> None:
-		"""Copy the last spoken text to the clipboard."""
-		self._runAction(self.controller.copyLastSpokenText)
-
-	@script(
 		# Translators: Input help description for appending the last spoken text.
 		description=_("Appends the last spoken text to the clipboard"),
+		gesture="kb:NVDA+alt+x",
 		speakOnDemand=True,
 	)
 	def script_appendLastSpokenText(self, gesture: inputCore.InputGesture) -> None:
@@ -257,6 +249,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for temporarily pasting the last spoken text.
 		description=_("Pastes the last spoken text without keeping it in clipboard history"),
+		gesture="kb:NVDA+`",
 		speakOnDemand=True,
 	)
 	def script_pasteLastSpokenText(self, gesture: inputCore.InputGesture) -> None:
@@ -316,7 +309,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for saving a clipboard image.
 		description=_("Saves the clipboard image to a file"),
-		gestures=("kb(desktop):NVDA+alt+printScreen", "kb(laptop):NVDA+alt+printScreen"),
+		gesture="kb:NVDA+alt+printScreen",
 		speakOnDemand=True,
 	)
 	@gui.blockAction.when(gui.blockAction.Context.MODAL_DIALOG_OPEN)

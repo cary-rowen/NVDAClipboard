@@ -32,7 +32,7 @@ addon_info = AddonInfo(
 	# Translators: Long description to be shown for this add-on on add-on information from add-on store
 	addon_description=_("""NVDA Clipboard adds accessible navigation and bounded SQLite history for the Windows clipboard.
 History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixed text and images, and real file groups, with user categories and a type-aware manager.
-Unassigned commands can copy, append, or temporarily paste NVDA's last spoken text.
+Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
 	addon_version="0.1.0",
