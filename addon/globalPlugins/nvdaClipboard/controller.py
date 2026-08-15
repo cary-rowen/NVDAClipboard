@@ -610,22 +610,19 @@ class ClipboardController:
 	def _reportTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
 		"""Report exact completed text statistics or the current calculation state."""
 		progress = calculation.getProgress()
-		if not progress.isComplete:
-			# Translators: Clipboard text summary while exact statistics are still being calculated.
-			summary = _("{summary}: calculating; check again shortly").format(summary=self._summary)
-		elif progress.statistics is None:
-			summary = self._summary
-		else:
-			summary = self._formatTextStatisticsSummary(progress.statistics)
 		lineNumber, columnNumber = self.navigator.getLineAndColumn()
-		ui.message(
-			# Translators: Clipboard text summary followed by the current one-based navigation line and column.
-			_("{summary}; line {line}, column {column}").format(
-				summary=summary,
-				line=lineNumber,
-				column=columnNumber,
-			),
-		)
+		summary = _(
+			# Translators: Clipboard text type followed by the current one-based navigation line and column.
+			"{summary}: line {line}, column {column}",
+		).format(summary=self._summary, line=lineNumber, column=columnNumber)
+		if not progress.isComplete:
+			summary = _(
+				# Translators: Clipboard text summary with its position while exact statistics are calculated.
+				"{summary}; calculating; check again shortly",
+			).format(summary=summary)
+		elif progress.statistics is not None:
+			summary = self._formatTextStatisticsSummary(summary, progress.statistics)
+		ui.message(summary)
 
 	def moveToFirstLine(self) -> None:
 		"""Move to and report the first clipboard line."""
@@ -2258,15 +2255,9 @@ class ClipboardController:
 			byteCount,
 		).format(count=byteCount)
 
-	def _formatTextStatisticsSummary(self, statistics: TextStatistics) -> str:
-		"""Append exact, non-zero Unicode statistics to the current text type summary."""
+	def _formatTextStatisticsSummary(self, summary: str, statistics: TextStatistics) -> str:
+		"""Append exact, non-zero Unicode statistics to a positioned text summary."""
 		details = [
-			ngettext(
-				# Translators: Number of explicit text lines, as distinct from visually wrapped lines.
-				"{count} text line",
-				"{count} text lines",
-				statistics.lineCount,
-			).format(count=statistics.lineCount),
 			ngettext(
 				# Translators: Number of user-perceived Unicode characters including whitespace; line breaks are excluded.
 				"{count} character (including whitespace)",
@@ -2316,8 +2307,16 @@ class ClipboardController:
 				details=detailsText,
 				attributes=_(", ").join(attributes),
 			)
-		# Translators: Clipboard content type followed by exact text statistics.
-		return _("{summary}: {details}").format(summary=self._summary, details=detailsText)
+		return ngettext(
+			# Translators: Total explicit lines and exact statistics after the clipboard type and current position.
+			"{summary}, {count} line in total; {details}",
+			"{summary}, {count} lines in total; {details}",
+			statistics.lineCount,
+		).format(
+			summary=summary,
+			count=statistics.lineCount,
+			details=detailsText,
+		)
 
 	def _formatCurrentSummary(self, snapshot: ClipboardSnapshot) -> str:
 		"""Return a concise description of the current system clipboard."""
