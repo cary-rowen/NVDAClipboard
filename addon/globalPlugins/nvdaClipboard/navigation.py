@@ -75,6 +75,21 @@ class ClipboardNavigator:
 		"""Return the current Python string offset."""
 		return self._position.bookmark.startOffset
 
+	def getLineAndColumn(self) -> tuple[int, int]:
+		"""Return the one-based line and character column at the current position."""
+		text = self._owner.text
+		if not text:
+			return 1, 1
+		offset = min(self.getPosition(), len(text) - 1)
+		lineStart = self._getExpanded(self._position, textInfos.UNIT_LINE).bookmark.startOffset
+		lineNumber = (
+			text.count("\n", 0, lineStart)
+			+ text.count("\r", 0, lineStart)
+			- text.count("\r\n", 0, lineStart)
+			+ 1
+		)
+		return lineNumber, offset - lineStart + 1
+
 	def setPosition(self, offset: int) -> None:
 		"""Move to a bounded Python string offset."""
 		maxOffset = max(len(self._owner.text) - 1, 0)

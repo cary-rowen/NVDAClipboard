@@ -22,6 +22,8 @@ Before native ARM64 can be declared supported:
 
 You can browse clipboard text by line, word, or character. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
 
+Text summaries include the current one-based navigation line and character column; a tab counts as one column.
+
 Commands for moving back or forward 10 lines have no default gestures. You can assign them under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 Press the current line or word command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.

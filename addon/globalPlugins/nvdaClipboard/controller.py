@@ -617,7 +617,15 @@ class ClipboardController:
 			summary = self._summary
 		else:
 			summary = self._formatTextStatisticsSummary(progress.statistics)
-		ui.message(summary)
+		lineNumber, columnNumber = self.navigator.getLineAndColumn()
+		ui.message(
+			# Translators: Clipboard text summary followed by the current one-based navigation line and column.
+			_("{summary}; line {line}, column {column}").format(
+				summary=summary,
+				line=lineNumber,
+				column=columnNumber,
+			),
+		)
 
 	def moveToFirstLine(self) -> None:
 		"""Move to and report the first clipboard line."""
