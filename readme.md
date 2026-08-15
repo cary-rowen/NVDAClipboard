@@ -22,6 +22,8 @@ Before native ARM64 can be declared supported:
 
 You can browse clipboard text by line, word, or character. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
 
+Commands for moving back or forward 10 lines have no default gestures. You can assign them under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+
 Press the current line or word command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
 Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Alt+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.

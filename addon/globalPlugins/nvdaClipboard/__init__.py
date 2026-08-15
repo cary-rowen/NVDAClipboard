@@ -139,6 +139,24 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.moveLine, 1)
 
 	@script(
+		# Translators: Input help description for moving backward 10 clipboard lines.
+		description=_("Moves back 10 clipboard lines and reports the resulting line"),
+		speakOnDemand=True,
+	)
+	def script_moveTenClipboardLinesBackward(self, gesture: inputCore.InputGesture) -> None:
+		"""Move back 10 clipboard lines."""
+		self._runAction(self.controller.moveLine, -1, 10)
+
+	@script(
+		# Translators: Input help description for moving forward 10 clipboard lines.
+		description=_("Moves forward 10 clipboard lines and reports the resulting line"),
+		speakOnDemand=True,
+	)
+	def script_moveTenClipboardLinesForward(self, gesture: inputCore.InputGesture) -> None:
+		"""Move forward 10 clipboard lines."""
+		self._runAction(self.controller.moveLine, 1, 10)
+
+	@script(
 		description=_(
 			# Translators: Input help description for reporting the current clipboard line.
 			"Reports the current clipboard line. Press twice to spell it and three times for character descriptions.",

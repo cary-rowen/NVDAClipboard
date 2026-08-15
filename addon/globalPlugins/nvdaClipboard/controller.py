@@ -635,11 +635,15 @@ class ClipboardController:
 		self._playLineNavigationCue(atBoundary=True)
 		self._speakTextInfo(info, textInfos.UNIT_LINE)
 
-	def moveLine(self, direction: int) -> None:
-		"""Move and report one clipboard line."""
+	def moveLine(self, direction: int, lineCount: int = 1) -> None:
+		"""Move and report one or more clipboard lines."""
 		if not self._ensureCurrentContentIsNavigable():
 			return
 		result = self.navigator.move(textInfos.UNIT_LINE, direction)
+		for _ in range(lineCount - 1):
+			if result.isAtBoundary or result.isAtStoryBoundary:
+				break
+			result = self.navigator.move(textInfos.UNIT_LINE, direction)
 		self._playLineNavigationCue(atBoundary=result.isAtBoundary or result.isAtStoryBoundary)
 		self._speakTextInfo(result.textInfo, textInfos.UNIT_LINE)
 
