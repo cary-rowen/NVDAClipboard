@@ -704,9 +704,22 @@ class ClipboardController:
 
 	def appendLastSpokenText(self) -> None:
 		"""Append the most recent NVDA speech text to text clipboard content."""
+		text = self._requireLastSpokenText()
 		self._appendTextToClipboard(
-			self._requireLastSpokenText(),
+			text,
 			canReplaceNonText=False,
+		)
+		textLength = len(text)
+		if textLength < 1024:
+			spokenText = text
+		else:
+			# Translators: Spoken instead of lengthy text appended to the clipboard.
+			spokenText = ngettext("%d character", "%d characters", textLength) % textLength
+		ui.message(
+			# Translators: Announced after text is appended to the clipboard.
+			_("Appended to clipboard: {text}").format(text=spokenText),
+			# Translators: Displayed in braille after text is appended to the clipboard.
+			brailleText=_("Appended: {text}").format(text=text),
 		)
 
 	def pasteLastSpokenText(self, triggerKeyCodes: frozenset[int]) -> None:
