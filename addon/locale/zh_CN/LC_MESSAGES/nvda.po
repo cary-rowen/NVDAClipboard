@@ -1757,12 +1757,19 @@ msgid "Could not update local clipboard storage"
 msgstr "无法更新本地剪贴板存储"
 
 #. Translators: Name of the NVDA Clipboard command category in NVDA's Input Gestures dialog.
+#. Translators: Title of the NVDA Clipboard settings panel.
 #. Add-on summary/title, usually the user visible name of the add-on
 #. Translators: Summary/title for this add-on
 #. to be shown on installation and add-on information found in add-on store
-#: addon\globalPlugins\nvdaClipboard\__init__.py:29 buildVars.py:30
+#: addon\globalPlugins\nvdaClipboard\__init__.py:32
+#: addon\globalPlugins\nvdaClipboard\settings.py:39 buildVars.py:30
 msgid "NVDA Clipboard"
 msgstr "剪贴板"
+
+#. Translators: Label for the number of clipboard lines moved by the page up and page down commands.
+#: addon\globalPlugins\nvdaClipboard\settings.py:46
+msgid "&Number of lines to move when paging up or down:"
+msgstr "向上或向下翻页时跳转的行数(&N)："
 
 #. Translators: Generic error reported when an add-on command fails.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:88
@@ -1794,15 +1801,15 @@ msgstr "移动到剪贴板上一行并读出"
 msgid "Moves to and reports the next clipboard line"
 msgstr "移动到剪贴板下一行并读出"
 
-#. Translators: Input help description for moving backward 10 clipboard lines.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:143
-msgid "Moves back 10 clipboard lines and reports the resulting line"
-msgstr "在剪贴板中向后移动 10 行并读出所在行"
+#. Translators: Input help description for moving up one page through clipboard lines.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:148
+msgid "Moves up one page through the clipboard and reports the resulting line"
+msgstr "在剪贴板中向上翻一页并读出所在行"
 
-#. Translators: Input help description for moving forward 10 clipboard lines.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:152
-msgid "Moves forward 10 clipboard lines and reports the resulting line"
-msgstr "在剪贴板中向前移动 10 行并读出所在行"
+#. Translators: Input help description for moving down one page through clipboard lines.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:157
+msgid "Moves down one page through the clipboard and reports the resulting line"
+msgstr "在剪贴板中向下翻一页并读出所在行"
 
 #. Translators: Input help description for reporting the current clipboard line.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:162

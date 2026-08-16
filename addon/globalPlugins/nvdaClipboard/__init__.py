@@ -14,6 +14,7 @@ import addonHandler
 import globalPluginHandler
 import globalVars
 import gui
+from gui.settingsDialogs import NVDASettingsDialog
 import inputCore
 from keyboardHandler import KeyboardInputGesture
 from logHandler import log
@@ -21,6 +22,8 @@ import scriptHandler
 from scriptHandler import script
 import ui
 import wx
+
+from .settings import NVDAClipboardSettingsPanel, getPageLineCount
 
 
 addonHandler.initTranslation()
@@ -58,6 +61,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 			self.controller = ClipboardController()
 			self.controller.start()
+			NVDASettingsDialog.categoryClasses.append(NVDAClipboardSettingsPanel)
 		except Exception:
 			super().terminate()
 			raise
@@ -68,6 +72,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		try:
 			self.controller.terminate()
 		finally:
+			NVDASettingsDialog.categoryClasses.remove(NVDAClipboardSettingsPanel)
 			super().terminate()
 
 	def _runAction(self, action: Callable[..., None], *args: object) -> None:
@@ -139,22 +144,22 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.moveLine, 1)
 
 	@script(
-		# Translators: Input help description for moving backward 10 clipboard lines.
-		description=_("Moves back 10 clipboard lines and reports the resulting line"),
+		# Translators: Input help description for moving up one page through clipboard lines.
+		description=_("Moves up one page through the clipboard and reports the resulting line"),
 		speakOnDemand=True,
 	)
-	def script_moveTenClipboardLinesBackward(self, gesture: inputCore.InputGesture) -> None:
-		"""Move back 10 clipboard lines."""
-		self._runAction(self.controller.moveLine, -1, 10)
+	def script_moveClipboardPageUp(self, gesture: inputCore.InputGesture) -> None:
+		"""Move up one configured page through the clipboard lines."""
+		self._runAction(self.controller.moveLine, -1, getPageLineCount())
 
 	@script(
-		# Translators: Input help description for moving forward 10 clipboard lines.
-		description=_("Moves forward 10 clipboard lines and reports the resulting line"),
+		# Translators: Input help description for moving down one page through clipboard lines.
+		description=_("Moves down one page through the clipboard and reports the resulting line"),
 		speakOnDemand=True,
 	)
-	def script_moveTenClipboardLinesForward(self, gesture: inputCore.InputGesture) -> None:
-		"""Move forward 10 clipboard lines."""
-		self._runAction(self.controller.moveLine, 1, 10)
+	def script_moveClipboardPageDown(self, gesture: inputCore.InputGesture) -> None:
+		"""Move down one configured page through the clipboard lines."""
+		self._runAction(self.controller.moveLine, 1, getPageLineCount())
 
 	@script(
 		description=_(

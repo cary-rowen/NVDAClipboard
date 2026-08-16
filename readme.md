@@ -26,7 +26,7 @@ Text summaries report the current one-based navigation line and character column
 
 File summaries omit names and report whether the items were copied, cut, or linked, the top-level item count, and, after a background scan, their combined size and recursive file and folder counts. File names and paths remain available through line navigation.
 
-Commands for moving back or forward 10 lines have no default gestures. You can assign them under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Commands for paging up or down through the clipboard have no default gestures. You can change the number of lines moved per page under **NVDA Clipboard** in NVDA's Settings dialog, and assign the commands under **NVDA Clipboard** in the Input Gestures dialog.
 
 Press the current line or word command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
