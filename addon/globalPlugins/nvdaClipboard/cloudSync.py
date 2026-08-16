@@ -41,9 +41,7 @@ StateChangedCallback = Callable[[], None]
 _CONFIG_SECTION = "nvdaClipboard"
 _CONFIG_AUTO_SYNC_TIANTAN = "autoSyncTiantan"
 
-config.conf.spec[_CONFIG_SECTION] = {
-	_CONFIG_AUTO_SYNC_TIANTAN: "boolean(default=true)",
-}
+config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "boolean(default=true)"
 
 
 def _getSdkUnavailableMessage() -> str:
