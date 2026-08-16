@@ -320,42 +320,41 @@ msgstr[0] "{count} 个文件夹"
 
 #. Translators: Separator between file size, file count, and folder count.
 #. Translators: Separator between exact clipboard text statistics.
-#. Translators: Separator between file names in a clipboard summary.
-#: addon\globalPlugins\nvdaClipboard\controller.py:562
-#: addon\globalPlugins\nvdaClipboard\controller.py:2303
-#: addon\globalPlugins\nvdaClipboard\controller.py:2308
-#: addon\globalPlugins\nvdaClipboard\controller.py:2341
+#: addon\globalPlugins\nvdaClipboard\controller.py:561
+#: addon\globalPlugins\nvdaClipboard\controller.py:2295
+#: addon\globalPlugins\nvdaClipboard\controller.py:2300
 msgid ", "
 msgstr "，"
 
 #. Translators: Clipboard file calculation with partial size and item counts.
-#: addon\globalPlugins\nvdaClipboard\controller.py:566
+#: addon\globalPlugins\nvdaClipboard\controller.py:565
 #, python-brace-format
-msgid "{summary}: about {details}"
-msgstr "{summary}：大约 {details}"
+msgid "{summary}; contents total about {details}"
+msgstr "{summary}；内容合计约 {details}"
 
 #. Translators: Completed clipboard file calculation with size and item counts.
-#: addon\globalPlugins\nvdaClipboard\controller.py:572
+#: addon\globalPlugins\nvdaClipboard\controller.py:571
 #, python-brace-format
-msgid "{summary}: {details}"
-msgstr "{summary}：{details}"
+msgid "{summary}; contents total {details}"
+msgstr "{summary}；内容合计 {details}"
 
 #. Translators: Clipboard file calculation with size and item counts accumulated so far.
-#: addon\globalPlugins\nvdaClipboard\controller.py:578
+#: addon\globalPlugins\nvdaClipboard\controller.py:577
 #, python-brace-format
-msgid "{summary}: calculating, {details}"
-msgstr "{summary}：正在计算，{details}"
+msgid "{summary}; calculating contents, {details}"
+msgstr "{summary}；正在统计内容，当前 {details}"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:586
+#. Translators: Clipboard file calculation where no content details were available.
+#: addon\globalPlugins\nvdaClipboard\controller.py:584
 #, python-brace-format
-msgid "{summary}: could not calculate size, file count, or folder count"
-msgstr "{summary}：无法统计大小、文件数和文件夹数"
+msgid "{summary}; could not calculate contents"
+msgstr "{summary}；无法统计内容"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:591
+#. Translators: Clipboard file calculation before any content details are available.
+#: addon\globalPlugins\nvdaClipboard\controller.py:587
 #, python-brace-format
-msgid "{summary}: calculating, {count} item"
-msgid_plural "{summary}: calculating, {count} items"
-msgstr[0] "{summary}：正在计算，{count} 个项目"
+msgid "{summary}; calculating contents"
+msgstr "{summary}；正在统计内容"
 
 #. Translators: Clipboard text type followed by the current one-based navigation line and column.
 #: addon\globalPlugins\nvdaClipboard\controller.py:616
@@ -732,11 +731,26 @@ msgstr "文本和图像"
 msgid "Text and image, {width} by {height} pixels"
 msgstr "文本和图像，{width} × {height} 像素"
 
-#. Translators: File names summary when additional clipboard items are omitted.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2344
+#. Translators: Number of top-level file system items cut to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2335
 #, python-brace-format
-msgid "{names}, and others"
-msgstr "{names}等"
+msgid "Cut files: {count} item"
+msgid_plural "Cut files: {count} items"
+msgstr[0] "已剪切文件：共 {count} 项"
+
+#. Translators: Number of top-level file system items linked from the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2342
+#, python-brace-format
+msgid "Linked files: {count} item"
+msgid_plural "Linked files: {count} items"
+msgstr[0] "已创建链接的文件：共 {count} 项"
+
+#. Translators: Number of top-level file system items copied to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2348
+#, python-brace-format
+msgid "Copied files: {count} item"
+msgid_plural "Copied files: {count} items"
+msgstr[0] "已复制文件：共 {count} 项"
 
 #. Translators: Summary of an image with known dimensions and color depth.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2350

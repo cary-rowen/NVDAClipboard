@@ -81,6 +81,16 @@ class ClipboardSnapshot:
 	richFormatsDropped: bool = False
 	error: str = ""
 
+	@property
+	def filesWereCut(self) -> bool:
+		"""Return whether a file group carries the Windows move effect."""
+		return bool(self.preferredDropEffect and self.preferredDropEffect & _DROPEFFECT_MOVE)
+
+	@property
+	def filesWereLinked(self) -> bool:
+		"""Return whether a file group carries only the Windows link effect."""
+		return self.preferredDropEffect == _DROPEFFECT_LINK
+
 
 ClipboardSnapshotCallback = Callable[[ClipboardSnapshot], None]
 

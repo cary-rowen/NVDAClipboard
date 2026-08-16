@@ -62,6 +62,20 @@ class ClipboardMonitorTests(unittest.TestCase):
 		self.assertIsNot(type(firstWindow), type(secondWindow))
 		self.assertNotEqual(firstWindow.className, secondWindow.className)
 
+	def testExplorerCopyDropEffectIsNotLink(self) -> None:
+		"""Treat Explorer's combined copy and link flags as an ordinary copy."""
+		combinedCopy = clipboardMonitor.ClipboardSnapshot(
+			clipboardMonitor.ClipboardContentType.FILES,
+			preferredDropEffect=clipboardMonitor._DROPEFFECT_COPY | clipboardMonitor._DROPEFFECT_LINK,
+		)
+		linkOnly = clipboardMonitor.ClipboardSnapshot(
+			clipboardMonitor.ClipboardContentType.FILES,
+			preferredDropEffect=clipboardMonitor._DROPEFFECT_LINK,
+		)
+
+		self.assertFalse(combinedCopy.filesWereLinked)
+		self.assertTrue(linkOnly.filesWereLinked)
+
 	def testProtectedContentStaysOpaqueWhilePartialContentRemainsWritable(self) -> None:
 		"""Keep protected payloads opaque while restoring retained nonprotected text."""
 		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
