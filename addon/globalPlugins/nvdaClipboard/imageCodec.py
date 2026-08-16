@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from io import BytesIO
-from typing import TYPE_CHECKING
+from time import sleep
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
 	from PIL import Image
@@ -22,6 +24,18 @@ from .clipboardData import (
 
 
 _PACKED_DIB_HEADER_BYTES = 40
+_PREDOMINANT_PIXEL_PERCENTAGE = 95
+_IMAGE_ANALYSIS_CHUNK_PIXELS = 64 * 1024
+_PNG_SAMPLE_DEPTH_OFFSET = 24
+
+
+@dataclass(frozen=True, slots=True)
+class ImageProperties:
+	"""Describe trustworthy pixel properties obtained from a fully decoded image."""
+
+	color: tuple[int, int, int] | None = None
+	colorPercentage: float = 0.0
+	transparentPercentage: float = 0.0
 
 
 class ImageDataTooLargeError(ValueError):
@@ -82,6 +96,228 @@ def _saveImage(image: Image.Image, imageFormat: str, maximumBytes: int) -> bytes
 	except (OSError, ValueError):
 		return None
 	return output.getvalue()
+
+
+def getImageProperties(
+	imageFormat: str | None,
+	imageData: bytes,
+	expectedInfo: tuple[int, int, int],
+) -> ImageProperties | None:
+	"""Fully decode an image and return exact common-format properties, or ``None`` on failure."""
+	pillowFormat = "PNG" if imageFormat == "PNG" else "DIB" if imageFormat in ("DIB", "DIBV5") else None
+	if pillowFormat is None:
+		return None
+	image = _decodeImage(
+		imageData,
+		expectedInfo,
+		imageFormat=pillowFormat,
+		maximumBytes=MAX_IMAGE_BYTES if pillowFormat == "PNG" else MAX_DECODED_IMAGE_BYTES,
+	)
+	if image is None:
+		return None
+	try:
+		if getattr(image, "n_frames", 1) != 1:
+			return ImageProperties()
+		if pillowFormat == "PNG":
+			sampleDepth = imageData[_PNG_SAMPLE_DEPTH_OFFSET]
+			if sampleDepth > 8 or image.mode not in ("1", "L", "LA", "P", "RGB", "RGBA"):
+				return ImageProperties()
+			if image.mode == "P":
+				palette = image.getpalette()
+				if (
+					not palette
+					or len(palette) % 3
+					or cast(tuple[int, int], image.getextrema())[1] >= len(palette) // 3
+				):
+					return ImageProperties()
+			if "transparency" in image.info:
+				transparencyData = _getPngTransparencyData(imageData)
+				if transparencyData is None or not _preparePngTransparency(
+					image,
+					sampleDepth,
+					transparencyData,
+				):
+					return ImageProperties()
+		else:
+			headerSize = int.from_bytes(imageData[:4], "little")
+			if (
+				image.mode not in ("RGB", "RGBA")
+				or expectedInfo[2] not in (24, 32)
+				or (
+					headerSize != 12
+					and (len(imageData) < 36 or int.from_bytes(imageData[32:36], "little") != 0)
+				)
+			):
+				return ImageProperties()
+		solidColor = _getSolidColor(image)
+		alphaExtrema, transparentPixels = _getAlphaProperties(image)
+		pixelCount = image.width * image.height
+		if alphaExtrema == (0, 0):
+			return ImageProperties(transparentPercentage=100.0)
+		hasMixedAlpha = alphaExtrema is not None and alphaExtrema != (255, 255)
+		if hasMixedAlpha and _isPredominant(transparentPixels, pixelCount):
+			return ImageProperties(
+				transparentPercentage=_getPercentage(transparentPixels, pixelCount),
+			)
+		if solidColor is not None and not hasMixedAlpha:
+			return ImageProperties(color=solidColor, colorPercentage=100.0)
+		predominantColor = _getPredominantBlackOrWhite(image)
+		if predominantColor is not None:
+			color, colorPixels = predominantColor
+			return ImageProperties(
+				color=color,
+				colorPercentage=_getPercentage(colorPixels, pixelCount),
+			)
+		return ImageProperties()
+	finally:
+		image.close()
+
+
+def _getSolidColor(image: Image.Image) -> tuple[int, int, int] | None:
+	"""Return one RGB value when every non-alpha channel is constant."""
+	if image.mode == "P":
+		palette = image.getpalette()
+		if not palette:
+			return None
+		colors = {
+			tuple(palette[index * 3 : index * 3 + 3])
+			for index, count in enumerate(image.histogram())
+			if count
+		}
+		return cast(tuple[int, int, int], next(iter(colors))) if len(colors) == 1 else None
+	extrema = image.getextrema()
+	channelExtrema = (
+		(cast(tuple[int, int], extrema),)
+		if isinstance(extrema[0], int)
+		else cast(tuple[tuple[int, int], ...], extrema)
+	)
+	colorChannelCount = len(channelExtrema) - ("A" in image.getbands())
+	if any(minimum != maximum for minimum, maximum in channelExtrema[:colorChannelCount]):
+		return None
+	with image.crop((0, 0, 1, 1)).convert("RGB") as pixelImage:
+		return cast(tuple[int, int, int], pixelImage.getpixel((0, 0)))
+
+
+def _getPngTransparencyData(imageData: bytes) -> bytes | None:
+	"""Return one pre-IDAT PNG tRNS payload, or ``None`` when its placement is invalid."""
+	offset = 8
+	transparencyData: bytes | None = None
+	hasImageData = False
+	while offset + 12 <= len(imageData):
+		chunkLength = int.from_bytes(imageData[offset : offset + 4], "big")
+		payloadStart = offset + 8
+		payloadEnd = payloadStart + chunkLength
+		chunkEnd = payloadEnd + 4
+		if chunkEnd > len(imageData):
+			return None
+		chunkType = imageData[offset + 4 : payloadStart]
+		if chunkType == b"IDAT":
+			hasImageData = True
+		elif chunkType == b"tRNS":
+			if hasImageData or transparencyData is not None:
+				return None
+			transparencyData = imageData[payloadStart:payloadEnd]
+		elif chunkType == b"IEND":
+			return transparencyData if hasImageData else None
+		offset = chunkEnd
+	return None
+
+
+def _preparePngTransparency(image: Image.Image, sampleDepth: int, transparencyData: bytes) -> bool:
+	"""Validate raw PNG tRNS data and normalize it for Pillow's alpha conversion."""
+	if image.mode in ("1", "L") and sampleDepth in (1, 2, 4, 8):
+		if len(transparencyData) != 2:
+			return False
+		transparency = int.from_bytes(transparencyData, "big")
+		maximumSample = (1 << sampleDepth) - 1
+		if transparency > maximumSample:
+			return False
+		image.info["transparency"] = transparency * 255 // maximumSample
+		return True
+	if image.mode == "P" and sampleDepth in (1, 2, 4, 8):
+		palette = image.getpalette()
+		paletteEntryCount = len(palette) // 3 if palette else 0
+		if not 0 < len(transparencyData) <= paletteEntryCount:
+			return False
+		image.info["transparency"] = transparencyData
+		return True
+	if image.mode != "RGB" or sampleDepth != 8 or len(transparencyData) != 6:
+		return False
+	transparency = tuple(
+		int.from_bytes(transparencyData[offset : offset + 2], "big") for offset in range(0, 6, 2)
+	)
+	if any(sample > 255 for sample in transparency):
+		return False
+	image.info["transparency"] = transparency
+	return True
+
+
+def _getAlphaProperties(image: Image.Image) -> tuple[tuple[int, int] | None, int]:
+	"""Return alpha bounds and the number of fully transparent pixels."""
+	if "A" in image.getbands():
+		with image.getchannel("A") as alphaChannel:
+			return cast(tuple[int, int], alphaChannel.getextrema()), alphaChannel.histogram()[0]
+	if "transparency" not in image.info:
+		return None, 0
+	alphaMinimum, alphaMaximum = 255, 0
+	transparentPixels = 0
+	rowsPerChunk = max(1, _IMAGE_ANALYSIS_CHUNK_PIXELS // image.width)
+	for top in range(0, image.height, rowsPerChunk):
+		with (
+			image.crop((0, top, image.width, min(top + rowsPerChunk, image.height))) as imageChunk,
+			imageChunk.convert("RGBA") as rgbaImage,
+			rgbaImage.getchannel("A") as alphaChannel,
+		):
+			chunkMinimum, chunkMaximum = cast(tuple[int, int], alphaChannel.getextrema())
+			alphaMinimum = min(alphaMinimum, chunkMinimum)
+			alphaMaximum = max(alphaMaximum, chunkMaximum)
+			transparentPixels += alphaChannel.histogram()[0]
+		sleep(0)
+	return (alphaMinimum, alphaMaximum), transparentPixels
+
+
+def _getPredominantBlackOrWhite(image: Image.Image) -> tuple[tuple[int, int, int], int] | None:
+	"""Return black or white when it covers at least the reporting threshold."""
+	from PIL import ImageChops
+
+	blackPixels = whitePixels = 0
+	rowsPerChunk = max(1, _IMAGE_ANALYSIS_CHUNK_PIXELS // image.width)
+	for top in range(0, image.height, rowsPerChunk):
+		with (
+			image.crop((0, top, image.width, min(top + rowsPerChunk, image.height))) as imageChunk,
+			imageChunk.convert("RGBA") as rgbaImage,
+		):
+			red, green, blue, alpha = rgbaImage.split()
+			with red, green, blue, alpha:
+				with (
+					ImageChops.lighter(red, green) as maximumRedGreen,
+					ImageChops.lighter(maximumRedGreen, blue) as maximumChannel,
+					ImageChops.invert(alpha) as inverseAlpha,
+					ImageChops.lighter(maximumChannel, inverseAlpha) as opaqueMaximum,
+				):
+					blackPixels += opaqueMaximum.histogram()[0]
+				with (
+					ImageChops.darker(red, green) as minimumRedGreen,
+					ImageChops.darker(minimumRedGreen, blue) as minimumChannel,
+					ImageChops.darker(minimumChannel, alpha) as opaqueMinimum,
+				):
+					whitePixels += opaqueMinimum.histogram()[255]
+		sleep(0)
+	pixelCount = image.width * image.height
+	color, colorPixels = (
+		((0, 0, 0), blackPixels) if blackPixels >= whitePixels else ((255, 255, 255), whitePixels)
+	)
+	return (color, colorPixels) if _isPredominant(colorPixels, pixelCount) else None
+
+
+def _isPredominant(matchingPixels: int, pixelCount: int) -> bool:
+	"""Return whether matching pixels meet the fixed reporting threshold."""
+	return matchingPixels * 100 >= pixelCount * _PREDOMINANT_PIXEL_PERCENTAGE
+
+
+def _getPercentage(matchingPixels: int, pixelCount: int) -> float:
+	"""Return a one-decimal percentage truncated so a partial match never becomes 100%."""
+	return (matchingPixels * 1000 // pixelCount) / 10
 
 
 def isPngImageDecodable(pngData: bytes, expectedInfo: tuple[int, int, int]) -> bool:

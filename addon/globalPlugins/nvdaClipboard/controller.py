@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Never
 import addonHandler
 import api
 import braille
+import colors
 import controlTypes
 from core import callLater
 import eventHandler
@@ -96,6 +97,21 @@ _MAIN_FRAME_UNAVAILABLE = _("NVDA's main window is unavailable")
 
 # Translators: Name of the built-in category containing recent clipboard text.
 _HISTORY_CATEGORY_NAME = _("Clipboard history")
+
+_CANONICAL_SOLID_COLOR_NAMES = {
+	# Translators: Exact name of the RGB color (255, 0, 0).
+	(255, 0, 0): _("red"),
+	# Translators: Exact name of the RGB color (0, 255, 0).
+	(0, 255, 0): _("green"),
+	# Translators: Exact name of the RGB color (0, 0, 255).
+	(0, 0, 255): _("blue"),
+	# Translators: Exact name of the RGB color (255, 255, 0).
+	(255, 255, 0): _("yellow"),
+	# Translators: Exact name of the RGB color (0, 255, 255).
+	(0, 255, 255): _("cyan"),
+	# Translators: Exact name of the RGB color (255, 0, 255).
+	(255, 0, 255): _("magenta"),
+}
 
 
 class _BuiltinCategory(Enum):
@@ -1194,6 +1210,10 @@ class ClipboardController:
 			return
 		if self._consumePendingWrite(snapshot):
 			self._awaitingInitialSnapshot = False
+			if snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+				self._summary = self._formatCurrentSummary(snapshot)
+				if snapshot.contentType == ClipboardContentType.IMAGE:
+					self.navigator.setText(self._summary)
 			return
 		state = self._lastSpokenPasteState
 		if state is not None and _isLastSpokenTemporarySnapshot(snapshot, state):
@@ -2319,14 +2339,8 @@ class ClipboardController:
 			# Translators: Type-only summary of formatted text before exact statistics are available.
 			return _("Formatted text")
 		if snapshot.contentType == ClipboardContentType.TEXT_AND_IMAGE:
-			if not snapshot.imageWidth or not snapshot.imageHeight:
-				# Translators: Type-only summary of mixed clipboard content when image dimensions are unavailable.
-				return _("Text and image")
-			# Translators: Mixed clipboard content with known image dimensions.
-			return _("Text and image, {width} by {height} pixels").format(
-				width=snapshot.imageWidth,
-				height=snapshot.imageHeight,
-			)
+			# Translators: Type of clipboard content containing both text and an image.
+			return self._formatCurrentImageSummary(snapshot, _("Text and image"))
 		if snapshot.contentType == ClipboardContentType.FILES:
 			itemCount = len(snapshot.files)
 			if snapshot.filesWereCut:
@@ -2350,21 +2364,8 @@ class ClipboardController:
 				itemCount,
 			).format(count=itemCount)
 		if snapshot.contentType == ClipboardContentType.IMAGE:
-			if snapshot.imageWidth and snapshot.imageHeight:
-				if snapshot.imageBitDepth:
-					# Translators: Summary of an image with known dimensions and color depth.
-					return _("Image, {width} by {height} pixels, {depth}-bit color").format(
-						width=snapshot.imageWidth,
-						height=snapshot.imageHeight,
-						depth=snapshot.imageBitDepth,
-					)
-				# Translators: Summary of an image with known dimensions but unknown color depth.
-				return _("Image, {width} by {height} pixels").format(
-					width=snapshot.imageWidth,
-					height=snapshot.imageHeight,
-				)
-			# Translators: Type-only image summary when dimensions are unavailable.
-			return _("Image")
+			# Translators: Type of image-only clipboard content.
+			return self._formatCurrentImageSummary(snapshot, _("Image"))
 		if snapshot.contentType == ClipboardContentType.PROTECTED:
 			# Translators: Summary for clipboard content excluded from monitoring by its source application.
 			return _("Protected clipboard content is not available")
@@ -2373,6 +2374,52 @@ class ClipboardController:
 			return _("Clipboard is empty")
 		# Translators: Summary used for clipboard data this add-on cannot navigate.
 		return _("Unsupported clipboard content")
+
+	def _formatCurrentImageSummary(self, snapshot: ClipboardSnapshot, contentType: str) -> str:
+		"""Return image metadata and trustworthy pixel properties for the current clipboard."""
+		if not snapshot.imageWidth or not snapshot.imageHeight:
+			return contentType
+		if snapshot.imageWidth == snapshot.imageHeight:
+			# Translators: Orientation of an image whose width and height are equal.
+			orientation = _("square")
+		elif snapshot.imageWidth > snapshot.imageHeight:
+			# Translators: Orientation of an image wider than it is tall.
+			orientation = _("landscape")
+		else:
+			# Translators: Orientation of an image taller than it is wide.
+			orientation = _("portrait")
+		# Translators: Clipboard image type, dimensions, and orientation.
+		summary = _("{summary}: {width} by {height} pixels, {orientation}").format(
+			summary=contentType,
+			width=snapshot.imageWidth,
+			height=snapshot.imageHeight,
+			orientation=orientation,
+		)
+		if snapshot.imageTransparentPercentage == 100:
+			# Translators: Exact image property indicating that every pixel is fully transparent.
+			return _("{summary}; fully transparent").format(summary=summary)
+		if snapshot.imageColor is not None and snapshot.imageColorPercentage == 100:
+			# Translators: Exact image property indicating that every pixel has the same color.
+			return _("{summary}; solid {color}").format(
+				summary=summary,
+				color=_CANONICAL_SOLID_COLOR_NAMES.get(snapshot.imageColor)
+				or colors.RGB(*snapshot.imageColor).name,
+			)
+		if snapshot.imageTransparentPercentage:
+			# Translators: Image summary followed by the percentage of fully transparent pixels.
+			return _("{summary}; fully transparent pixels: {percentage}%").format(
+				summary=summary,
+				percentage=f"{snapshot.imageTransparentPercentage:g}",
+			)
+		if snapshot.imageColor is not None and snapshot.imageColorPercentage:
+			# Translators: Image summary followed by the percentage of black or white pixels.
+			return _("{summary}; {color} pixels: {percentage}%").format(
+				summary=summary,
+				color=_CANONICAL_SOLID_COLOR_NAMES.get(snapshot.imageColor)
+				or colors.RGB(*snapshot.imageColor).name,
+				percentage=f"{snapshot.imageColorPercentage:g}",
+			)
+		return summary
 
 	def _formatRestoreConfirmation(self, item: ClipboardItem) -> str:
 		"""Return a type-specific confirmation after restoring a stored entry."""

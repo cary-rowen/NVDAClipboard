@@ -125,6 +125,55 @@ class ImageCodecTests(unittest.TestCase):
 		self.assertIsNotNone(dibData)
 		self.assertEqual(56, len(dibData))
 
+	def testImagePropertiesRemainTrustworthy(self) -> None:
+		"""Report predominant, palette, and validated transparency properties."""
+		from PIL import Image
+
+		output = BytesIO()
+		with Image.new("RGBA", (100, 1), (0, 0, 0, 255)) as image:
+			image.paste((0, 0, 0, 0), (0, 0, 4, 1))
+			image.save(output, format="PNG")
+		self.assertEqual(
+			imageCodec.ImageProperties(color=(0, 0, 0), colorPercentage=96.0),
+			imageCodec.getImageProperties("PNG", output.getvalue(), (100, 1, 32)),
+		)
+
+		output = BytesIO()
+		with Image.new("P", (1, 1), 0) as image:
+			image.putpalette([255, 0, 0])
+			image.save(output, format="PNG", transparency=0)
+		self.assertEqual(
+			imageCodec.ImageProperties(transparentPercentage=100.0),
+			imageCodec.getImageProperties("PNG", output.getvalue(), (1, 1, 1)),
+		)
+
+		output = BytesIO()
+		with Image.new("P", (2, 1)) as image:
+			image.putpalette([255, 0, 0, 255, 0, 0])
+			image.putdata((0, 1))
+			image.save(output, format="PNG")
+		self.assertEqual(
+			imageCodec.ImageProperties(color=(255, 0, 0), colorPercentage=100.0),
+			imageCodec.getImageProperties("PNG", output.getvalue(), (2, 1, 1)),
+		)
+
+		output = BytesIO()
+		with Image.new("P", (1, 1), 1) as image:
+			image.putpalette([255, 0, 0])
+			image.save(output, format="PNG")
+		self.assertEqual(
+			imageCodec.ImageProperties(),
+			imageCodec.getImageProperties("PNG", output.getvalue(), (1, 1, 1)),
+		)
+
+		output = BytesIO()
+		with Image.new("1", (1, 1), 1) as image:
+			image.save(output, format="PNG", transparency=255)
+		self.assertEqual(
+			imageCodec.ImageProperties(),
+			imageCodec.getImageProperties("PNG", output.getvalue(), (1, 1, 1)),
+		)
+
 
 if __name__ == "__main__":
 	unittest.main()
