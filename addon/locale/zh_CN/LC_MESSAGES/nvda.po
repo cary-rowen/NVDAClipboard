@@ -398,6 +398,25 @@ msgstr "{summary}：{line} 行，{column} 列"
 msgid "{summary}; calculating; check again shortly"
 msgstr "{summary}；正在计算，请稍后再次查询"
 
+#. Translators: Spoken instead of lengthy text appended to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:717
+#, python-format
+msgid "%d character"
+msgid_plural "%d characters"
+msgstr[0] "%d 个字符"
+
+#. Translators: Announced after text is appended to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:720
+#, python-brace-format
+msgid "Appended to clipboard: {text}"
+msgstr "已追加 {text} 到剪贴板"
+
+#. Translators: Displayed in braille after text is appended to the clipboard.
+#: addon\globalPlugins\nvdaClipboard\controller.py:722
+#, python-brace-format
+msgid "Appended: {text}"
+msgstr "已追加 {text}"
+
 #. Translators: Message shown when another last-spoken paste is still running.
 #: addon\globalPlugins\nvdaClipboard\controller.py:708
 msgid "A last spoken paste is already in progress"
