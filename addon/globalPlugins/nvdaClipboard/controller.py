@@ -661,8 +661,8 @@ class ClipboardController:
 		self._playLineNavigationCue(atBoundary=result.isAtBoundary or result.isAtStoryBoundary)
 		self._speakTextInfo(result.textInfo, textInfos.UNIT_LINE)
 
-	def moveWord(self, direction: int) -> None:
-		"""Move and report one clipboard word."""
+	def moveNavigationUnit(self, direction: int) -> None:
+		"""Move and report one configured clipboard navigation unit."""
 		if not self._ensureCurrentContentIsNavigable():
 			return
 		result = self.navigator.move(textInfos.UNIT_WORD, direction)
@@ -683,11 +683,11 @@ class ClipboardController:
 			return
 		self._reportTextInfo(self.navigator.getCurrentLine(), textInfos.UNIT_LINE, repeatCount)
 
-	def reportCurrentWord(self, repeatCount: int) -> None:
-		"""Report, spell, or describe the current clipboard word."""
+	def reportCurrentNavigationUnit(self, repeatCount: int) -> None:
+		"""Report, spell, or describe the current clipboard navigation unit."""
 		if not self._ensureCurrentContentIsNavigable():
 			return
-		self._reportTextInfo(self.navigator.getCurrentWord(), textInfos.UNIT_WORD, repeatCount)
+		self._reportTextInfo(self.navigator.getCurrentNavigationUnit(), textInfos.UNIT_WORD, repeatCount)
 
 	def reportCurrentCharacter(self, repeatCount: int) -> None:
 		"""Report the current character using NVDA review-command repeat semantics."""

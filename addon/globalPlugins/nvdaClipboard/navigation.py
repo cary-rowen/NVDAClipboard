@@ -11,6 +11,9 @@ from typing import override
 import textInfos
 from textInfos.offsets import Offsets, OffsetsTextInfo
 
+from .configuration import NavigationSplitMode, getNavigationSplitSettings
+from .navigationUnits import getPunctuationUnitOffsets
+
 
 _SUPPORTED_UNITS = frozenset(
 	(
@@ -52,6 +55,22 @@ class _ClipboardTextInfo(OffsetsTextInfo):
 	@override
 	def _getStoryLength(self) -> int:
 		return len(self._owner.text)
+
+	@override
+	def _getWordOffsets(self, offset: int) -> tuple[int, int]:
+		"""Return word or punctuation-delimited offsets for the configured mode."""
+		splitMode, separatePunctuation = getNavigationSplitSettings()
+		if splitMode is NavigationSplitMode.WINDOWS_WORD:
+			start, end = super()._getWordOffsets(offset)
+			return start, end
+		lineStart, lineEnd = self._getLineOffsets(offset)
+		lineText = self._getTextRange(lineStart, lineEnd)
+		start, end = getPunctuationUnitOffsets(
+			lineText,
+			offset - lineStart,
+			separatePunctuation=separatePunctuation,
+		)
+		return start + lineStart, end + lineStart
 
 
 class ClipboardNavigator:
@@ -110,8 +129,8 @@ class ClipboardNavigator:
 		"""Return a TextInfo expanded to the current line."""
 		return self._getCurrent(textInfos.UNIT_LINE)
 
-	def getCurrentWord(self) -> textInfos.TextInfo:
-		"""Return a TextInfo expanded to the current word."""
+	def getCurrentNavigationUnit(self) -> textInfos.TextInfo:
+		"""Return a TextInfo expanded to the configured navigation unit."""
 		return self._getCurrent(textInfos.UNIT_WORD)
 
 	def getCurrentCharacter(self) -> textInfos.TextInfo:

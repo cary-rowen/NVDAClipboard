@@ -23,7 +23,8 @@ from scriptHandler import script
 import ui
 import wx
 
-from .settings import NVDAClipboardSettingsPanel, getPageLineCount
+from .configuration import getPageLineCount
+from .settings import NVDAClipboardSettingsPanel
 
 
 addonHandler.initTranslation()
@@ -174,36 +175,40 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.reportCurrentLine, scriptHandler.getLastScriptRepeatCount())
 
 	@script(
-		# Translators: Input help description for moving to the previous clipboard word.
-		description=_("Moves to and reports the previous clipboard word"),
+		# Translators: Input help description for moving to the previous clipboard navigation unit.
+		description=_("Moves to and reports the previous clipboard navigation unit"),
 		gestures=("kb:control+numpad4", "kb(laptop):NVDA+shift+alt+leftArrow"),
 		speakOnDemand=True,
 	)
-	def script_previousClipboardWord(self, gesture: inputCore.InputGesture) -> None:
-		"""Move to the previous clipboard word."""
-		self._runAction(self.controller.moveWord, -1)
+	def script_previousClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
+		"""Move to the previous clipboard navigation unit."""
+		self._runAction(self.controller.moveNavigationUnit, -1)
 
 	@script(
-		# Translators: Input help description for moving to the next clipboard word.
-		description=_("Moves to and reports the next clipboard word"),
+		# Translators: Input help description for moving to the next clipboard navigation unit.
+		description=_("Moves to and reports the next clipboard navigation unit"),
 		gestures=("kb:control+numpad6", "kb(laptop):NVDA+shift+alt+rightArrow"),
 		speakOnDemand=True,
 	)
-	def script_nextClipboardWord(self, gesture: inputCore.InputGesture) -> None:
-		"""Move to the next clipboard word."""
-		self._runAction(self.controller.moveWord, 1)
+	def script_nextClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
+		"""Move to the next clipboard navigation unit."""
+		self._runAction(self.controller.moveNavigationUnit, 1)
 
 	@script(
 		description=_(
-			# Translators: Input help description for reporting the current clipboard word.
-			"Reports the current clipboard word. Press twice to spell it and three times for character descriptions.",
+			# Translators: Input help description for reporting the current clipboard navigation unit.
+			"Reports the current clipboard navigation unit. "
+			"Press twice to spell it and three times for character descriptions.",
 		),
 		gestures=("kb:control+numpad5", "kb(laptop):NVDA+shift+alt+."),
 		speakOnDemand=True,
 	)
-	def script_currentClipboardWord(self, gesture: inputCore.InputGesture) -> None:
-		"""Report the current clipboard word using repeat semantics."""
-		self._runAction(self.controller.reportCurrentWord, scriptHandler.getLastScriptRepeatCount())
+	def script_currentClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
+		"""Report the current clipboard navigation unit using repeat semantics."""
+		self._runAction(
+			self.controller.reportCurrentNavigationUnit,
+			scriptHandler.getLastScriptRepeatCount(),
+		)
 
 	@script(
 		# Translators: Input help description for moving to the previous clipboard character.

@@ -20,7 +20,7 @@ Before native ARM64 can be declared supported:
 
 ## Exploring the Clipboard
 
-You can browse clipboard text by line, word, or character. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
+You can browse clipboard text by line, navigation unit, or character. Navigation units use Windows word boundaries by default. Under **NVDA Clipboard** in NVDA's Settings dialog, you can instead split units at Unicode punctuation and choose whether each punctuation character is a separate unit. When punctuation is not separate, delimiter clusters are kept with the preceding text where possible. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
 
 Text summaries report the current one-based navigation line and character column before the total line and character statistics; a tab counts as one column.
 
@@ -28,7 +28,7 @@ File summaries omit names and report whether the items were copied, cut, or link
 
 Commands for paging up or down through the clipboard have no default gestures. You can change the number of lines moved per page under **NVDA Clipboard** in NVDA's Settings dialog, and assign the commands under **NVDA Clipboard** in the Input Gestures dialog.
 
-Press the current line or word command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
+Press the current line or navigation unit command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
 Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Alt+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
@@ -92,9 +92,9 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Previous clipboard line | `Ctrl+NumPad 7` | `NVDA+Alt+Up Arrow` |
 | Current clipboard line | `Ctrl+NumPad 8` | `NVDA+Alt+L` |
 | Next clipboard line | `Ctrl+NumPad 9` | `NVDA+Alt+Down Arrow` |
-| Previous clipboard word | `Ctrl+NumPad 4` | `NVDA+Alt+Shift+Left Arrow` |
-| Current clipboard word | `Ctrl+NumPad 5` | `NVDA+Alt+Shift+.` |
-| Next clipboard word | `Ctrl+NumPad 6` | `NVDA+Alt+Shift+Right Arrow` |
+| Previous clipboard navigation unit | `Ctrl+NumPad 4` | `NVDA+Alt+Shift+Left Arrow` |
+| Current clipboard navigation unit | `Ctrl+NumPad 5` | `NVDA+Alt+Shift+.` |
+| Next clipboard navigation unit | `Ctrl+NumPad 6` | `NVDA+Alt+Shift+Right Arrow` |
 | Previous clipboard character | `Ctrl+NumPad 1` | `NVDA+Alt+Left Arrow` |
 | Current clipboard character | `Ctrl+NumPad 2` | `NVDA+Alt+.` |
 | Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Alt+Right Arrow` |
