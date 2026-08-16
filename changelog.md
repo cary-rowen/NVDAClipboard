@@ -2,4 +2,5 @@
 
 - Initial NVDA Clipboard development release.
 - Added accessible clipboard navigation and bounded SQLite history for text, formatted content, images, mixed entries, and file groups.
+- Added configurable clipboard navigation units using Windows word boundaries or Unicode punctuation.
 - Added a type-aware manager, user categories, last-spoken text commands, and optional Tiantan Clipboard and OneDrive synchronization.

@@ -1762,12 +1762,32 @@ msgstr "无法更新本地剪贴板存储"
 #. Translators: Summary/title for this add-on
 #. to be shown on installation and add-on information found in add-on store
 #: addon\globalPlugins\nvdaClipboard\__init__.py:32
-#: addon\globalPlugins\nvdaClipboard\settings.py:39 buildVars.py:30
+#: addon\globalPlugins\nvdaClipboard\settings.py:35 buildVars.py:30
 msgid "NVDA Clipboard"
 msgstr "剪贴板"
 
+#. Translators: Label for choosing how previous, current, and next navigation units are split.
+#: addon\globalPlugins\nvdaClipboard\settings.py:43
+msgid "Navigation unit &splitting:"
+msgstr "导航单位拆分方式(&S)："
+
+#. Translators: Split clipboard navigation units using Windows word boundaries.
+#: addon\globalPlugins\nvdaClipboard\settings.py:49
+msgid "Windows word boundaries"
+msgstr "Windows 词边界"
+
+#. Translators: Split clipboard navigation units at Unicode punctuation characters.
+#: addon\globalPlugins\nvdaClipboard\settings.py:51
+msgid "Split at punctuation"
+msgstr "按标点符号拆分"
+
+#. Translators: Checkbox to make each punctuation character a separate clipboard navigation unit.
+#: addon\globalPlugins\nvdaClipboard\settings.py:60
+msgid "Treat &punctuation as separate navigation units"
+msgstr "将标点符号作为单独的导航单位(&P)"
+
 #. Translators: Label for the number of clipboard lines moved by the page up and page down commands.
-#: addon\globalPlugins\nvdaClipboard\settings.py:46
+#: addon\globalPlugins\nvdaClipboard\settings.py:71
 msgid "&Number of lines to move when paging up or down:"
 msgstr "向上或向下翻页时跳转的行数(&N)："
 
@@ -1818,22 +1838,22 @@ msgid ""
 "for character descriptions."
 msgstr "读出当前剪贴板行。连按两次逐字朗读，连按三次逐字解释。"
 
-#. Translators: Input help description for moving to the previous clipboard word.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:173
-msgid "Moves to and reports the previous clipboard word"
-msgstr "移动到剪贴板上一个单词并读出"
+#. Translators: Input help description for moving to the previous clipboard navigation unit.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:179
+msgid "Moves to and reports the previous clipboard navigation unit"
+msgstr "移动到剪贴板的上一个导航单位并读出"
 
-#. Translators: Input help description for moving to the next clipboard word.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:183
-msgid "Moves to and reports the next clipboard word"
-msgstr "移动到剪贴板下一个单词并读出"
+#. Translators: Input help description for moving to the next clipboard navigation unit.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:189
+msgid "Moves to and reports the next clipboard navigation unit"
+msgstr "移动到剪贴板的下一个导航单位并读出"
 
-#. Translators: Input help description for reporting the current clipboard word.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:194
+#. Translators: Input help description for reporting the current clipboard navigation unit.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:200
 msgid ""
-"Reports the current clipboard word. Press twice to spell it and three times "
-"for character descriptions."
-msgstr "读出当前剪贴板单词。连按两次逐字朗读，连按三次逐字解释。"
+"Reports the current clipboard navigation unit. Press twice to spell it and "
+"three times for character descriptions."
+msgstr "读出当前剪贴板导航单位。连按两次逐字朗读，连按三次逐字解释。"
 
 #. Translators: Input help description for moving to the previous clipboard character.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:205
