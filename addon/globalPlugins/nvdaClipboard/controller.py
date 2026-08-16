@@ -251,7 +251,6 @@ class ClipboardController:
 		self._canUpload = False
 		self._fileSizeCalculation: FileSizeCalculation | None = None
 		self._pendingFileSizeReport: FileSizeCalculation | None = None
-		self._fileItemCount: int = 0
 		self._textStatisticsCalculation: TextStatisticsCalculation | None = None
 		self._pendingTextStatisticsReport: TextStatisticsCalculation | None = None
 		# Translators: Summary used when the system clipboard is empty.
@@ -563,35 +562,29 @@ class ClipboardController:
 			if progress.isComplete:
 				if progress.isIncomplete:
 					# Translators: Clipboard file calculation with partial size and item counts.
-					summary = _("{summary}: about {details}").format(
+					summary = _("{summary}; contents total about {details}").format(
 						details=detailsText,
 						summary=self._summary,
 					)
 				else:
 					# Translators: Completed clipboard file calculation with size and item counts.
-					summary = _("{summary}: {details}").format(
+					summary = _("{summary}; contents total {details}").format(
 						details=detailsText,
 						summary=self._summary,
 					)
 			else:
 				# Translators: Clipboard file calculation with size and item counts accumulated so far.
-				summary = _("{summary}: calculating, {details}").format(
+				summary = _("{summary}; calculating contents, {details}").format(
 					details=detailsText,
 					summary=self._summary,
 				)
 		else:
 			if progress.isComplete:
-				# Translators: Clipboard file calculation where no size, file count, or folder count was available.
-				summary = _(
-					"{summary}: could not calculate size, file count, or folder count",
-				).format(summary=self._summary)
+				# Translators: Clipboard file calculation where no content details were available.
+				summary = _("{summary}; could not calculate contents").format(summary=self._summary)
 			else:
-				# Translators: Clipboard file calculation before any size or item count is available.
-				summary = ngettext(
-					"{summary}: calculating, {count} item",
-					"{summary}: calculating, {count} items",
-					self._fileItemCount,
-				).format(count=self._fileItemCount, summary=self._summary)
+				# Translators: Clipboard file calculation before any content details are available.
+				summary = _("{summary}; calculating contents").format(summary=self._summary)
 		ui.message(summary)
 
 	def _onTextStatisticsCalculationComplete(self, calculation: TextStatisticsCalculation) -> None:
@@ -1276,7 +1269,6 @@ class ClipboardController:
 			if snapshot.contentType == ClipboardContentType.FILES and snapshot.files
 			else None
 		)
-		self._fileItemCount = len(snapshot.files) if snapshot.contentType == ClipboardContentType.FILES else 0
 		self._pendingTextStatisticsReport = None
 		if self._textStatisticsCalculation is not None:
 			self._textStatisticsCalculation.cancel()
@@ -2337,12 +2329,26 @@ class ClipboardController:
 			)
 		if snapshot.contentType == ClipboardContentType.FILES:
 			itemCount = len(snapshot.files)
-			# Translators: Separator between file names in a clipboard summary.
-			names = _(", ").join(Path(filePath).name or filePath for filePath in snapshot.files[:2])
-			if itemCount > 2:
-				# Translators: File names summary when additional clipboard items are omitted.
-				names = _("{names}, and others").format(names=names)
-			return names
+			if snapshot.filesWereCut:
+				return ngettext(
+					# Translators: Number of top-level file system items cut to the clipboard.
+					"Cut files: {count} item",
+					"Cut files: {count} items",
+					itemCount,
+				).format(count=itemCount)
+			if snapshot.filesWereLinked:
+				return ngettext(
+					# Translators: Number of top-level file system items linked from the clipboard.
+					"Linked files: {count} item",
+					"Linked files: {count} items",
+					itemCount,
+				).format(count=itemCount)
+			return ngettext(
+				# Translators: Number of top-level file system items copied to the clipboard.
+				"Copied files: {count} item",
+				"Copied files: {count} items",
+				itemCount,
+			).format(count=itemCount)
 		if snapshot.contentType == ClipboardContentType.IMAGE:
 			if snapshot.imageWidth and snapshot.imageHeight:
 				if snapshot.imageBitDepth:
