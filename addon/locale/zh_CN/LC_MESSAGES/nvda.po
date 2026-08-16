@@ -271,6 +271,36 @@ msgstr "NVDA 主窗口不可用"
 msgid "Clipboard history"
 msgstr "剪贴板历史"
 
+#. Translators: Exact name of the RGB color (255, 0, 0).
+#: addon\globalPlugins\nvdaClipboard\controller.py:103
+msgid "red"
+msgstr "红色"
+
+#. Translators: Exact name of the RGB color (0, 255, 0).
+#: addon\globalPlugins\nvdaClipboard\controller.py:105
+msgid "green"
+msgstr "绿色"
+
+#. Translators: Exact name of the RGB color (0, 0, 255).
+#: addon\globalPlugins\nvdaClipboard\controller.py:107
+msgid "blue"
+msgstr "蓝色"
+
+#. Translators: Exact name of the RGB color (255, 255, 0).
+#: addon\globalPlugins\nvdaClipboard\controller.py:109
+msgid "yellow"
+msgstr "黄色"
+
+#. Translators: Exact name of the RGB color (0, 255, 255).
+#: addon\globalPlugins\nvdaClipboard\controller.py:111
+msgid "cyan"
+msgstr "青色"
+
+#. Translators: Exact name of the RGB color (255, 0, 255).
+#: addon\globalPlugins\nvdaClipboard\controller.py:113
+msgid "magenta"
+msgstr "品红色"
+
 #. Translators: Error shown when supported clipboard formats cannot be restored.
 #: addon\globalPlugins\nvdaClipboard\controller.py:206
 #: addon\globalPlugins\nvdaClipboard\controller.py:1055
@@ -718,18 +748,12 @@ msgstr "纯文本"
 msgid "Formatted text"
 msgstr "格式化文本"
 
-#. Translators: Type-only summary of mixed clipboard content when image dimensions are unavailable.
+#. Translators: Type of clipboard content containing both text and an image.
 #. Translators: Kind of stored text-and-image content in the manager.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2332
+#: addon\globalPlugins\nvdaClipboard\controller.py:2343
 #: addon\globalPlugins\nvdaClipboard\manager.py:1320
 msgid "Text and image"
 msgstr "文本和图像"
-
-#. Translators: Mixed clipboard content with known image dimensions.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2334
-#, python-brace-format
-msgid "Text and image, {width} by {height} pixels"
-msgstr "文本和图像，{width} × {height} 像素"
 
 #. Translators: Number of top-level file system items cut to the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2335
@@ -752,20 +776,8 @@ msgid "Copied files: {count} item"
 msgid_plural "Copied files: {count} items"
 msgstr[0] "已复制文件：共 {count} 项"
 
-#. Translators: Summary of an image with known dimensions and color depth.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2350
-#, python-brace-format
-msgid "Image, {width} by {height} pixels, {depth}-bit color"
-msgstr "图像，{width} × {height} 像素，{depth} 位色"
-
-#. Translators: Summary of an image with known dimensions but unknown color depth.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2356
-#, python-brace-format
-msgid "Image, {width} by {height} pixels"
-msgstr "图像，{width} × {height} 像素"
-
-#. Translators: Type-only image summary when dimensions are unavailable.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2361
+#. Translators: Type of image-only clipboard content.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2368
 msgid "Image"
 msgstr "图像"
 
@@ -778,6 +790,51 @@ msgstr "受保护的剪贴板内容不可用"
 #: addon\globalPlugins\nvdaClipboard\controller.py:2369
 msgid "Unsupported clipboard content"
 msgstr "不支持的剪贴板内容"
+
+#. Translators: Orientation of an image whose width and height are equal.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2384
+msgid "square"
+msgstr "正方形"
+
+#. Translators: Orientation of an image wider than it is tall.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2387
+msgid "landscape"
+msgstr "横向"
+
+#. Translators: Orientation of an image taller than it is wide.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2390
+msgid "portrait"
+msgstr "纵向"
+
+#. Translators: Clipboard image type, dimensions, and orientation.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2392
+#, python-brace-format
+msgid "{summary}: {width} by {height} pixels, {orientation}"
+msgstr "{summary}：{orientation}，{width} × {height} 像素"
+
+#. Translators: Exact image property indicating that every pixel is fully transparent.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2400
+#, python-brace-format
+msgid "{summary}; fully transparent"
+msgstr "{summary}；全透明"
+
+#. Translators: Exact image property indicating that every pixel has the same color.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2403
+#, python-brace-format
+msgid "{summary}; solid {color}"
+msgstr "{summary}；纯{color}"
+
+#. Translators: Image summary followed by the percentage of fully transparent pixels.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2410
+#, python-brace-format
+msgid "{summary}; fully transparent pixels: {percentage}%"
+msgstr "{summary}；全透明像素占 {percentage}%"
+
+#. Translators: Image summary followed by the percentage of black or white pixels.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2416
+#, python-brace-format
+msgid "{summary}; {color} pixels: {percentage}%"
+msgstr "{summary}；{color}像素占 {percentage}%"
 
 #. Translators: Confirmation after restoring one or multiple files to the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2376

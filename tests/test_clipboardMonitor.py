@@ -115,8 +115,8 @@ class ClipboardMonitorTests(unittest.TestCase):
 			monitor._buildWritableFormats(partial),
 		)
 
-	def testPngDecodeRunsOnlyForWorkerReadsAfterClipboardClose(self) -> None:
-		"""Keep synchronous reads fast and decode worker PNG bytes only after clipboard close."""
+	def testImageAnalysisRunsOnlyForWorkerReadsAfterClipboardClose(self) -> None:
+		"""Keep synchronous DIB reads fast and analyze worker images only after clipboard close."""
 		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
 		monitor._formats = SimpleNamespace(
 			html=101,
@@ -131,9 +131,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 		monitor._readTextIfAvailable = Mock(return_value=None)
 		monitor._readOptionalFormat = Mock(return_value=(None, False))
 		dibData = _buildDibV5()
-		monitor._readImageFromOpenClipboard = Mock(
-			return_value=("PNG", b"png", (1, 1, 32), False),
-		)
+		monitor._readImageFromOpenClipboard = Mock(return_value=("DIBV5", dibData, (1, 1, 32), False))
 		monitor._readDibImageForSequence = Mock(
 			return_value=("DIBV5", dibData, (1, 1, 32), False),
 		)
@@ -146,23 +144,33 @@ class ClipboardMonitorTests(unittest.TestCase):
 			clipboardIsClosed = True
 			return True
 
-		def decodePng(_data: bytes, _info: tuple[int, int, int]) -> bool:
-			"""Reject the PNG after verifying that the clipboard is closed."""
+		def analyzeImage(
+			imageFormat: str,
+			_data: bytes,
+			_info: tuple[int, int, int],
+		) -> SimpleNamespace | None:
+			"""Reject PNG and describe fallback DIB after verifying that the clipboard is closed."""
 			self.assertTrue(clipboardIsClosed)
-			return False
+			return (
+				None
+				if imageFormat == "PNG"
+				else SimpleNamespace(color=(0, 0, 0), colorPercentage=100.0, transparentPercentage=0.0)
+			)
 
 		with (
 			patch.object(clipboardMonitor, "_closeClipboard", side_effect=closeClipboard),
-			patch.object(clipboardMonitor, "isPngImageDecodable", side_effect=decodePng) as decoder,
+			patch.object(clipboardMonitor, "getImageProperties", side_effect=analyzeImage) as analyzer,
 		):
-			synchronousSnapshot = monitor.readNow()
-			decoder.assert_not_called()
+			synchronousSnapshot = monitor.readNow(decodePng=True)
+			analyzer.assert_not_called()
+			monitor._readImageFromOpenClipboard.return_value = ("PNG", b"png", (1, 1, 32), False)
 			clipboardIsClosed = False
-			snapshot = monitor.readNow(decodePng=True)
+			snapshot = monitor.readNow(analyzeImage=True)
 
-		self.assertEqual("PNG", synchronousSnapshot.imageFormat)
+		self.assertEqual("DIBV5", synchronousSnapshot.imageFormat)
 		self.assertEqual("DIBV5", snapshot.imageFormat)
 		self.assertEqual(dibData, snapshot.imageData)
+		self.assertEqual((0, 0, 0), snapshot.imageColor)
 		monitor._readDibImageForSequence.assert_called_once_with(42)
 
 	def testSourceDibDoesNotCopySynthesizedBitmap(self) -> None:

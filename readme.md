@@ -56,7 +56,7 @@ You can also use the global history commands to move through recent entries with
 
 ## Images
 
-When the clipboard contains an image, the add-on can report its dimensions and color depth. Use `NVDA+Alt+PrintScreen` to save the current clipboard image, or save an image selected in the Clipboard Manager. `NVDA+PrintScreen` copies the current navigator object as an image.
+When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. Use `NVDA+Alt+PrintScreen` to save the current clipboard image, or save an image selected in the Clipboard Manager. `NVDA+PrintScreen` copies the current navigator object as an image.
 
 ## Cloud Synchronization
 

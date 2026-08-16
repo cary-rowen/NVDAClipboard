@@ -30,7 +30,7 @@ from .clipboardData import (
 	getPngImageInfo,
 	isImageSizeSafe,
 )
-from .imageCodec import isPngImageDecodable, pngToPackedDib
+from .imageCodec import getImageProperties, isPngImageDecodable, pngToPackedDib
 
 __all__ = [
 	"ClipboardContentType",
@@ -74,6 +74,9 @@ class ClipboardSnapshot:
 	imageWidth: int = 0
 	imageHeight: int = 0
 	imageBitDepth: int = 0
+	imageColor: tuple[int, int, int] | None = None
+	imageColorPercentage: float = 0.0
+	imageTransparentPercentage: float = 0.0
 	files: tuple[str, ...] = ()
 	preferredDropEffect: int | None = None
 	canIncludeInHistory: bool = True
@@ -479,10 +482,15 @@ class ClipboardMonitor:
 		self._window.destroy()
 		self._window = None
 
-	def readNow(self, *, decodePng: bool = False) -> ClipboardSnapshot:
-		"""Read the current clipboard state, optionally fully decoding PNG data after close."""
+	def readNow(
+		self,
+		*,
+		decodePng: bool = False,
+		analyzeImage: bool = False,
+	) -> ClipboardSnapshot:
+		"""Read the clipboard, optionally validating PNG or analyzing image pixels after close."""
 		try:
-			return self._readSnapshot(decodePng=decodePng)
+			return self._readSnapshot(decodePng=decodePng, analyzeImage=analyzeImage)
 		except Exception as error:
 			log.debugWarning("ClipboardMonitor failed to read clipboard.", exc_info=True)
 			return ClipboardSnapshot(ClipboardContentType.ERROR, error=str(error))
@@ -638,7 +646,7 @@ class ClipboardMonitor:
 		"""Read and queue completed snapshots until pending updates are consumed."""
 		reportedOpenFailure = False
 		while True:
-			snapshot = self.readNow(decodePng=True)
+			snapshot = self.readNow(analyzeImage=True)
 			shouldRestart = False
 			shouldRetry = False
 			shouldReadAgain = False
@@ -708,7 +716,7 @@ class ClipboardMonitor:
 			except Exception:
 				log.exception("ClipboardMonitor callback failed.")
 
-	def _readSnapshot(self, *, decodePng: bool) -> ClipboardSnapshot:
+	def _readSnapshot(self, *, decodePng: bool, analyzeImage: bool) -> ClipboardSnapshot:
 		"""Read one internally consistent snapshot, decoding copied PNG data after close."""
 		if not self._openClipboardWithRetry(None):
 			return ClipboardSnapshot(ClipboardContentType.ERROR, error=_OPEN_CLIPBOARD_ERROR)
@@ -799,15 +807,22 @@ class ClipboardMonitor:
 			if not _closeClipboard():
 				log.debugWarning("ClipboardMonitor failed to close clipboard.", exc_info=WinError())
 		assert imageSnapshot is not None
-		if (
-			decodePng
-			and imageSnapshot.imageFormat == "PNG"
-			and imageSnapshot.imageData is not None
-			and not isPngImageDecodable(
-				imageSnapshot.imageData,
-				(imageSnapshot.imageWidth, imageSnapshot.imageHeight, imageSnapshot.imageBitDepth),
-			)
-		):
+		if imageSnapshot.imageData is None:
+			return imageSnapshot
+		if not analyzeImage and (not decodePng or imageSnapshot.imageFormat != "PNG"):
+			return imageSnapshot
+		imageInfo = (imageSnapshot.imageWidth, imageSnapshot.imageHeight, imageSnapshot.imageBitDepth)
+		imageProperties = (
+			getImageProperties(imageSnapshot.imageFormat, imageSnapshot.imageData, imageInfo)
+			if analyzeImage
+			else None
+		)
+		pngIsDecodable = (
+			imageProperties is not None
+			if analyzeImage
+			else isPngImageDecodable(imageSnapshot.imageData, imageInfo)
+		)
+		if not pngIsDecodable and imageSnapshot.imageFormat == "PNG":
 			imageFormat, imageData, imageInfo, _imageDropped = self._readDibImageForSequence(
 				imageSnapshot.sequenceNumber,
 			)
@@ -817,7 +832,7 @@ class ClipboardMonitor:
 					imageFormat=None,
 					imageData=None,
 				)
-			return replace(
+			imageSnapshot = replace(
 				imageSnapshot,
 				imageFormat=imageFormat,
 				imageData=imageData,
@@ -825,7 +840,15 @@ class ClipboardMonitor:
 				imageHeight=imageInfo[1],
 				imageBitDepth=imageInfo[2],
 			)
-		return imageSnapshot
+			imageProperties = getImageProperties(imageFormat, imageData, imageInfo) if analyzeImage else None
+		if imageProperties is None:
+			return imageSnapshot
+		return replace(
+			imageSnapshot,
+			imageColor=imageProperties.color,
+			imageColorPercentage=imageProperties.colorPercentage,
+			imageTransparentPercentage=imageProperties.transparentPercentage,
+		)
 
 	def _readTextIfAvailable(self) -> str | None:
 		"""Return bounded CF_UNICODETEXT data, distinguishing an empty value from absence."""
