@@ -211,7 +211,3 @@ class TextStatisticsTests(unittest.TestCase):
 			end += len(ctypes.create_unicode_buffer(segment)) - 1
 			boundaries.append(end)
 		return tuple(boundaries)
-
-
-if __name__ == "__main__":
-	unittest.main()

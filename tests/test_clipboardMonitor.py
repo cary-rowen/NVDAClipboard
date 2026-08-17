@@ -361,7 +361,3 @@ class ClipboardMonitorTests(unittest.TestCase):
 		self.assertEqual((clipboardMonitor.CF_UNICODETEXT,), context.exception.__cause__.args)
 		monitor.invalidatePendingSnapshots.assert_called_once_with()
 		monitor.handleClipboardUpdate.assert_called_once_with()
-
-
-if __name__ == "__main__":
-	unittest.main()

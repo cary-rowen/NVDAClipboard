@@ -60,7 +60,3 @@ class ManagerOffsetTests(unittest.TestCase):
 						expectedSourceOffset += 2 if text.startswith("\r\n", expectedSourceOffset) else 1
 						remaining -= 1
 					self.assertEqual(expectedSourceOffset, _editorToSourceOffset(text, offset))
-
-
-if __name__ == "__main__":
-	unittest.main()

@@ -14,7 +14,6 @@ _MODULE_PATH = Path(__file__).parents[1] / "addon" / "installTasks.py"
 _SPEC = importlib.util.spec_from_file_location("nvdaClipboardInstallTasksTests", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 installTasks = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = installTasks
 _ADDON_HANDLER = ModuleType("addonHandler")
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
@@ -48,7 +47,3 @@ class InstallTasksTests(unittest.TestCase):
 
 		legacyAddon.requestRemove.assert_called_once_with()
 		installTasks.log.exception.assert_called_once()
-
-
-if __name__ == "__main__":
-	unittest.main()
