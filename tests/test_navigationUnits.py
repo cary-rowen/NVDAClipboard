@@ -17,8 +17,29 @@ sys.modules[_SPEC.name] = navigationUnits
 _SPEC.loader.exec_module(navigationUnits)
 
 
-class PunctuationUnitOffsetTests(unittest.TestCase):
-	"""Verify punctuation-delimited navigation units without loading NVDA."""
+class NavigationUnitOffsetTests(unittest.TestCase):
+	"""Verify configurable navigation unit boundaries without loading NVDA."""
+
+	def testCamelCaseBoundaries(self) -> None:
+		"""Split common camel-case forms while preserving surrounding content."""
+		cases = {
+			"getWord,": ((0, 3), (3, 8)),
+			"call getWord now.": ((0, 5), (5, 8), (8, 13), (13, 17)),
+			"call cafe\u0301Value now.": ((0, 5), (5, 10), (10, 16), (16, 20)),
+			"getǅuro": ((0, 3), (3, 7)),
+			"XMLHttpRequest": ((0, 3), (3, 7), (7, 14)),
+			"HTTP": ((0, 4),),
+			"version2Value": ((0, 8), (8, 13)),
+			"überValue": ((0, 4), (4, 9)),
+		}
+		for text, expectedUnits in cases.items():
+			with self.subTest(text=text):
+				for expected in expectedUnits:
+					for offset in range(*expected):
+						self.assertEqual(
+							expected,
+							navigationUnits.getCamelCaseUnitOffsets(text, offset),
+						)
 
 	def testPunctuationRunsAttachToPrecedingText(self) -> None:
 		"""Keep consecutive punctuation with the preceding text by default."""
@@ -122,6 +143,7 @@ class PunctuationUnitOffsetTests(unittest.TestCase):
 
 	def testPastEndOffsetAlwaysAdvances(self) -> None:
 		"""Return an empty advancing range at or beyond the text end."""
+		self.assertEqual((3, 4), navigationUnits.getCamelCaseUnitOffsets("abc", 3))
 		self.assertEqual(
 			(3, 4),
 			navigationUnits.getPunctuationUnitOffsets("abc", 3, separatePunctuation=False),
@@ -129,6 +151,8 @@ class PunctuationUnitOffsetTests(unittest.TestCase):
 
 	def testNegativeOffsetIsRejected(self) -> None:
 		"""Reject an invalid negative offset explicitly."""
+		with self.assertRaises(ValueError):
+			navigationUnits.getCamelCaseUnitOffsets("abc", -1)
 		with self.assertRaises(ValueError):
 			navigationUnits.getPunctuationUnitOffsets("abc", -1, separatePunctuation=False)
 

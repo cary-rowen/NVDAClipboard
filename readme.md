@@ -20,7 +20,7 @@ Before native ARM64 can be declared supported:
 
 ## Exploring the Clipboard
 
-You can browse clipboard text by line, navigation unit, or character. Navigation units use Windows word boundaries by default. Under **NVDA Clipboard** in NVDA's Settings dialog, you can instead split units at Unicode punctuation and choose whether each punctuation character is a separate unit. When punctuation is not separate, delimiter clusters are kept with the preceding text where possible. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
+You can browse clipboard text by line, navigation unit, or character. Navigation units use Windows word boundaries by default. Under **NVDA Clipboard** in NVDA's Settings dialog, you can instead split units at Unicode punctuation and choose whether each punctuation character is a separate unit. Joined words such as `getWord` are further split based on capitalization by default in either mode; this can be turned off. When punctuation is not separate, delimiter clusters are kept with the preceding text where possible. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
 
 Text summaries report the current one-based navigation line and character column before the total line and character statistics; a tab counts as one column.
 

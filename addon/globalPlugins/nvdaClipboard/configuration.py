@@ -23,6 +23,7 @@ MAX_PAGE_LINE_COUNT = 150
 _CONFIG_SECTION = "nvdaClipboard"
 _CONFIG_PAGE_LINE_COUNT = "pageLineCount"
 _CONFIG_NAVIGATION_SPLIT_MODE = "navigationSplitMode"
+_CONFIG_SPLIT_CAMEL_CASE = "splitCamelCase"
 _CONFIG_SEPARATE_PUNCTUATION = "separatePunctuation"
 _DEFAULT_PAGE_LINE_COUNT = 10
 
@@ -36,6 +37,7 @@ _sectionSpec.update(
 			f'option("{NavigationSplitMode.WINDOWS_WORD.value}", "{NavigationSplitMode.PUNCTUATION.value}", '
 			f'default="{NavigationSplitMode.WINDOWS_WORD.value}")'
 		),
+		_CONFIG_SPLIT_CAMEL_CASE: "boolean(default=true)",
 		_CONFIG_SEPARATE_PUNCTUATION: "boolean(default=false)",
 	},
 )
@@ -46,11 +48,12 @@ def getPageLineCount() -> int:
 	return int(config.conf[_CONFIG_SECTION][_CONFIG_PAGE_LINE_COUNT])
 
 
-def getNavigationSplitSettings() -> tuple[NavigationSplitMode, bool]:
-	"""Return the configured navigation split mode and punctuation behavior."""
+def getNavigationSplitSettings() -> tuple[NavigationSplitMode, bool, bool]:
+	"""Return the configured navigation split mode and modifiers."""
 	section = config.conf[_CONFIG_SECTION]
 	return (
 		NavigationSplitMode(str(section[_CONFIG_NAVIGATION_SPLIT_MODE])),
+		bool(section[_CONFIG_SPLIT_CAMEL_CASE]),
 		bool(section[_CONFIG_SEPARATE_PUNCTUATION]),
 	)
 
@@ -59,10 +62,12 @@ def saveSettings(
 	*,
 	pageLineCount: int,
 	navigationSplitMode: NavigationSplitMode,
+	splitCamelCase: bool,
 	separatePunctuation: bool,
 ) -> None:
 	"""Save settings from the NVDA Clipboard settings panel."""
 	section = config.conf[_CONFIG_SECTION]
 	section[_CONFIG_PAGE_LINE_COUNT] = pageLineCount
 	section[_CONFIG_NAVIGATION_SPLIT_MODE] = navigationSplitMode.value
+	section[_CONFIG_SPLIT_CAMEL_CASE] = splitCamelCase
 	section[_CONFIG_SEPARATE_PUNCTUATION] = separatePunctuation

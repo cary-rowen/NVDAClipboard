@@ -12,7 +12,7 @@ import textInfos
 from textInfos.offsets import Offsets, OffsetsTextInfo
 
 from .configuration import NavigationSplitMode, getNavigationSplitSettings
-from .navigationUnits import getPunctuationUnitOffsets
+from .navigationUnits import getCamelCaseUnitOffsets, getPunctuationUnitOffsets
 
 
 _SUPPORTED_UNITS = frozenset(
@@ -58,19 +58,27 @@ class _ClipboardTextInfo(OffsetsTextInfo):
 
 	@override
 	def _getWordOffsets(self, offset: int) -> tuple[int, int]:
-		"""Return word or punctuation-delimited offsets for the configured mode."""
-		splitMode, separatePunctuation = getNavigationSplitSettings()
+		"""Return offsets for the configured navigation unit."""
+		splitMode, splitCamelCase, separatePunctuation = getNavigationSplitSettings()
 		if splitMode is NavigationSplitMode.WINDOWS_WORD:
 			start, end = super()._getWordOffsets(offset)
+		else:
+			lineStart, lineEnd = self._getLineOffsets(offset)
+			lineText = self._getTextRange(lineStart, lineEnd)
+			start, end = getPunctuationUnitOffsets(
+				lineText,
+				offset - lineStart,
+				separatePunctuation=separatePunctuation,
+			)
+			start += lineStart
+			end += lineStart
+		if not splitCamelCase:
 			return start, end
-		lineStart, lineEnd = self._getLineOffsets(offset)
-		lineText = self._getTextRange(lineStart, lineEnd)
-		start, end = getPunctuationUnitOffsets(
-			lineText,
-			offset - lineStart,
-			separatePunctuation=separatePunctuation,
+		camelStart, camelEnd = getCamelCaseUnitOffsets(
+			self._getTextRange(start, end),
+			offset - start,
 		)
-		return start + lineStart, end + lineStart
+		return camelStart + start, camelEnd + start
 
 
 class ClipboardNavigator:

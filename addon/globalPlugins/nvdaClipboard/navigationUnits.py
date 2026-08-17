@@ -13,6 +13,83 @@ def _isPunctuation(character: str) -> bool:
 	return unicodedata.category(character)[0] == "P"
 
 
+def _isMark(character: str) -> bool:
+	"""Return whether a character has a Unicode mark category."""
+	return unicodedata.category(character)[0] == "M"
+
+
+def _isWordCharacter(character: str) -> bool:
+	"""Return whether NVDA's fallback word boundaries include a character."""
+	return unicodedata.category(character)[0] in "LMN"
+
+
+def _isCamelCaseBoundary(text: str, index: int) -> bool:
+	"""Return whether an index separates camel-case identifier components."""
+	right = text[index]
+	if not right.istitle():
+		return False
+	leftIndex = index - 1
+	while leftIndex >= 0 and _isMark(text[leftIndex]):
+		leftIndex -= 1
+	if leftIndex < 0:
+		return False
+	left = text[leftIndex]
+	nextIndex = index + 1
+	while nextIndex < len(text) and _isMark(text[nextIndex]):
+		nextIndex += 1
+	return (
+		left.islower()
+		or left.isdigit()
+		or (left.istitle() and nextIndex < len(text) and text[nextIndex].islower())
+	)
+
+
+def _wordContainsCamelCaseBoundary(text: str, start: int, end: int) -> bool:
+	"""Return whether a word contains a camel-case boundary."""
+	return any(_isCamelCaseBoundary(text, index) for index in range(start + 1, end))
+
+
+def _isCamelCaseUnitBoundary(text: str, index: int) -> bool:
+	"""Return whether an index separates capitalization-refined navigation units."""
+	if _isCamelCaseBoundary(text, index):
+		return True
+	if not _isWordCharacter(text[index]) or _isWordCharacter(text[index - 1]):
+		return False
+
+	previousEnd = index
+	while previousEnd > 0 and not _isWordCharacter(text[previousEnd - 1]):
+		previousEnd -= 1
+	if previousEnd == 0:
+		return False
+
+	currentEnd = index + 1
+	while currentEnd < len(text) and _isWordCharacter(text[currentEnd]):
+		currentEnd += 1
+	if _wordContainsCamelCaseBoundary(text, index, currentEnd):
+		return True
+
+	previousStart = previousEnd - 1
+	while previousStart > 0 and _isWordCharacter(text[previousStart - 1]):
+		previousStart -= 1
+	return _wordContainsCamelCaseBoundary(text, previousStart, previousEnd)
+
+
+def getCamelCaseUnitOffsets(text: str, offset: int) -> tuple[int, int]:
+	"""Return the capitalization-refined navigation unit containing an offset."""
+	if offset < 0:
+		raise ValueError(f"Offset must not be negative, got {offset}")
+	if offset >= len(text):
+		return offset, offset + 1
+
+	start = offset
+	while start > 0 and not _isCamelCaseUnitBoundary(text, start):
+		start -= 1
+	end = offset + 1
+	while end < len(text) and not _isCamelCaseUnitBoundary(text, end):
+		end += 1
+	return start, end
+
+
 def _getSeparatePunctuationUnitOffsets(text: str, offset: int) -> tuple[int, int]:
 	"""Return a unit where each punctuation character is separate."""
 	if _isPunctuation(text[offset]):

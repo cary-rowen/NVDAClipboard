@@ -1781,6 +1781,11 @@ msgstr "Windows 词边界"
 msgid "Split at punctuation"
 msgstr "按标点符号拆分"
 
+#. Translators: Checkbox to navigate joined words such as "getWord" as separate units.
+#: addon\globalPlugins\nvdaClipboard\settings.py:57
+msgid "Split joined words by &capitalization"
+msgstr "根据大小写拆分连写单词(&C)"
+
 #. Translators: Checkbox to make each punctuation character a separate clipboard navigation unit.
 #: addon\globalPlugins\nvdaClipboard\settings.py:60
 msgid "Treat &punctuation as separate navigation units"
