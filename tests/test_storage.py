@@ -703,7 +703,3 @@ class StorageSelfCheckTests(unittest.TestCase):
 	def testStorageSelfCheck(self) -> None:
 		"""Require the complete storage self-check to succeed."""
 		_runSelfCheck()
-
-
-if __name__ == "__main__":
-	unittest.main()

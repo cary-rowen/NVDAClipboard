@@ -173,7 +173,3 @@ class ImageCodecTests(unittest.TestCase):
 			imageCodec.ImageProperties(),
 			imageCodec.getImageProperties("PNG", output.getvalue(), (1, 1, 1)),
 		)
-
-
-if __name__ == "__main__":
-	unittest.main()

@@ -93,7 +93,3 @@ class SearchTests(unittest.TestCase):
 				search.splitSearchKeywords(search.normalizeSearchText("needel")),
 			),
 		)
-
-
-if __name__ == "__main__":
-	unittest.main()

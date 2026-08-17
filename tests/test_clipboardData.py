@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import struct
-import sys
 import unittest
 import zlib
 
@@ -14,7 +13,6 @@ _MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClip
 _SPEC = importlib.util.spec_from_file_location("nvdaClipboardClipboardData", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 clipboardData = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = clipboardData
 _SPEC.loader.exec_module(clipboardData)
 
 
@@ -56,7 +54,3 @@ class ClipboardDataTests(unittest.TestCase):
 	def testImageDimensionsBoundScanlineWork(self) -> None:
 		"""Reject narrow images with a pathological number of scanlines."""
 		self.assertFalse(clipboardData.isImageSizeSafe(1, 30_000_000, 24))
-
-
-if __name__ == "__main__":
-	unittest.main()

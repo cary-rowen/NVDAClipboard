@@ -79,7 +79,3 @@ class ManagerCategoryContextMenuTests(unittest.TestCase):
 		controller.isHistoryCategory.assert_called_once_with("second")
 		categoryList.PopupMenu.assert_called_once_with(menu)
 		menu.Destroy.assert_called_once_with()
-
-
-if __name__ == "__main__":
-	unittest.main()

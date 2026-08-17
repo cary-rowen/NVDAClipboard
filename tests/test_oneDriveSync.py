@@ -704,7 +704,3 @@ class OneDriveSyncTests(unittest.TestCase):
 		self.assertIn(orphanHash, graph.payloads)
 		self.assertLess(graph.events.index("putManifest"), graph.events.index("apply"))
 		self.assertLess(graph.events.index("apply"), graph.events.index("delete"))
-
-
-if __name__ == "__main__":
-	unittest.main()

@@ -148,7 +148,3 @@ class CloudSyncTests(unittest.TestCase):
 			cloudSync.validateUploadText(withinLimit + "a")
 		self.assertEqual(context.exception.code, cloudSync.INVALID_ARGUMENT)
 		self.assertEqual(context.exception.message, cloudSync.TEXT_EXCEEDS_MAX_BYTES_ERROR)
-
-
-if __name__ == "__main__":
-	unittest.main()

@@ -43,18 +43,9 @@ _SPEC = importlib.util.spec_from_file_location(
 assert _SPEC is not None and _SPEC.loader is not None
 oneDriveProtocol = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = oneDriveProtocol
-_MISSING_MODULE = object()
-_originalAddonHandler = sys.modules.get("addonHandler", _MISSING_MODULE)
-sys.modules["addonHandler"] = _ADDON_HANDLER
-try:
-	with patch.dict(sys.modules, {"logHandler": _LOG_HANDLER}):
-		_SPEC.loader.exec_module(oneDriveProtocol)
-		storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
-finally:
-	if _originalAddonHandler is _MISSING_MODULE:
-		del sys.modules["addonHandler"]
-	else:
-		sys.modules["addonHandler"] = _originalAddonHandler  # type: ignore[assignment]
+with patch.dict(sys.modules, {"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER}):
+	_SPEC.loader.exec_module(oneDriveProtocol)
+	storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
 
 
 class OneDriveProtocolTests(unittest.TestCase):
@@ -323,7 +314,3 @@ class OneDriveProtocolTests(unittest.TestCase):
 				oneDriveProtocol._decodeManifest(json.dumps(invalidManifest).encode("utf-8"))
 		with self.assertRaises(oneDriveProtocol.OneDriveError):
 			oneDriveProtocol._decodeManifest(b"{}")
-
-
-if __name__ == "__main__":
-	unittest.main()

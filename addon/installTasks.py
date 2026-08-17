@@ -11,20 +11,12 @@ import addonHandler
 from logHandler import log
 
 
-_LEGACY_ADDON_NAME = "clipboardEnhancement"
-
-
-def _removeLegacyAddon() -> None:
-	"""Silently request removal of the previous Clipboard Enhancement add-on."""
+def onInstall() -> None:
+	"""Schedule removal of the legacy add-on without showing a dialog."""
 	try:
 		for addon in addonHandler.getAvailableAddons():
-			if addon.name == _LEGACY_ADDON_NAME:
+			if addon.name == "clipboardEnhancement":
 				addon.requestRemove()
 	except Exception:
 		# A failed cleanup must not roll back installation of the new add-on.
 		log.exception("Unable to schedule removal of the legacy Clipboard Enhancement add-on")
-
-
-def onInstall() -> None:
-	"""Schedule removal of the legacy add-on without showing a dialog."""
-	_removeLegacyAddon()

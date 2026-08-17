@@ -114,7 +114,3 @@ class ManagerDraftTests(unittest.TestCase):
 		self.assertEqual(2, manager._contentActiveKey)
 		manager._loadActiveItem.assert_not_called()
 		manager._updateUiState.assert_called_once_with()
-
-
-if __name__ == "__main__":
-	unittest.main()

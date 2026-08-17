@@ -115,7 +115,3 @@ class FileSizeCalculationTests(unittest.TestCase):
 		self.assertEqual(0, progress.fileCount)
 		self.assertEqual(0, progress.directoryCount)
 		self.assertTrue(progress.isIncomplete)
-
-
-if __name__ == "__main__":
-	unittest.main()
