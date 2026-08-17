@@ -1294,11 +1294,7 @@ class ClipboardController:
 		if shouldRecord and snapshot.canIncludeInHistory and snapshot.richFormatsDropped and snapshot.text:
 			# Translators: Message shown when oversized rich formats are omitted from a history entry.
 			ui.message(_("Some text formatting was too large and was not saved in history"))
-		if shouldRecord and snapshot.contentType not in (
-			ClipboardContentType.EMPTY,
-			ClipboardContentType.PROTECTED,
-			ClipboardContentType.UNSUPPORTED,
-		):
+		if shouldRecord:
 			playCopy()
 
 	def _applyCurrentSnapshot(self, snapshot: ClipboardSnapshot) -> None:
