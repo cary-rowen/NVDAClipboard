@@ -1007,7 +1007,16 @@ class ClipboardController:
 		)
 		confirmation = self._formatRestoreConfirmation(item)
 		if snapshot.imageFormat != "PNG":
-			self._writeSnapshot(snapshot, source)
+			try:
+				self._writeSnapshot(
+					snapshot,
+					source,
+					expectedSequenceNumber=expectedSequenceNumber,
+				)
+			except ClipboardSequenceChangedError:
+				# Translators: Error shown when another application changes the clipboard during a restore.
+				ui.message(_("The clipboard changed before it could be updated. Try again."))
+				return
 			ui.message(confirmation)
 			return
 		future = self._historyExecutor.submit(
