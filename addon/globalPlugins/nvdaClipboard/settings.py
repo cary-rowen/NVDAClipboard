@@ -38,7 +38,7 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 	def makeSettings(self, settingsSizer: wx.BoxSizer) -> None:
 		"""Add NVDA Clipboard controls to the settings panel."""
 		sizerHelper = guiHelper.BoxSizerHelper(self, sizer=settingsSizer)
-		navigationSplitMode, separatePunctuation = getNavigationSplitSettings()
+		navigationSplitMode, splitCamelCase, separatePunctuation = getNavigationSplitSettings()
 		# Translators: Label for choosing how previous, current, and next navigation units are split.
 		navigationSplitLabel = _("Navigation unit &splitting:")
 		self.navigationSplitChoice = sizerHelper.addLabeledControl(
@@ -52,6 +52,11 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 			),
 		)
 		self.navigationSplitChoice.SetSelection(_NAVIGATION_SPLIT_MODES.index(navigationSplitMode))
+		self.splitCamelCaseCheckBox = sizerHelper.addItem(
+			# Translators: Checkbox to navigate joined words such as "getWord" as separate units.
+			wx.CheckBox(self, label=_("Split joined words by &capitalization")),
+		)
+		self.splitCamelCaseCheckBox.SetValue(splitCamelCase)
 		self.separatePunctuationCheckBox = sizerHelper.addItem(
 			wx.CheckBox(
 				self,
@@ -85,5 +90,6 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 		saveSettings(
 			pageLineCount=self.pageLineCountSpin.GetValue(),
 			navigationSplitMode=_NAVIGATION_SPLIT_MODES[self.navigationSplitChoice.GetSelection()],
+			splitCamelCase=self.splitCamelCaseCheckBox.GetValue(),
 			separatePunctuation=self.separatePunctuationCheckBox.GetValue(),
 		)
