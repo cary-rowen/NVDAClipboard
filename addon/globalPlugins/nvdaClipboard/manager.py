@@ -447,6 +447,11 @@ class ClipboardManagerFrame(wx.Frame):
 			previousActiveKey, previousActiveIndex, previousSelectedKeys = self._getSearchListState()
 			wasDirty = self._hasDirtyChanges()
 			wasDraft = self._contentEditable and self._contentItemKey is None
+			preservedEditorOffset: int | None = None
+			preservedEditorText: str | None = None
+			if self._contentEditable and self._contentItemKey is not None and not wasDirty:
+				preservedEditorText = self._contentSourceText
+				preservedEditorOffset = self._getEditorCodePointOffset()
 			preserveNavigationSync = False
 			if self._navigationSyncState is not None:
 				syncText, _syncOffset, expectedSequenceNumber = self._navigationSyncState
@@ -478,6 +483,12 @@ class ClipboardManagerFrame(wx.Frame):
 				self._updateUiState()
 			elif not wasDirty and not self._isSearchSessionActive:
 				self._loadActiveItem(confirmDirty=False)
+				if (
+					preservedEditorOffset is not None
+					and preservedEditorText is not None
+					and self._contentSourceText == preservedEditorText
+				):
+					self._setEditorCodePointOffset(preservedEditorOffset)
 				self._restoreNavigationSyncOffsetInEditor()
 			else:
 				self._syncEnteredSearchResult()

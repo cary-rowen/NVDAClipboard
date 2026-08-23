@@ -114,3 +114,33 @@ class ManagerDraftTests(unittest.TestCase):
 		self.assertEqual(2, manager._contentActiveKey)
 		manager._loadActiveItem.assert_not_called()
 		manager._updateUiState.assert_called_once_with()
+
+	def testRefreshPreservesEditorInsertionPointForCurrentStoredContent(self) -> None:
+		"""Keep the editor cursor where it was when a copy triggers a refresh."""
+		manager = SimpleNamespace(
+			_contentActiveKey=1,
+			_contentEditable=True,
+			_contentItemKey=7,
+			_contentSourceText="example text",
+			_isSearchSessionActive=False,
+			_navigationSyncState=None,
+			_selectedCategory="Saved",
+			_getEditorCodePointOffset=Mock(return_value=5),
+			_getActiveItemKey=Mock(return_value=7),
+			_getSearchListState=Mock(return_value=(1, 0, (1,))),
+			_getSelectedCategory=Mock(return_value="Saved"),
+			_hasDirtyChanges=Mock(return_value=False),
+			_loadActiveItem=Mock(),
+			_refreshCategories=Mock(),
+			_reloadItemsFromController=Mock(),
+			_restoreNavigationSyncOffsetInEditor=Mock(),
+			_setEditorCodePointOffset=Mock(),
+			_showError=Mock(),
+			_syncEnteredSearchResult=Mock(),
+			_updateUiState=Mock(),
+		)
+
+		_refreshFromController(manager)
+
+		manager._loadActiveItem.assert_called_once_with(confirmDirty=False)
+		manager._setEditorCodePointOffset.assert_called_once_with(5)
