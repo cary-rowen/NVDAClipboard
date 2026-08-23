@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "navigationUnits.py"
-_SPEC = importlib.util.spec_from_file_location("nvdaClipboardNavigationUnits", _MODULE_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-navigationUnits = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(navigationUnits)
+navigationUnits = loadAddonModule("nvdaClipboardNavigationUnits", _MODULE_PATH)
 
 
 class NavigationUnitOffsetTests(unittest.TestCase):

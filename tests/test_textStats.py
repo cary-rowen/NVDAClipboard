@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 from pathlib import Path
-import sys
 from threading import Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import unicodedata
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "textStats.py"
-_SPEC = importlib.util.spec_from_file_location("nvdaClipboardTextStats", _MODULE_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-textStats = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = textStats
-with patch.dict(sys.modules, {"logHandler": SimpleNamespace(log=Mock())}):
-	_SPEC.loader.exec_module(textStats)
+textStats = loadAddonModule(
+	"nvdaClipboardTextStats",
+	_MODULE_PATH,
+	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
+)
 
 
 class _FakeIterator:

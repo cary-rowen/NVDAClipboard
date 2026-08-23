@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import importlib.util
 import json
 from pathlib import Path
 import struct
@@ -13,6 +12,8 @@ import unittest
 from unittest.mock import Mock, patch
 from uuid import UUID
 import zlib
+
+from tests._module_loader import loadAddonModule
 
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
@@ -36,16 +37,12 @@ _ADDON_HANDLER = ModuleType("addonHandler")
 _ADDON_HANDLER.initTranslation = _initTranslation
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
-_SPEC = importlib.util.spec_from_file_location(
+oneDriveProtocol = loadAddonModule(
 	f"{_PACKAGE_NAME}.oneDriveProtocol",
 	_MODULE_DIRECTORY / "oneDriveProtocol.py",
+	injectedModules={"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER},
 )
-assert _SPEC is not None and _SPEC.loader is not None
-oneDriveProtocol = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = oneDriveProtocol
-with patch.dict(sys.modules, {"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER}):
-	_SPEC.loader.exec_module(oneDriveProtocol)
-	storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
+storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
 
 
 class OneDriveProtocolTests(unittest.TestCase):

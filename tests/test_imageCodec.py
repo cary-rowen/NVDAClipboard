@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 from io import BytesIO
 from pathlib import Path
 import random
@@ -12,6 +11,8 @@ from types import ModuleType
 import unittest
 from unittest.mock import patch
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardImageCodecTests"
@@ -20,21 +21,8 @@ _PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
 sys.modules[_PACKAGE_NAME] = _PACKAGE
 
 
-def _loadModule(moduleName: str) -> ModuleType:
-	"""Load one add-on module without importing NVDA."""
-	spec = importlib.util.spec_from_file_location(
-		f"{_PACKAGE_NAME}.{moduleName}",
-		_MODULE_DIRECTORY / f"{moduleName}.py",
-	)
-	assert spec is not None and spec.loader is not None
-	module = importlib.util.module_from_spec(spec)
-	sys.modules[spec.name] = module
-	spec.loader.exec_module(module)
-	return module
-
-
-clipboardData = _loadModule("clipboardData")
-imageCodec = _loadModule("imageCodec")
+clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboardData", _MODULE_DIRECTORY / "clipboardData.py")
+imageCodec = loadAddonModule(f"{_PACKAGE_NAME}.imageCodec", _MODULE_DIRECTORY / "imageCodec.py")
 
 
 def _buildCanonicalDib() -> bytes:

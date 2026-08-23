@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 import struct
 import unittest
 import zlib
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "clipboardData.py"
-_SPEC = importlib.util.spec_from_file_location("nvdaClipboardClipboardData", _MODULE_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-clipboardData = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(clipboardData)
+clipboardData = loadAddonModule("nvdaClipboardClipboardData", _MODULE_PATH)
 
 
 def _buildChunk(chunkType: bytes, payload: bytes) -> bytes:
