@@ -23,7 +23,7 @@ from scriptHandler import script
 import ui
 import wx
 
-from .configuration import getPageLineCount
+from .configuration import getPageLineCount, getTiantanEnabled
 from .settings import NVDAClipboardSettingsPanel
 
 
@@ -60,7 +60,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		try:
 			from .controller import ClipboardController
 
-			self.controller = ClipboardController()
+			self.controller = ClipboardController(tiantanEnabled=getTiantanEnabled())
 			self.controller.start()
 			NVDASettingsDialog.categoryClasses.append(NVDAClipboardSettingsPanel)
 		except Exception:

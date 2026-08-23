@@ -341,7 +341,8 @@ class ClipboardManagerFrame(wx.Frame):
 		self.sendToTiantanItem: wx.MenuItem | None = None
 		self.receiveFromTiantanItem: wx.MenuItem | None = None
 		self.autoSyncTiantanItem: wx.MenuItem | None = None
-		if self.controller.isCloudAvailable:
+		cloudSync = self.controller.cloudSync
+		if cloudSync is not None:
 			cloudItem = cloudMenu.Append(
 				wx.ID_ANY,
 				# Translators: Menu command to open the Tiantan Cloud Clipboard account dialog.
@@ -497,16 +498,18 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def refreshCloudMenuState(self) -> None:
 		"""Enable Cloud menu actions supported by the current account states."""
-		cloudState = self.controller.cloudSync.getState()
-		if self.autoSyncTiantanItem is not None:
-			self.autoSyncTiantanItem.Check(cloudState.isAutoSyncEnabled)
-			self.autoSyncTiantanItem.Enable(cloudState.isAvailable)
-		if self.sendToTiantanItem is not None:
-			self.sendToTiantanItem.Enable(
-				cloudState.isAvailable and cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
-			)
-		if self.receiveFromTiantanItem is not None:
-			self.receiveFromTiantanItem.Enable(cloudState.isAvailable and cloudState.isLoggedIn)
+		cloudSync = self.controller.cloudSync
+		if cloudSync is not None:
+			cloudState = cloudSync.getState()
+			if self.autoSyncTiantanItem is not None:
+				self.autoSyncTiantanItem.Check(cloudState.isAutoSyncEnabled)
+				self.autoSyncTiantanItem.Enable(cloudState.isAvailable)
+			if self.sendToTiantanItem is not None:
+				self.sendToTiantanItem.Enable(
+					cloudState.isAvailable and cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
+				)
+			if self.receiveFromTiantanItem is not None:
+				self.receiveFromTiantanItem.Enable(cloudState.isAvailable and cloudState.isLoggedIn)
 		oneDriveState = self.controller.oneDriveSync.getState()
 		self.syncOneDriveItem.Enable(
 			oneDriveState.isAvailable
@@ -2254,8 +2257,9 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onAutoSyncTiantan(self, event: wx.CommandEvent) -> None:
 		"""Toggle automatic Tiantan Cloud Clipboard synchronization."""
-		if self.autoSyncTiantanItem is not None:
-			self.controller.cloudSync.setAutoSyncEnabled(self.autoSyncTiantanItem.IsChecked())
+		cloudSync = self.controller.cloudSync
+		if self.autoSyncTiantanItem is not None and cloudSync is not None:
+			cloudSync.setAutoSyncEnabled(self.autoSyncTiantanItem.IsChecked())
 
 	def _onReceiveFromTiantan(self, event: wx.CommandEvent) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard."""
