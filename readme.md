@@ -5,18 +5,18 @@ NVDA Clipboard makes the Windows clipboard easier to explore and reuse with NVDA
 ## Requirements
 
 - NVDA 2026.3 or later, using the x64 (AMD64) build. Native ARM64 NVDA is not currently supported.
-- Tiantan Clipboard also requires .NET 8 or later.
+- Tiantan Cloud Clipboard also requires .NET 8 or later.
 
 ## [ ] Native ARM64 Support
 
-The add-on currently ships x64 builds of `_sqlite3.pyd`, `sqlite3.dll`, and `ClipDataCloud.SDK.dll`. `_sqlite3.pyd` is imported when the add-on starts, so native ARM64 NVDA cannot load the add-on. The Tiantan SDK is optional, but Tiantan cloud clipboard features are unavailable until a compatible SDK is provided.
+The add-on currently ships x64 builds of `_sqlite3.pyd`, `sqlite3.dll`, and `ClipDataCloud.SDK.dll`. `_sqlite3.pyd` is imported when the add-on starts, so native ARM64 NVDA cannot load the add-on. The Tiantan SDK is optional, but Tiantan Cloud Clipboard features are unavailable until a compatible SDK is provided.
 
 Before native ARM64 can be declared supported:
 
 - Package ARM64 builds of `_sqlite3.pyd` and `sqlite3.dll` that match the Python version bundled with NVDA.
-- Package an ARM64 `ClipDataCloud.SDK.dll`, or disable Tiantan cloud clipboard features on ARM64 when no compatible SDK is available.
+- Package an ARM64 `ClipDataCloud.SDK.dll`, or disable Tiantan Cloud Clipboard features on ARM64 when no compatible SDK is available.
 - Make the add-on package select binaries for the current NVDA architecture, or load them only when appropriate.
-- Verify add-on startup, SQLite history operations, and Tiantan cloud clipboard features in native ARM64 NVDA.
+- Verify add-on startup, SQLite history operations, and Tiantan Cloud Clipboard features in native ARM64 NVDA.
 
 ## Exploring the Clipboard
 
@@ -70,11 +70,11 @@ Synchronization is bidirectional and runs automatically while NVDA is running. Y
 
 Deleting a synchronized entry or category also deletes it from the other synchronized installations. OneDrive synchronization is therefore not a backup.
 
-### Tiantan Clipboard
+### Tiantan Cloud Clipboard
 
-Tiantan Clipboard can send text between this computer and the Tiantan cloud clipboard. Formatting, images, and copied files stay local. Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
+Tiantan Cloud Clipboard can send text between this computer and the Tiantan cloud clipboard. Formatting, images, and copied files stay local. Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
 
-`NVDA+Alt+V` receives Tiantan text and immediately pastes it into the focused application. A manual receive leaves the text on the clipboard without pasting it.
+`NVDA+Alt+V` receives Tiantan Cloud Clipboard text and immediately pastes it into the focused application. A manual receive leaves the text on the clipboard without pasting it.
 
 ## Privacy
 
@@ -102,7 +102,7 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Append selected text | `NVDA+Alt+A` | `NVDA+Alt+A` |
 | Append last spoken text | `NVDA+Alt+X` | `NVDA+Alt+X` |
 | Temporarily paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
-| Receive and paste Tiantan text | `NVDA+Alt+V` | `NVDA+Alt+V` |
+| Receive and paste Tiantan Cloud Clipboard text | `NVDA+Alt+V` | `NVDA+Alt+V` |
 | Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
 | Next clipboard history entry | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |
 | Previous clipboard history entry | `Ctrl+Windows+NumPad Minus` | `Ctrl+Windows+[` |

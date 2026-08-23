@@ -3,7 +3,7 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Provide the Tiantan Clipboard account dialog."""
+"""Provide the Tiantan Cloud Clipboard account dialog."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ addonHandler.initTranslation()
 
 
 class CloudClipboardDialog(wx.Dialog):
-	"""Show Tiantan Clipboard account and synchronization state."""
+	"""Show Tiantan Cloud Clipboard account and synchronization state."""
 
 	def __init__(
 		self,
@@ -31,8 +31,8 @@ class CloudClipboardDialog(wx.Dialog):
 	) -> None:
 		super().__init__(
 			parent,
-			# Translators: Title of the Tiantan Clipboard account dialog.
-			title=_("Tiantan Clipboard"),
+			# Translators: Title of the Tiantan Cloud Clipboard account dialog.
+			title=_("Tiantan Cloud Clipboard"),
 			style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
 		)
 		self._manager = manager
@@ -44,12 +44,14 @@ class CloudClipboardDialog(wx.Dialog):
 		self.Bind(wx.EVT_CLOSE, self._onClose)
 		self.Bind(wx.EVT_WINDOW_DESTROY, self._onWindowDestroy)
 		self.SetMinSize(self.GetBestSize())
+		self.SetEscapeId(wx.ID_CLOSE)
+		self.CentreOnParent()
 
 	def _makeUi(self) -> None:
 		self._mainSizer = wx.BoxSizer(wx.VERTICAL)
 		statusLabel = wx.StaticText(
 			self,
-			# Translators: Label for the current Tiantan Clipboard status.
+			# Translators: Label for the current Tiantan Cloud Clipboard status.
 			label=_("Status:"),
 		)
 		self._mainSizer.Add(statusLabel, flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, border=10)
@@ -57,8 +59,8 @@ class CloudClipboardDialog(wx.Dialog):
 		self._mainSizer.Add(self.statusText, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
 		self.privacyText = wx.StaticText(
 			self,
-			# Translators: Description shown in the Tiantan Clipboard dialog.
-			label=_("Syncs clipboard text between this computer and Tiantan."),
+			# Translators: Description shown in the Tiantan Cloud Clipboard dialog.
+			label=_("Synchronizes clipboard text between this computer and Tiantan Cloud Clipboard."),
 		)
 		self._mainSizer.Add(self.privacyText, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
 
@@ -66,19 +68,19 @@ class CloudClipboardDialog(wx.Dialog):
 		loginSizer = wx.BoxSizer(wx.VERTICAL)
 		self.phoneCtrl = self._addTextRow(
 			loginSizer,
-			# Translators: Label for the ClipDataCloud phone number field.
+			# Translators: Label for the Tiantan Cloud Clipboard phone number field.
 			_("&Phone number:"),
 			style=0,
 		)
 		self.passwordCtrl = self._addTextRow(
 			loginSizer,
-			# Translators: Label for the ClipDataCloud password field.
+			# Translators: Label for the Tiantan Cloud Clipboard password field.
 			_("Pass&word:"),
 			style=wx.TE_PASSWORD,
 		)
 		self.loginButton = wx.Button(
 			self.loginPanel,
-			# Translators: Button to log in to ClipDataCloud.
+			# Translators: Button to log in to Tiantan Cloud Clipboard.
 			label=_("Sign &in"),
 		)
 		loginSizer.Add(self.loginButton, flag=wx.TOP | wx.ALIGN_RIGHT, border=10)
@@ -89,7 +91,7 @@ class CloudClipboardDialog(wx.Dialog):
 		loggedInSizer = wx.BoxSizer(wx.VERTICAL)
 		accountLabel = wx.StaticText(
 			self.loggedInPanel,
-			# Translators: Label for the signed-in Tiantan Clipboard account.
+			# Translators: Label for the signed-in Tiantan Cloud Clipboard account.
 			label=_("Account:"),
 		)
 		loggedInSizer.Add(accountLabel, flag=wx.BOTTOM | wx.EXPAND, border=2)
@@ -97,7 +99,7 @@ class CloudClipboardDialog(wx.Dialog):
 		loggedInSizer.Add(self.loginStatusText, flag=wx.BOTTOM | wx.EXPAND, border=10)
 		self.logoutButton = wx.Button(
 			self.loggedInPanel,
-			# Translators: Button to log out of ClipDataCloud.
+			# Translators: Button to log out of Tiantan Cloud Clipboard.
 			label=_("Sign &out"),
 		)
 		loggedInSizer.Add(self.logoutButton)
@@ -109,7 +111,7 @@ class CloudClipboardDialog(wx.Dialog):
 		self.closeButton = wx.Button(
 			self,
 			wx.ID_CLOSE,
-			# Translators: Button to close the Tiantan Clipboard account dialog.
+			# Translators: Button to close the Tiantan Cloud Clipboard account dialog.
 			label=_("&Close"),
 		)
 		closeSizer.AddStretchSpacer()
@@ -149,10 +151,10 @@ class CloudClipboardDialog(wx.Dialog):
 		self.Layout()
 		self.Fit()
 
-	def refreshFromManager(self) -> None:
+	def refreshFromManager(self, updateStatus: bool = True) -> None:
 		"""Refresh controls after cloud state changes outside this dialog."""
 		if not self._isDestroyed:
-			self._refreshUi()
+			self._refreshUi(updateStatus=updateStatus)
 
 	def _setBusy(self, busy: bool, message: str | None = None) -> None:
 		self._busy = busy
@@ -163,7 +165,7 @@ class CloudClipboardDialog(wx.Dialog):
 	def _operationDone(self, success: bool, message: str) -> None:
 		if self._isDestroyed:
 			return
-		self._setBusy(False)
+		self._setBusy(False, message if message else None)
 
 	def _loginDone(self, success: bool, message: str) -> None:
 		self._operationDone(success, message)
@@ -176,7 +178,7 @@ class CloudClipboardDialog(wx.Dialog):
 			self.phoneCtrl.SetFocus()
 
 	def _onLogin(self, evt: wx.CommandEvent) -> None:
-		# Translators: Progress message while signing in to Tiantan Clipboard.
+		# Translators: Progress message while signing in to Tiantan Cloud Clipboard.
 		self._setBusy(True, _("Signing in..."))
 		self._manager.login(
 			self.phoneCtrl.GetValue(),
@@ -185,7 +187,7 @@ class CloudClipboardDialog(wx.Dialog):
 		)
 
 	def _onLogout(self, evt: wx.CommandEvent) -> None:
-		# Translators: Progress message while signing out of Tiantan Clipboard.
+		# Translators: Progress message while signing out of Tiantan Cloud Clipboard.
 		self._setBusy(True, _("Signing out..."))
 		self._manager.logout(onDone=self._logoutDone)
 

@@ -21,6 +21,13 @@ def loadAddonModule(
 	assert spec is not None and spec.loader is not None
 	module = module_from_spec(spec)
 	sys.modules[moduleName] = module
+	packagePrefix = f"{moduleName.rpartition('.')[0]}."
 	with patch.dict(sys.modules, dict(injectedModules or {})):
 		spec.loader.exec_module(module)
+		loadedPackageModules = {
+			name: loadedModule
+			for name, loadedModule in sys.modules.items()
+			if name == moduleName or name.startswith(packagePrefix)
+		}
+	sys.modules.update(loadedPackageModules)
 	return module
