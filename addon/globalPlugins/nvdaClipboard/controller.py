@@ -361,7 +361,7 @@ class ClipboardController:
 			mainFrame.postPopup()
 
 	def showCloudDialog(self, parent: wx.Window | None = None) -> None:
-		"""Create or raise the Tiantan Clipboard account dialog."""
+		"""Create or raise the Tiantan Cloud Clipboard account dialog."""
 		if not self.isCloudAvailable:
 			ui.message(self.cloudSync.getState().statusMessage)
 			return
@@ -428,13 +428,13 @@ class ClipboardController:
 			ui.message(state.statusMessage)
 			return
 		if self._cloudFetchInProgress:
-			# Translators: Message shown when another Tiantan receive is still running.
-			ui.message(_("A Tiantan receive is already in progress"))
+			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
+			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
 			return
 		focusObject = self._getFocusObject()
 		if focusObject is None:
 			# Translators: Cloud paste cancellation because keyboard focus could not be identified safely.
-			ui.message(_("Keyboard focus could not be identified. Tiantan paste was cancelled."))
+			ui.message(_("Keyboard focus could not be identified. Tiantan Cloud Clipboard paste was cancelled."))
 			return
 		self._cloudFetchInProgress = True
 
@@ -442,7 +442,7 @@ class ClipboardController:
 			"""Write downloaded text only while keyboard focus remains unchanged."""
 			if not self._isSameFocus(focusObject):
 				# Translators: Cloud paste cancellation because focus changed while downloading.
-				raise CloudClipboardWriteError(_("Focus changed. Tiantan paste was cancelled."))
+				raise CloudClipboardWriteError(_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."))
 			sequenceNumber = self._writeClipboardText(text, _ClipboardChangeSource.CLOUD_FETCH)
 			callLater(
 				_PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
@@ -461,23 +461,23 @@ class ClipboardController:
 		)
 
 	def sendToTiantan(self) -> None:
-		"""Send the current allowed clipboard text to Tiantan."""
+		"""Send the current allowed clipboard text to Tiantan Cloud Clipboard."""
 		self.cloudSync.uploadCurrentText(self._getCurrentCloudUploadText())
 
 	def receiveFromTiantan(self) -> None:
-		"""Receive Tiantan text into the system clipboard without pasting it."""
+		"""Receive Tiantan Cloud Clipboard text into the system clipboard without pasting it."""
 		state = self.cloudSync.getState()
 		if not state.isAvailable:
 			ui.message(state.statusMessage)
 			return
 		if self._cloudFetchInProgress:
-			# Translators: Message shown when another Tiantan receive is still running.
-			ui.message(_("A Tiantan receive is already in progress"))
+			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
+			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
 			return
 		self._cloudFetchInProgress = True
 
 		def writeFetchedText(text: str) -> None:
-			"""Write received Tiantan text without recording or resending it."""
+			"""Write received Tiantan Cloud Clipboard text without recording or resending it."""
 			self._writeClipboardText(text, _ClipboardChangeSource.CLOUD_FETCH)
 
 		self.cloudSync.fetchToClipboard(
@@ -2444,18 +2444,18 @@ class ClipboardController:
 		if item.contentType == ClipboardItemType.FILES:
 			return ngettext(
 				# Translators: Confirmation after restoring one or multiple files to the clipboard.
-				"{count} file placed on the clipboard",
-				"{count} files placed on the clipboard",
+				"{count} file restored to the clipboard",
+				"{count} files restored to the clipboard",
 				len(item.files),
 			).format(count=len(item.files))
 		if item.contentType == ClipboardItemType.IMAGE:
 			# Translators: Confirmation after restoring an image to the clipboard.
-			return _("Image placed on the clipboard")
+			return _("Image restored to the clipboard")
 		if item.contentType == ClipboardItemType.TEXT_AND_IMAGE:
 			# Translators: Confirmation after restoring mixed text and image content.
-			return _("Text and image placed on the clipboard")
+			return _("Text and image restored to the clipboard")
 		# Translators: Confirmation after restoring plain or formatted text.
-		return _("Text placed on the clipboard")
+		return _("Text restored to the clipboard")
 
 	def _formatFileNavigationText(self, files: tuple[str, ...]) -> str:
 		"""Return one navigable line for each file path on the clipboard."""
@@ -2606,7 +2606,7 @@ class ClipboardController:
 		self._cloudFetchInProgress = False
 
 	def _onTiantanReceiveDone(self, success: bool, message: str) -> None:
-		"""Finish a menu-initiated Tiantan receive and announce its result."""
+		"""Finish a menu-initiated Tiantan Cloud Clipboard receive and announce its result."""
 		self._cloudFetchInProgress = False
 		if message:
 			ui.message(message)
@@ -2626,11 +2626,11 @@ class ClipboardController:
 				return
 			if not self._isSameFocus(expectedFocus):
 				# Translators: Cloud paste cancellation because focus changed before pasting.
-				ui.message(_("Focus changed. Tiantan paste was cancelled."))
+				ui.message(_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."))
 				return
 			if not expectedSequenceNumber or self.monitor.getSequenceNumber() != expectedSequenceNumber:
 				# Translators: Cloud paste cancellation because another application changed the clipboard.
-				ui.message(_("Clipboard changed. Tiantan paste was cancelled."))
+				ui.message(_("Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."))
 				return
 			keyReleaseState = _waitForTriggerKeysReleased(
 				triggerKeyCodes,
@@ -2647,10 +2647,10 @@ class ClipboardController:
 				retryScheduled = True
 				return
 			if not keyReleaseState:
-				# Translators: Message shown when a Tiantan paste shortcut remains held until timeout.
+				# Translators: Message shown when a Tiantan Cloud Clipboard paste shortcut remains held until timeout.
 				ui.message(
 					_(
-						"The keyboard shortcut was not released. Tiantan text was left on the clipboard without pasting.",
+						"The keyboard shortcut was not released. Tiantan Cloud Clipboard text was left on the clipboard without pasting.",
 					),
 				)
 				return
@@ -2662,15 +2662,15 @@ class ClipboardController:
 				or self.monitor.getSequenceNumber() != expectedSequenceNumber
 			):
 				# Translators: Cloud paste cancellation because another application changed the clipboard.
-				ui.message(_("Clipboard changed. Tiantan paste was cancelled."))
+				ui.message(_("Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."))
 				return
 			KeyboardInputGesture.fromName("control+v").send()
 			# Translators: Confirmation after downloaded cloud text is pasted.
-			ui.message(_("Pasted from Tiantan"))
+			ui.message(_("Pasted from Tiantan Cloud Clipboard"))
 		except Exception:
 			log.exception("Failed to send the cloud paste gesture.")
 			# Translators: Error shown when the cloud paste keyboard gesture fails.
-			ui.message(_("Tiantan paste failed"))
+			ui.message(_("Tiantan Cloud Clipboard paste failed"))
 		finally:
 			if not retryScheduled:
 				self._cloudFetchInProgress = False

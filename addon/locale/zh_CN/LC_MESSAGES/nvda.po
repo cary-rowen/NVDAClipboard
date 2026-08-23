@@ -19,6 +19,172 @@ msgstr ""
 "X-Generator: Poedit 3.9\n"
 
 # Cloud menu and account dialogs.
+#. Translators: Title of the Tiantan Cloud Clipboard account dialog.
+msgid "Tiantan Cloud Clipboard"
+msgstr "天坦云剪贴板"
+
+#. Translators: Description shown in the Tiantan Cloud Clipboard dialog.
+msgid "Synchronizes clipboard text between this computer and Tiantan Cloud Clipboard."
+msgstr "同步本机剪贴板到天坦云剪贴板。"
+
+#. Translators: Error shown when the native cloud clipboard library cannot be used.
+msgid "Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll."
+msgstr "天坦云剪贴板不可用：请检查 ClipDataCloud.SDK.dll。"
+
+#. Translators: Message shown when another cloud account action is still running.
+msgid "Another Tiantan Cloud Clipboard account action is in progress"
+msgstr "云剪贴板账户操作正在进行"
+
+#. Translators: Error prefix for a failed cloud clipboard login.
+#, python-brace-format
+msgid "Sign in failed: {error}"
+msgstr "登录失败：{error}"
+
+#. Translators: Error prefix for a failed cloud clipboard logout.
+#, python-brace-format
+msgid "Sign out failed: {error}"
+msgstr "退出登录失败：{error}"
+
+#. Translators: Message shown when a manual Tiantan cloud clipboard send is still running.
+msgid "Tiantan Cloud Clipboard send is in progress"
+msgstr "正在发送到云剪贴板"
+
+#. Translators: Confirmation after manually sending clipboard text.
+msgid "Sent to Tiantan Cloud Clipboard"
+msgstr "已发送到云剪贴板"
+
+#. Translators: Message shown when the cloud clipboard contains no text.
+msgid "Tiantan Cloud Clipboard is empty"
+msgstr "云剪贴板为空"
+
+#. Translators: Confirmation after downloading text from cloud clipboard.
+msgid "Received from Tiantan Cloud Clipboard"
+msgstr "已从云剪贴板接收"
+
+#. Translators: Status shown when automatic upload stops because the account signed out.
+msgid "Tiantan Cloud Clipboard signed out. Automatic sync stopped."
+msgstr "云剪贴板已退出登录，自动同步已停止。"
+
+#. Translators: Message shown when there is no clipboard text to upload.
+msgid "There is no clipboard text to send"
+msgstr "没有可发送的剪贴板文本"
+
+#. Translators: Message shown when clipboard text contains a NUL character.
+msgid "Text contains a NUL character and was not sent"
+msgstr "未发送：文本包含 NUL 字符"
+
+#. Translators: Message shown when clipboard text exceeds the cloud size limit.
+msgid "Text exceeds 1 MB and was not sent"
+msgstr "未发送：文本超过 1 MB"
+
+#. Translators: Message shown when clipboard text contains invalid Unicode data.
+msgid "Text contains invalid Unicode data and was not sent"
+msgstr "未发送：文本包含无效 Unicode 数据"
+
+#. Translators: Fallback description when the cloud SDK returns no error text.
+msgid "Unknown Tiantan Cloud Clipboard error"
+msgstr "未知云剪贴板错误"
+
+#. Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
+msgid "A Tiantan Cloud Clipboard receive is already in progress"
+msgstr "云剪贴板接收正在进行"
+
+#. Translators: Cloud paste cancellation because keyboard focus could not be identified safely.
+msgid "Keyboard focus could not be identified. Tiantan Cloud Clipboard paste was cancelled."
+msgstr "无法确定键盘焦点，已取消云剪贴板粘贴。"
+
+#. Translators: Cloud paste cancellation because focus changed while downloading.
+#. Translators: Cloud paste cancellation because focus changed before pasting.
+msgid "Focus changed. Tiantan Cloud Clipboard paste was cancelled."
+msgstr "焦点已改变，已取消云剪贴板粘贴。"
+
+#. Translators: Cloud paste cancellation because another application changed the clipboard.
+msgid "Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."
+msgstr "剪贴板已改变，已取消云剪贴板粘贴。"
+
+msgid ""
+"The keyboard shortcut was not released. Tiantan Cloud Clipboard text was left on the "
+"clipboard without pasting."
+msgstr "快捷键未释放。云剪贴板文本已保留在剪贴板中，但未粘贴。"
+
+#. Translators: Confirmation after downloaded cloud text is pasted.
+msgid "Pasted from Tiantan Cloud Clipboard"
+msgstr "已从云剪贴板粘贴"
+
+#. Translators: Error shown when the cloud paste keyboard gesture fails.
+msgid "Tiantan Cloud Clipboard paste failed"
+msgstr "云剪贴板粘贴失败"
+
+#. Translators: Menu command to open the Tiantan Cloud Clipboard account dialog.
+msgid "&Tiantan Cloud Clipboard..."
+msgstr "天坦云剪贴板(&C)..."
+
+#. Translators: Checkable menu command to automatically send clipboard text to Tiantan Cloud Clipboard.
+msgid "&Auto-sync Tiantan Cloud Clipboard"
+msgstr "自动同步云剪贴板(&A)"
+
+#. Translators: Menu command to send current clipboard text to Tiantan Cloud Clipboard.
+msgid "&Send to Tiantan Cloud Clipboard"
+msgstr "发送到云剪贴板(&S)"
+
+#. Translators: Menu command to receive Tiantan Cloud Clipboard text into the system clipboard.
+msgid "&Receive from Tiantan Cloud Clipboard"
+msgstr "从云剪贴板接收(&R)"
+
+#. Translators: Menu command to synchronize with OneDrive immediately.
+msgid "S&ynchronize OneDrive"
+msgstr "同步 OneDrive(&Y)"
+
+#. Translators: Button that puts modified text on the system clipboard.
+msgid "Restore to Clipboard"
+msgstr "恢复到剪贴板"
+
+#. Translators: Context menu command to restore an entry to the clipboard.
+msgid "&Restore to Clipboard"
+msgstr "恢复到剪贴板(&R)"
+
+#. Translators: Confirmation after restoring one or multiple files to the clipboard.
+#, python-brace-format
+msgid "{count} file restored to the clipboard"
+msgid_plural "{count} files restored to the clipboard"
+msgstr[0] "已将 {count} 个文件恢复到剪贴板"
+
+#. Translators: Confirmation after restoring an image to the clipboard.
+msgid "Image restored to the clipboard"
+msgstr "图像已恢复到剪贴板"
+
+#. Translators: Confirmation after restoring mixed text and image content.
+msgid "Text and image restored to the clipboard"
+msgstr "文本和图像已恢复到剪贴板"
+
+#. Translators: Confirmation after restoring plain or formatted text.
+msgid "Text restored to the clipboard"
+msgstr "文本已恢复到剪贴板"
+
+#. Translators: Short description of OneDrive backup and synchronization.
+msgid "Backs up and synchronizes eligible history and categories. Deletions are also synchronized."
+msgstr "备份并同步符合条件的历史记录和类别，删除也会同步。"
+
+#. Translators: Error shown when Microsoft sign-in can no longer authorize OneDrive.
+msgid "Sign in expired"
+msgstr "登录已过期"
+
+#. Translators: Generic error shown when OneDrive sign-out fails unexpectedly.
+msgid "Sign out failed"
+msgstr "退出登录失败"
+
+#. Translators: Generic error when OneDrive synchronization fails unexpectedly.
+msgid "Synchronization failed"
+msgstr "同步失败"
+
+#. Translators: Status after a complete OneDrive synchronization succeeds.
+msgid "Synchronization complete"
+msgstr "同步完成"
+
+#. Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
+msgid "Receives and pastes from Tiantan Cloud Clipboard"
+msgstr "从天坦云剪贴板接收并粘贴"
+
 #. Translators: Title of the Tiantan Clipboard account dialog.
 #: addon\globalPlugins\nvdaClipboard\cloudDialog.py:35
 msgid "Tiantan Clipboard"
@@ -2067,9 +2233,6 @@ msgstr ""
 
 #~ msgid "Cloud paste failed"
 #~ msgstr "云剪贴板粘贴失败"
-
-#~ msgid "&Cloud Clipboard..."
-#~ msgstr "云剪贴板(&C)..."
 
 #~ msgid "&OneDrive History and Categories..."
 #~ msgstr "OneDrive 历史记录和分类(&O)..."

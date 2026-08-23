@@ -344,24 +344,24 @@ class ClipboardManagerFrame(wx.Frame):
 		if self.controller.isCloudAvailable:
 			cloudItem = cloudMenu.Append(
 				wx.ID_ANY,
-				# Translators: Menu command to open the Tiantan Clipboard account dialog.
-				_("&Tiantan Clipboard..."),
+				# Translators: Menu command to open the Tiantan Cloud Clipboard account dialog.
+				_("&Tiantan Cloud Clipboard..."),
 			)
 			self.Bind(wx.EVT_MENU, self._onCloudSync, cloudItem)
 			self.autoSyncTiantanItem = cloudMenu.AppendCheckItem(
 				wx.ID_ANY,
-				# Translators: Checkable menu command to automatically send clipboard text to Tiantan.
-				_("&Auto-sync Tiantan"),
+				# Translators: Checkable menu command to automatically send clipboard text to Tiantan Cloud Clipboard.
+				_("&Auto-sync Tiantan Cloud Clipboard"),
 			)
 			self.sendToTiantanItem = cloudMenu.Append(
 				wx.ID_ANY,
-				# Translators: Menu command to send current clipboard text to Tiantan.
-				_("&Send to Tiantan"),
+				# Translators: Menu command to send current clipboard text to Tiantan Cloud Clipboard.
+				_("&Send to Tiantan Cloud Clipboard"),
 			)
 			self.receiveFromTiantanItem = cloudMenu.Append(
 				wx.ID_ANY,
-				# Translators: Menu command to receive Tiantan text into the system clipboard.
-				_("&Receive from Tiantan"),
+				# Translators: Menu command to receive Tiantan Cloud Clipboard text into the system clipboard.
+				_("&Receive from Tiantan Cloud Clipboard"),
 			)
 			cloudMenu.AppendSeparator()
 			self.Bind(wx.EVT_MENU, self._onAutoSyncTiantan, self.autoSyncTiantanItem)
@@ -375,7 +375,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self.syncOneDriveItem = cloudMenu.Append(
 			wx.ID_ANY,
 			# Translators: Menu command to synchronize with OneDrive immediately.
-			_("S&ync OneDrive"),
+			_("S&ynchronize OneDrive"),
 		)
 		menuBar.Append(
 			cloudMenu,
@@ -1416,7 +1416,7 @@ class ClipboardManagerFrame(wx.Frame):
 		isHistory = category is None or self.controller.isHistoryCategory(category)
 		if isHistory:
 			# Translators: Button that puts modified text on the system clipboard.
-			saveLabel = _("Put on Clipboard")
+			saveLabel = _("Restore to Clipboard")
 		else:
 			# Translators: Button that saves modified text in the selected user category.
 			saveLabel = _("Save to Current Category")
@@ -1699,7 +1699,7 @@ class ClipboardManagerFrame(wx.Frame):
 			restoreItem = menu.Append(
 				wx.ID_ANY,
 				# Translators: Context menu command to restore an entry to the clipboard.
-				_("&Put on Clipboard"),
+				_("&Restore to Clipboard"),
 			)
 			menu.Bind(wx.EVT_MENU, self._onRestoreItemToClipboard, restoreItem)
 		transferItem = menu.Append(
@@ -2221,7 +2221,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self._editorCommands.goToLine()
 
 	def _onCloudSync(self, event: wx.CommandEvent) -> None:
-		"""Open the Tiantan Clipboard account dialog."""
+		"""Open the Tiantan Cloud Clipboard account dialog."""
 		try:
 			self.controller.showCloudDialog(self)
 		except Exception as error:
@@ -2235,19 +2235,19 @@ class ClipboardManagerFrame(wx.Frame):
 			self._showError(error)
 
 	def _onSendToTiantan(self, event: wx.CommandEvent) -> None:
-		"""Send current clipboard text to Tiantan."""
+		"""Send current clipboard text to Tiantan Cloud Clipboard."""
 		try:
 			self.controller.sendToTiantan()
 		except Exception as error:
 			self._showError(error)
 
 	def _onAutoSyncTiantan(self, event: wx.CommandEvent) -> None:
-		"""Toggle automatic Tiantan synchronization."""
+		"""Toggle automatic Tiantan Cloud Clipboard synchronization."""
 		if self.autoSyncTiantanItem is not None:
 			self.controller.cloudSync.setAutoSyncEnabled(self.autoSyncTiantanItem.IsChecked())
 
 	def _onReceiveFromTiantan(self, event: wx.CommandEvent) -> None:
-		"""Receive Tiantan text into the system clipboard."""
+		"""Receive Tiantan Cloud Clipboard text into the system clipboard."""
 		try:
 			self.controller.receiveFromTiantan()
 		except Exception as error:

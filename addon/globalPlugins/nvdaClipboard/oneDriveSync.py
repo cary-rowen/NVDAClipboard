@@ -107,9 +107,9 @@ _ERROR_INVALID_FILE_LIST = _("OneDrive returned an invalid file list")
 # Translators: Error used when another device changes the OneDrive manifest during synchronization.
 _ERROR_MANIFEST_CHANGED = _("The OneDrive synchronization data changed on another device")
 # Translators: Error shown when Microsoft sign-in can no longer authorize OneDrive.
-_ERROR_SIGN_IN_EXPIRED = _("Sign-in expired")
+_ERROR_SIGN_IN_EXPIRED = _("Sign in expired")
 # Translators: Generic error shown when Microsoft sign-in fails.
-_ERROR_SIGN_IN_FAILED = _("Sign-in failed")
+_ERROR_SIGN_IN_FAILED = _("Sign in failed")
 # Translators: Error shown when OneDrive synchronization is requested without signing in.
 _ERROR_SIGN_IN_REQUIRED = _("Sign in to OneDrive before synchronizing")
 
@@ -558,11 +558,11 @@ class _AuthManager:
 			if code or description:
 				return OneDriveError(
 					# Translators: Microsoft authentication failure. {error} is a Microsoft description or code.
-					_("Microsoft sign-in failed: {error}").format(error=description or code),
+					_("Sign in failed: {error}").format(error=description or code),
 				)
 		return OneDriveError(
 			# Translators: Generic Microsoft authentication failure.
-			_("Microsoft sign-in failed"),
+			_("Sign in failed"),
 		)
 
 
@@ -1121,7 +1121,7 @@ class OneDriveSyncManager:
 			name="nvdaClipboard.oneDriveSignOut",
 			busyMessage=_STATUS_SIGNING_OUT,
 			# Translators: Generic error when OneDrive sign-out fails unexpectedly.
-			failureMessage=_("Sign-out failed"),
+			failureMessage=_("Sign out failed"),
 			onDone=onDone,
 			isSigningOut=True,
 		)
@@ -1232,7 +1232,7 @@ class OneDriveSyncManager:
 			return
 		busyMessage = _STATUS_SYNCHRONIZING
 		# Translators: Generic error when OneDrive synchronization fails unexpectedly.
-		failureMessage = _("Sync failed")
+		failureMessage = _("Synchronization failed")
 		self._startOperation(
 			partial(self._syncWorker, isPoll=isPoll),
 			name="nvdaClipboard.oneDriveSync",
@@ -1251,7 +1251,7 @@ class OneDriveSyncManager:
 				f"downloaded={result.downloaded}, localChanged={result.changedLocally}",
 			)
 		# Translators: Status after a complete OneDrive synchronization succeeds.
-		return _("Sync complete"), result.changedLocally
+		return _("Synchronization complete"), result.changedLocally
 
 	def _synchronizeWithRefresh(self, *, isPoll: bool = False) -> _SyncResult:
 		"""Synchronize with one normal and at most one forced silent token refresh."""

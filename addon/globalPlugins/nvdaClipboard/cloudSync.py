@@ -46,12 +46,12 @@ config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "b
 
 def _getSdkUnavailableMessage() -> str:
 	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan is unavailable. Check ClipDataCloud.SDK.dll.")
+	return _("Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll.")
 
 
 def _getStateOperationInProgressMessage() -> str:
 	# Translators: Message shown when another cloud account action is still running.
-	return _("Another Tiantan account action is in progress")
+	return _("Another Tiantan Cloud Clipboard account action is in progress")
 
 
 class CloudClipboardWriteError(Exception):
@@ -126,11 +126,11 @@ class CloudSyncManager:
 		)
 
 	def isAutoSyncEnabled(self) -> bool:
-		"""Return whether automatic Tiantan synchronization is configured."""
+		"""Return whether automatic Tiantan Cloud Clipboard synchronization is configured."""
 		return bool(config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN])
 
 	def setAutoSyncEnabled(self, enabled: bool) -> None:
-		"""Persist and immediately apply automatic Tiantan synchronization."""
+		"""Persist and immediately apply automatic Tiantan Cloud Clipboard synchronization."""
 		config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN] = enabled
 		self._applyAutoSyncSetting()
 
@@ -146,9 +146,9 @@ class CloudSyncManager:
 					nickname=self._nickname,
 					memberStatus=memberStatus,
 				)
-			# Translators: Tiantan account status when signed in without profile details.
+			# Translators: Tiantan Cloud Clipboard account status when signed in without profile details.
 			return _("Signed in")
-		# Translators: Cloud clipboard account status when no account is signed in.
+		# Translators: Tiantan Cloud Clipboard account status when no account is signed in.
 		return _("Not signed in")
 
 	def login(self, phone: str, password: str, onDone: CompletionCallback | None = None) -> None:
@@ -171,7 +171,7 @@ class CloudSyncManager:
 
 		operationId = self._beginStateOperation()
 		# Translators: Error prefix for a failed cloud clipboard login.
-		failureTemplate = _("Sign-in failed: {error}")
+		failureTemplate = _("Sign in failed: {error}")
 		self._runSdkOperation(
 			work,
 			success,
@@ -195,7 +195,7 @@ class CloudSyncManager:
 			return self._statusMessage
 
 		# Translators: Error prefix for a failed cloud clipboard logout.
-		failureTemplate = _("Sign-out failed: {error}")
+		failureTemplate = _("Sign out failed: {error}")
 		self._runSdkOperation(
 			work,
 			success,
@@ -218,7 +218,7 @@ class CloudSyncManager:
 			if isLoggedIn:
 				self._setLoggedIn(self._nickname, self._isVip)
 			else:
-				# Translators: Cloud clipboard status when no account is signed in.
+				# Translators: Tiantan Cloud Clipboard status when no account is signed in.
 				self._setLoggedOut(_("Not signed in"))
 			return self._statusMessage
 
@@ -247,8 +247,8 @@ class CloudSyncManager:
 			self._finish(False, invalidReason, onDone, announce=announce)
 			return
 		if not self._manualSendLock.acquire(blocking=False):
-			# Translators: Message shown when a manual Tiantan send is still running.
-			self._finish(False, _("Tiantan send is in progress"), onDone, announce)
+			# Translators: Message shown when a manual cloud clipboard send is still running.
+			self._finish(False, _("Tiantan Cloud Clipboard send is in progress"), onDone, announce)
 			return
 		self._notifyStateChanged()
 
@@ -268,13 +268,13 @@ class CloudSyncManager:
 			self._getSdk().uploadText(text)
 
 		def success(_result: object) -> str:
-			# Translators: Confirmation after manually uploading clipboard text.
-			return _("Sent to Tiantan")
+			# Translators: Confirmation after manually sending clipboard text.
+			return _("Sent to Tiantan Cloud Clipboard")
 
-		# Translators: Error prefix for a failed cloud clipboard upload.
 		self._runSdkOperation(
 			work,
 			success,
+			# Translators: Error prefix for a failed Tiantan cloud clipboard send.
 			_("Send failed: {error}"),
 			finish,
 			announce=announce,
@@ -291,7 +291,7 @@ class CloudSyncManager:
 		if self._rejectConcurrentStateOperation(onDone, announce=False):
 			return
 		stateAtStart = self._stateOperationId
-		# Translators: Error prefix for a failed cloud clipboard fetch.
+			# Translators: Error prefix for a failed Tiantan cloud clipboard receive.
 		failureTemplate = _("Receive failed: {error}")
 
 		def worker() -> None:
@@ -593,7 +593,7 @@ class CloudSyncManager:
 			return
 		if not text:
 			# Translators: Message shown when the cloud clipboard contains no text.
-			self._finish(False, _("Tiantan clipboard is empty"), onDone, announce=False)
+			self._finish(False, _("Tiantan Cloud Clipboard is empty"), onDone, announce=False)
 			return
 		try:
 			clipboardWriter(text)
@@ -607,7 +607,7 @@ class CloudSyncManager:
 			self._finish(False, message, onDone, announce=False)
 			return
 		# Translators: Confirmation after downloading text from cloud clipboard.
-		self._finish(True, _("Received from Tiantan"), onDone, announce=False)
+		self._finish(True, _("Received from Tiantan Cloud Clipboard"), onDone, announce=False)
 
 	def _autoUploadWorker(self, text: str, stateAtStart: int) -> None:
 		"""Upload clipboard changes sequentially while retaining only the latest pending value."""
@@ -685,7 +685,7 @@ class CloudSyncManager:
 		if self._terminated or stateAtStart != self._stateOperationId:
 			return
 		# Translators: Status shown when automatic upload stops because the account signed out.
-		message = _("Tiantan signed out. Automatic sync stopped.")
+		message = _("Tiantan Cloud Clipboard signed out. Automatic sync stopped.")
 		self._setLoggedOut(message)
 		self._notifyStateChanged()
 		if not self._notLoggedInNotified:
@@ -711,16 +711,16 @@ class CloudSyncManager:
 	def _formatUploadValidationError(self, error: CloudClipboardError) -> str:
 		if error.message == TEXT_EMPTY_ERROR:
 			# Translators: Message shown when there is no clipboard text to upload.
-			return _("There is no clipboard text to upload")
+			return _("There is no clipboard text to send")
 		if error.message == TEXT_CONTAINS_NUL_ERROR:
 			# Translators: Message shown when clipboard text contains a NUL character.
-			return _("Text contains a NUL character and was not uploaded")
+			return _("Text contains a NUL character and was not sent")
 		if error.message == TEXT_EXCEEDS_MAX_BYTES_ERROR:
 			# Translators: Message shown when clipboard text exceeds the cloud size limit.
-			return _("Text exceeds 1 MB and was not uploaded")
+			return _("Text exceeds 1 MB and was not sent")
 		if error.message == TEXT_INVALID_UTF8_ERROR:
 			# Translators: Message shown when clipboard text contains invalid Unicode data.
-			return _("Text contains invalid Unicode data and was not uploaded")
+			return _("Text contains invalid Unicode data and was not sent")
 		return self._formatError(error)
 
 	def _formatError(self, error: Exception) -> str:
@@ -737,7 +737,7 @@ class CloudSyncManager:
 				# Translators: Cloud SDK error description.
 				return _("The account is not signed in")
 			# Translators: Fallback description when the cloud SDK returns no error text.
-			message = error.message or _("Unknown Tiantan error")
+			message = error.message or _("Unknown Tiantan Cloud Clipboard error")
 			# Translators: Generic cloud SDK error with a numeric error code.
 			return _("{message} (error code {code})").format(message=message, code=error.code)
 		return str(error)
@@ -768,9 +768,9 @@ class CloudSyncManager:
 
 	def _formatLoggedInStatus(self) -> str:
 		if self._autoUploadEnabled:
-			# Translators: Tiantan automatic synchronization status when enabled.
+			# Translators: Tiantan Cloud Clipboard automatic synchronization status when enabled.
 			return _("Auto sync: on")
-		# Translators: Tiantan automatic synchronization status when disabled.
+		# Translators: Tiantan Cloud Clipboard automatic synchronization status when disabled.
 		return _("Auto sync: off")
 
 	def _applyAutoSyncSetting(self) -> None:

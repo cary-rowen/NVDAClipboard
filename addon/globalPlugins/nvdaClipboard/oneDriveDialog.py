@@ -80,7 +80,7 @@ class OneDriveSyncDialog(wx.Dialog):
 			_("A&bout:"),
 			value=_(
 				# Translators: Short description of OneDrive backup and synchronization.
-				"Backs up and syncs eligible history and categories. Deletions are also synchronized.",
+				"Backs up and synchronizes eligible history and categories. Deletions are also synchronized.",
 			),
 			size=(-1, 58),
 		)
@@ -204,7 +204,7 @@ class OneDriveSyncDialog(wx.Dialog):
 		parentSizer.Add(textCtrl, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
 		return textCtrl
 
-	def refreshFromManager(self) -> None:
+	def refreshFromManager(self, updateStatus: bool = True) -> None:
 		"""Refresh account, status, visibility, and enabled states."""
 		if self._isDestroyed:
 			return
@@ -222,7 +222,8 @@ class OneDriveSyncDialog(wx.Dialog):
 			# Translators: OneDrive account status when no Microsoft account is signed in.
 			accountName = _("Not signed in")
 		self.accountCtrl.ChangeValue(accountName)
-		self.statusCtrl.ChangeValue(state.statusMessage)
+		if updateStatus:
+			self.statusCtrl.ChangeValue(state.statusMessage)
 
 		if state.isLoggedIn and self._deviceCodeActive:
 			self._clearDeviceCode()
@@ -270,8 +271,9 @@ class OneDriveSyncDialog(wx.Dialog):
 		"""Refresh after an explicit operation and announce its result."""
 		if self._isDestroyed:
 			return
-		self.refreshFromManager()
+		self.refreshFromManager(updateStatus=message == "")
 		if message:
+			self.statusCtrl.ChangeValue(message)
 			ui.message(message)
 
 	def _deviceOperationDone(self, success: bool, message: str) -> None:
