@@ -5,8 +5,6 @@ from __future__ import annotations
 import ctypes
 from dataclasses import replace
 from hashlib import sha1, sha256
-import importlib
-import importlib.util
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -15,13 +13,15 @@ import unittest
 from unittest.mock import call, MagicMock, Mock, patch
 from uuid import UUID
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardOneDriveSyncTests"
 _PACKAGE = ModuleType(_PACKAGE_NAME)
 _PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
 sys.modules[_PACKAGE_NAME] = _PACKAGE
-storageModels = importlib.import_module(f"{_PACKAGE_NAME}.storageModels")
+storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels", _MODULE_DIRECTORY / "storageModels.py")
 
 
 def _translate(message: str) -> str:
@@ -121,17 +121,11 @@ _STORAGE.MAX_TOTAL_IMAGE_BYTES = 256 * 1024 * 1024
 _STORAGE.getItemDedupKey = _getItemDedupKey
 _STORAGE.getItemPayloadHash = _getItemPayloadHash
 _STORAGE.isOneDriveSyncItem = _isOneDriveSyncItem
-_SPEC = importlib.util.spec_from_file_location(
-	f"{_PACKAGE_NAME}.oneDriveSync",
-	_MODULE_DIRECTORY / "oneDriveSync.py",
-)
-assert _SPEC is not None and _SPEC.loader is not None
-oneDriveSync = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = oneDriveSync
-with (
-	patch.dict(
-		sys.modules,
-		{
+with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True):
+	oneDriveSync = loadAddonModule(
+		f"{_PACKAGE_NAME}.oneDriveSync",
+		_MODULE_DIRECTORY / "oneDriveSync.py",
+		injectedModules={
 			"addonHandler": _ADDON_HANDLER,
 			"gui": _GUI,
 			"gui.message": _GUI_MESSAGE,
@@ -140,10 +134,7 @@ with (
 			"wx": _WX,
 			f"{_PACKAGE_NAME}.storage": _STORAGE,
 		},
-	),
-	patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True),
-):
-	_SPEC.loader.exec_module(oneDriveSync)
+	)
 
 
 class _FakeStorage:

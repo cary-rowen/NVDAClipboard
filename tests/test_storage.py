@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
-import importlib.util
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -15,26 +15,37 @@ import unittest
 from unittest.mock import Mock, patch
 from uuid import UUID
 
+from tests._module_loader import loadAddonModule
+
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardStorageTests"
 _PACKAGE = ModuleType(_PACKAGE_NAME)
 _PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
 sys.modules[_PACKAGE_NAME] = _PACKAGE
-_SPEC = importlib.util.spec_from_file_location(
-	f"{_PACKAGE_NAME}.storage",
-	_MODULE_DIRECTORY / "storage.py",
-)
-assert _SPEC is not None and _SPEC.loader is not None
-storageModule = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = storageModule
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
-with patch.dict(sys.modules, {"logHandler": _LOG_HANDLER}):
-	_SPEC.loader.exec_module(storageModule)
+storageModule = loadAddonModule(
+	f"{_PACKAGE_NAME}.storage",
+	_MODULE_DIRECTORY / "storage.py",
+	injectedModules={"logHandler": _LOG_HANDLER},
+)
 for _name, _value in vars(storageModule).items():
 	if not _name.startswith("__"):
 		globals()[_name] = _value
+
+
+def _expectRaises(
+	exceptionType: type[BaseException],
+	action: Callable[[], None],
+	message: str,
+) -> None:
+	"""Assert that one callable raises one expected exception."""
+	try:
+		action()
+	except exceptionType:
+		return
+	raise AssertionError(message)
 
 
 # Keep this linear cross-feature scenario intact so storage interactions are exercised in one database lifecycle.
@@ -92,12 +103,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 		futureConnection = sqlite3.connect(futureDataPath)
 		futureConnection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
 		futureConnection.close()
-		try:
-			_openDatabase(futureDataPath)
-		except UnsupportedSchemaVersionError:
-			pass
-		else:
-			raise AssertionError("A future schema version was accepted")
+		_expectRaises(
+			UnsupportedSchemaVersionError,
+			lambda: _openDatabase(futureDataPath),
+			"A future schema version was accepted",
+		)
 		futureConnection = sqlite3.connect(futureDataPath)
 		try:
 			journalModeRow = futureConnection.execute("PRAGMA journal_mode").fetchone()
@@ -276,12 +286,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 		reservationStorage.reserveOneDriveVersions(expectedSnapshot, 200, 0)
 		concurrentItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="concurrent local change")
 		assert reservationStorage.addHistory(concurrentItem) is not None
-		try:
-			reservationStorage.reserveOneDriveVersions(expectedSnapshot, 300, 1)
-		except OneDriveLocalChangeError:
-			pass
-		else:
-			raise AssertionError("A stale local synchronization snapshot was accepted")
+		_expectRaises(
+			OneDriveLocalChangeError,
+			lambda: reservationStorage.reserveOneDriveVersions(expectedSnapshot, 300, 1),
+			"A stale local synchronization snapshot was accepted",
+		)
 		currentSnapshot = reservationStorage.getOneDriveSnapshot()
 		futureVersions = reservationStorage.reserveOneDriveVersions(currentSnapshot, 1_000, 2)
 		futureItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="future local change")
@@ -292,22 +301,20 @@ def _runSelfCheck() -> None:  # noqa: C901
 			if state.dedupKey == getItemDedupKey(futureItem)
 		)
 		assert futureState.version.clock > futureVersions[-1].clock
-		try:
-			reservationStorage.reserveOneDriveVersions(
+		_expectRaises(
+			ValueError,
+			lambda: reservationStorage.reserveOneDriveVersions(
 				reservationStorage.getOneDriveSnapshot(),
 				_MAX_SYNC_CLOCK - 1,
 				0,
-			)
-		except ValueError:
-			pass
-		else:
-			raise AssertionError("A clock without a local successor was observed")
-		try:
-			_validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, _ZERO_OPERATION_ID))
-		except StorageFormatError:
-			pass
-		else:
-			raise AssertionError("A terminal synchronization clock was accepted")
+			),
+			"A clock without a local successor was observed",
+		)
+		_expectRaises(
+			StorageFormatError,
+			lambda: _validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, _ZERO_OPERATION_ID)),
+			"A terminal synchronization clock was accepted",
+		)
 		generationStorage = ClipboardStorage(root / "generation.db", root / "missing-generation.json")
 		generationStorage.bindOneDriveAccount("account.tenant")
 		baselineItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="generation baseline")
@@ -567,12 +574,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 		storage.copyHistoryItemsToCategoryById((formattedId, formattedId, plainHistoryId), "Saved")
 		savedItemIds = tuple(item.itemId for item in storage.getCategoryItems("Saved"))
 		assert savedItemIds == (formattedId, plainHistoryId, plainLatestId)
-		try:
-			storage.moveCategoryItemsById("Saved", (formattedId, -1), "Moved")
-		except ItemNotFoundError:
-			pass
-		else:
-			raise AssertionError("A partial category move was committed")
+		_expectRaises(
+			ItemNotFoundError,
+			lambda: storage.moveCategoryItemsById("Saved", (formattedId, -1), "Moved"),
+			"A partial category move was committed",
+		)
 		assert tuple(item.itemId for item in storage.getCategoryItems("Saved")) == savedItemIds
 		assert not storage.getCategoryItems("Moved")
 		storage.moveCategoryItemsById("Saved", savedItemIds, "Moved")
@@ -581,12 +587,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 		storage.deleteCategoryItemsById("Moved", savedItemIds)
 		assert not storage.getCategoryItems("Moved")
 		historyItemIds = tuple(item.itemId for item in storage.history)
-		try:
-			storage.deleteHistoryItemsById((formattedId, -1))
-		except ItemNotFoundError:
-			pass
-		else:
-			raise AssertionError("A partial history deletion was committed")
+		_expectRaises(
+			ItemNotFoundError,
+			lambda: storage.deleteHistoryItemsById((formattedId, -1)),
+			"A partial history deletion was committed",
+		)
 		assert tuple(item.itemId for item in storage.history) == historyItemIds
 		olderItemIds = tuple(
 			item.itemId for item in storage.history if item.textPreview in ("older", "gap latest")
@@ -623,12 +628,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert tuple(item.itemId for item in categoryContents) == (filesId, longTextId)
 		with storage._transaction() as connection:
 			connection.execute("UPDATE items SET imageData = ? WHERE itemId = ?", (b"abd", imageId))
-		try:
-			storage.getHistoryItemById(imageId)
-		except StorageFormatError:
-			pass
-		else:
-			raise AssertionError("A payload with a stale hash was accepted")
+		_expectRaises(
+			StorageFormatError,
+			lambda: storage.getHistoryItemById(imageId),
+			"A payload with a stale hash was accepted",
+		)
 		replacementImageId = storage.addHistory(imageItem)
 		assert replacementImageId is not None and replacementImageId != imageId
 		assert storage.getHistoryItemById(replacementImageId) == imageItem
@@ -637,12 +641,11 @@ def _runSelfCheck() -> None:  # noqa: C901
 				"UPDATE items SET imageByteCount = imageByteCount + 1 WHERE itemId = ?",
 				(replacementImageId,),
 			)
-		try:
-			storage.getHistoryItemById(replacementImageId)
-		except StorageFormatError:
-			pass
-		else:
-			raise AssertionError("An incorrect image byte count was accepted")
+		_expectRaises(
+			StorageFormatError,
+			lambda: storage.getHistoryItemById(replacementImageId),
+			"An incorrect image byte count was accepted",
+		)
 		with storage._transaction() as connection:
 			connection.execute(
 				"UPDATE items SET imageByteCount = imageByteCount - 1 WHERE itemId = ?",

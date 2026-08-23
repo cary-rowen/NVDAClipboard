@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ast
 import ctypes
-import importlib.util
 from pathlib import Path
 import struct
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+
+from tests._module_loader import loadAddonModule
 
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
@@ -19,13 +20,6 @@ _PACKAGE = ModuleType(_PACKAGE_NAME)
 _PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
 sys.modules[_PACKAGE_NAME] = _PACKAGE
 
-_SPEC = importlib.util.spec_from_file_location(
-	f"{_PACKAGE_NAME}.clipboardMonitor",
-	_MODULE_DIRECTORY / "clipboardMonitor.py",
-)
-assert _SPEC is not None and _SPEC.loader is not None
-clipboardMonitor = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = clipboardMonitor
 with (
 	patch.object(ctypes, "windll", Mock(), create=True),
 	patch.object(ctypes, "WinError", lambda *_args: OSError(), create=True),
@@ -39,7 +33,10 @@ with (
 		},
 	),
 ):
-	_SPEC.loader.exec_module(clipboardMonitor)
+	clipboardMonitor = loadAddonModule(
+		f"{_PACKAGE_NAME}.clipboardMonitor",
+		_MODULE_DIRECTORY / "clipboardMonitor.py",
+	)
 
 
 def _buildDibV5() -> bytes:

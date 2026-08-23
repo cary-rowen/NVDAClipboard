@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
 from pathlib import Path
 import sys
 from threading import Lock
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+
+from tests._module_loader import loadAddonModule
 
 
 _MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
@@ -40,25 +40,18 @@ _UI = ModuleType("ui")
 _UI.message = Mock()
 _WX = ModuleType("wx")
 _WX.CallAfter = Mock()
-_SPEC = importlib.util.spec_from_file_location(
+cloudSync = loadAddonModule(
 	f"{_PACKAGE_NAME}.cloudSync",
 	_MODULE_DIRECTORY / "cloudSync.py",
-)
-assert _SPEC is not None and _SPEC.loader is not None
-cloudSync = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = cloudSync
-with patch.dict(
-	sys.modules,
-	{
+	injectedModules={
 		"addonHandler": _ADDON_HANDLER,
 		"config": _CONFIG,
 		"logHandler": _LOG_HANDLER,
 		"ui": _UI,
 		"wx": _WX,
 	},
-):
-	_SPEC.loader.exec_module(cloudSync)
-cloudClipboard = importlib.import_module(f"{_PACKAGE_NAME}.cloudClipboard")
+)
+cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.cloudClipboard"]
 
 
 class CloudSyncTests(unittest.TestCase):

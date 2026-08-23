@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
+
+from tests._module_loader import loadAddonModule
 
 
 _MODULE_PATH = Path(__file__).parents[1] / "addon" / "installTasks.py"
-_SPEC = importlib.util.spec_from_file_location("nvdaClipboardInstallTasksTests", _MODULE_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-installTasks = importlib.util.module_from_spec(_SPEC)
 _ADDON_HANDLER = ModuleType("addonHandler")
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
-with patch.dict(sys.modules, {"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER}):
-	_SPEC.loader.exec_module(installTasks)
+installTasks = loadAddonModule(
+	"nvdaClipboardInstallTasksTests",
+	_MODULE_PATH,
+	injectedModules={"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER},
+)
 
 
 class InstallTasksTests(unittest.TestCase):
