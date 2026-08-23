@@ -185,6 +185,26 @@ msgstr "同步完成"
 msgid "Receives and pastes from Tiantan Cloud Clipboard"
 msgstr "从天坦云剪贴板接收并粘贴"
 
+#. Translators: Message shown when Tiantan Cloud Clipboard is disabled.
+msgid "Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart NVDA."
+msgstr "天坦云剪贴板已禁用。请在设置中启用，然后重启 NVDA。"
+
+#. Translators: Checkbox to enable Tiantan Cloud Clipboard after NVDA restarts.
+msgid "Enable &Tiantan Cloud Clipboard (requires restart)"
+msgstr "启用天坦云剪贴板(&T)（需要重启）"
+
+#. Translators: Note shown under the Tiantan Cloud Clipboard option.
+msgid "Tiantan Cloud Clipboard loads only after NVDA restarts."
+msgstr "天坦云剪贴板只会在 NVDA 重启后加载。"
+
+#. Translators: Message shown after changing Tiantan Cloud Clipboard availability.
+msgid "Tiantan Cloud Clipboard changes require NVDA to restart. Restart now?"
+msgstr "天坦云剪贴板设置更改需要重启 NVDA。立即重启吗？"
+
+#. Translators: Title for the restart prompt after changing Tiantan Cloud Clipboard availability.
+msgid "Restart NVDA"
+msgstr "重启 NVDA"
+
 #. Translators: Title of the Tiantan Clipboard account dialog.
 #: addon\globalPlugins\nvdaClipboard\cloudDialog.py:35
 msgid "Tiantan Clipboard"
