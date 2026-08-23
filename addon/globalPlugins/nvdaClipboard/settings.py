@@ -8,8 +8,12 @@
 from typing import override
 
 import addonHandler
+import config
+import core
+import gui
 from gui import guiHelper, nvdaControls
 from gui.settingsDialogs import SettingsPanel
+import queueHandler
 import wx
 
 from .configuration import (
@@ -18,6 +22,7 @@ from .configuration import (
 	NavigationSplitMode,
 	getNavigationSplitSettings,
 	getPageLineCount,
+	getTiantanEnabled,
 	saveSettings,
 )
 
@@ -70,6 +75,23 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 		self.separatePunctuationCheckBox.Enable(navigationSplitMode is NavigationSplitMode.PUNCTUATION)
 		self.navigationSplitChoice.Bind(wx.EVT_CHOICE, self._onNavigationSplitModeChange)
 
+		self._initialTiantanEnabled = getTiantanEnabled()
+		self.tiantanEnabledCheckBox = sizerHelper.addItem(
+			wx.CheckBox(
+				self,
+				# Translators: Checkbox to enable Tiantan Cloud Clipboard after NVDA restarts.
+				label=_("Enable &Tiantan Cloud Clipboard (requires restart)"),
+			),
+		)
+		self.tiantanEnabledCheckBox.SetValue(getTiantanEnabled())
+		sizerHelper.addItem(
+			wx.StaticText(
+				self,
+				# Translators: Note shown under the Tiantan Cloud Clipboard option.
+				label=_("Tiantan Cloud Clipboard loads only after NVDA restarts."),
+			),
+		)
+
 		# Translators: Label for the number of clipboard lines moved by the page up and page down commands.
 		label = _("&Number of lines to move when paging up or down:")
 		self.pageLineCountSpin = sizerHelper.addLabeledControl(
@@ -92,4 +114,23 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 			navigationSplitMode=_NAVIGATION_SPLIT_MODES[self.navigationSplitChoice.GetSelection()],
 			splitCamelCase=self.splitCamelCaseCheckBox.GetValue(),
 			separatePunctuation=self.separatePunctuationCheckBox.GetValue(),
+			tiantanEnabled=self.tiantanEnabledCheckBox.GetValue(),
 		)
+
+	@override
+	def postSave(self) -> None:
+		"""Offer to restart NVDA after changing Tiantan Cloud Clipboard availability."""
+		if self._initialTiantanEnabled == getTiantanEnabled():
+			return
+		result = gui.messageBox(
+			_(
+				# Translators: Message shown after changing Tiantan Cloud Clipboard availability.
+				"Tiantan Cloud Clipboard changes require NVDA to restart. Restart now?",
+			),
+			# Translators: Title for the restart prompt after changing Tiantan Cloud Clipboard availability.
+			_("Restart NVDA"),
+			wx.YES | wx.NO | wx.ICON_WARNING,
+		)
+		if result == wx.YES:
+			config.conf.save()
+			queueHandler.queueFunction(queueHandler.eventQueue, core.restart)

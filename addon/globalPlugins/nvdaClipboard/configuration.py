@@ -25,6 +25,7 @@ _CONFIG_PAGE_LINE_COUNT = "pageLineCount"
 _CONFIG_NAVIGATION_SPLIT_MODE = "navigationSplitMode"
 _CONFIG_SPLIT_CAMEL_CASE = "splitCamelCase"
 _CONFIG_SEPARATE_PUNCTUATION = "separatePunctuation"
+_CONFIG_TIANTAN_ENABLED = "tiantanEnabled"
 _DEFAULT_PAGE_LINE_COUNT = 10
 
 _sectionSpec = config.conf.spec.setdefault(_CONFIG_SECTION, {})
@@ -39,6 +40,7 @@ _sectionSpec.update(
 		),
 		_CONFIG_SPLIT_CAMEL_CASE: "boolean(default=true)",
 		_CONFIG_SEPARATE_PUNCTUATION: "boolean(default=false)",
+		_CONFIG_TIANTAN_ENABLED: "boolean(default=false)",
 	},
 )
 
@@ -58,12 +60,18 @@ def getNavigationSplitSettings() -> tuple[NavigationSplitMode, bool, bool]:
 	)
 
 
+def getTiantanEnabled() -> bool:
+	"""Return whether Tiantan cloud synchronization is enabled."""
+	return bool(config.conf[_CONFIG_SECTION][_CONFIG_TIANTAN_ENABLED])
+
+
 def saveSettings(
 	*,
 	pageLineCount: int,
 	navigationSplitMode: NavigationSplitMode,
 	splitCamelCase: bool,
 	separatePunctuation: bool,
+	tiantanEnabled: bool,
 ) -> None:
 	"""Save settings from the NVDA Clipboard settings panel."""
 	section = config.conf[_CONFIG_SECTION]
@@ -71,3 +79,4 @@ def saveSettings(
 	section[_CONFIG_NAVIGATION_SPLIT_MODE] = navigationSplitMode.value
 	section[_CONFIG_SPLIT_CAMEL_CASE] = splitCamelCase
 	section[_CONFIG_SEPARATE_PUNCTUATION] = separatePunctuation
+	section[_CONFIG_TIANTAN_ENABLED] = tiantanEnabled
