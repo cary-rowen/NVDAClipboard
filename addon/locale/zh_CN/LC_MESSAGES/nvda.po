@@ -189,6 +189,10 @@ msgstr "从天坦云剪贴板接收并粘贴"
 msgid "Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart NVDA."
 msgstr "天坦云剪贴板已禁用。请在设置中启用，然后重启 NVDA。"
 
+#. Translators: Error shown when Tiantan Cloud Clipboard is not supported by the current NVDA process bitness.
+msgid "Tiantan Cloud Clipboard requires x64 NVDA."
+msgstr "天坦云剪贴板需要 x64 版 NVDA。"
+
 #. Translators: Checkbox to enable Tiantan Cloud Clipboard after NVDA restarts.
 msgid "Enable &Tiantan Cloud Clipboard (requires restart)"
 msgstr "启用天坦云剪贴板(&T)（需要重启）"

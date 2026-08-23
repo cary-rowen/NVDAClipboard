@@ -25,6 +25,7 @@ from .configuration import (
 	getTiantanEnabled,
 	saveSettings,
 )
+from .tiantanSupport import getTiantanSupportState
 
 
 addonHandler.initTranslation()
@@ -76,6 +77,7 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 		self.navigationSplitChoice.Bind(wx.EVT_CHOICE, self._onNavigationSplitModeChange)
 
 		self._initialTiantanEnabled = getTiantanEnabled()
+		self._tiantanSupportState = getTiantanSupportState()
 		self.tiantanEnabledCheckBox = sizerHelper.addItem(
 			wx.CheckBox(
 				self,
@@ -83,14 +85,25 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 				label=_("Enable &Tiantan Cloud Clipboard (requires restart)"),
 			),
 		)
-		self.tiantanEnabledCheckBox.SetValue(getTiantanEnabled())
-		sizerHelper.addItem(
-			wx.StaticText(
-				self,
-				# Translators: Note shown under the Tiantan Cloud Clipboard option.
-				label=_("Tiantan Cloud Clipboard loads only after NVDA restarts."),
-			),
+		self.tiantanEnabledCheckBox.SetValue(self._initialTiantanEnabled)
+		self.tiantanEnabledCheckBox.Enable(
+			self._tiantanSupportState.isAvailable or self._initialTiantanEnabled,
 		)
+		if self._tiantanSupportState.isAvailable:
+			sizerHelper.addItem(
+				wx.StaticText(
+					self,
+					# Translators: Note shown under the Tiantan Cloud Clipboard option.
+					label=_("Tiantan Cloud Clipboard loads only after NVDA restarts."),
+				),
+			)
+		else:
+			sizerHelper.addItem(
+				wx.StaticText(
+					self,
+					label=self._tiantanSupportState.statusMessage,
+				),
+			)
 
 		# Translators: Label for the number of clipboard lines moved by the page up and page down commands.
 		label = _("&Number of lines to move when paging up or down:")
