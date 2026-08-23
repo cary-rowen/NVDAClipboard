@@ -63,6 +63,7 @@ from .images import (
 	isScreenCurtainEnabled,
 	savePngImage,
 )
+from .tiantanSupport import getTiantanSupportState
 from .storage import (
 	CategoryExistsError,
 	CategoryNameError,
@@ -239,10 +240,20 @@ class ClipboardController:
 
 	def __init__(self, *, tiantanEnabled: bool = False) -> None:
 		self.storage = ClipboardStorage(reservedCategoryNames=(_HISTORY_CATEGORY_NAME,))
-		self._tiantanEnabled = tiantanEnabled
+		self._tiantanUnavailableMessage = ""
 		try:
 			self.navigator = ClipboardNavigator()
-			self.cloudSync = CloudSyncManager(onStateChanged=self._onCloudStateChanged) if tiantanEnabled else None
+			self.cloudSync = None
+			if tiantanEnabled:
+				tiantanSupportState = getTiantanSupportState()
+				self._tiantanUnavailableMessage = tiantanSupportState.statusMessage
+				if tiantanSupportState.isAvailable:
+					self.cloudSync = CloudSyncManager(onStateChanged=self._onCloudStateChanged)
+					cloudState = self.cloudSync.getState()
+					if not cloudState.isAvailable:
+						self._tiantanUnavailableMessage = cloudState.statusMessage
+						self.cloudSync.terminate()
+						self.cloudSync = None
 			self.oneDriveSync = OneDriveSyncManager(
 				self.storage,
 				onStateChanged=self._onOneDriveStateChanged,
@@ -292,11 +303,6 @@ class ClipboardController:
 		"""Return whether the native cloud clipboard SDK is available."""
 		cloudSync = self.cloudSync
 		return bool(cloudSync is not None and cloudSync.getState().isAvailable)
-
-	@property
-	def isTiantanEnabled(self) -> bool:
-		"""Return whether Tiantan cloud synchronization is enabled in settings."""
-		return self._tiantanEnabled
 
 	def start(self) -> None:
 		"""Start cloud state detection and clipboard monitoring."""
@@ -378,7 +384,7 @@ class ClipboardController:
 		"""Create or raise the Tiantan Cloud Clipboard account dialog."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
-			ui.message(_TIANTAN_DISABLED_MESSAGE)
+			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		if not self.isCloudAvailable:
 			ui.message(cloudSync.getState().statusMessage)
@@ -443,7 +449,7 @@ class ClipboardController:
 		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
-			ui.message(_TIANTAN_DISABLED_MESSAGE)
+			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		state = cloudSync.getState()
 		if not state.isAvailable:
@@ -486,7 +492,7 @@ class ClipboardController:
 		"""Send the current allowed clipboard text to Tiantan Cloud Clipboard."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
-			ui.message(_TIANTAN_DISABLED_MESSAGE)
+			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		cloudSync.uploadCurrentText(self._getCurrentCloudUploadText())
 
@@ -494,7 +500,7 @@ class ClipboardController:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard without pasting it."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
-			ui.message(_TIANTAN_DISABLED_MESSAGE)
+			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		state = cloudSync.getState()
 		if not state.isAvailable:
