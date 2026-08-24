@@ -18,6 +18,23 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Poedit 3.9\n"
 
+#. Translators: Context menu command to remove missing paths from selected file groups.
+msgid "Remove &Missing Files"
+msgstr "移除缺失文件(&M)"
+
+#. Translators: Confirmation before removing missing paths from selected file groups.
+msgid "Remove missing files from the selected file groups? File groups with no remaining files will be deleted."
+msgstr "要从选中的文件组移除缺失文件吗？没有剩余文件的文件组将被删除。"
+
+#. Translators: Message shown when selected file groups have no missing paths.
+msgid "No missing files"
+msgstr "没有缺失文件"
+
+#. Translators: Message shown after removing one or multiple missing paths from file groups.
+msgid "Removed {count} missing file"
+msgid_plural "Removed {count} missing files"
+msgstr[0] "已移除 {count} 个缺失文件"
+
 # Cloud menu and account dialogs.
 #. Translators: Title of the Tiantan Cloud Clipboard account dialog.
 msgid "Tiantan Cloud Clipboard"

@@ -178,6 +178,16 @@ class ClipboardItemDetails:
 
 
 @dataclass(frozen=True, slots=True)
+class MissingFileCleanupResult:
+	"""Describe selected file-group cleanup performed by the manager."""
+
+	changedCount: int
+	deletedCount: int
+	removedCount: int
+	replacementIds: dict[int, int]
+
+
+@dataclass(frozen=True, slots=True)
 class _HistoryWriteResult:
 	itemId: int | None
 	imageWasDropped: bool = False
@@ -218,6 +228,14 @@ def _isLastSpokenTemporarySnapshot(
 		and not snapshot.canUpload
 		and bool(snapshot.sequenceNumber)
 	)
+
+
+def _isMissingFilePath(filePath: str) -> bool:
+	"""Return whether a stored file path cannot currently be found."""
+	try:
+		return not Path(filePath).exists()
+	except OSError:
+		return True
 
 
 class _ClipboardWriteFailedError(RuntimeError):
@@ -952,6 +970,16 @@ class ClipboardController:
 			canUpload=item.canUpload,
 		)
 
+	def selectedFileGroupsHaveMissingFiles(self, category: CategoryId, itemIds: tuple[int, ...]) -> bool:
+		"""Return whether selected file groups contain any missing paths."""
+		for itemId in itemIds:
+			item = self._getStoredItemContentById(category, itemId)
+			if item.contentType == ClipboardItemType.FILES and any(
+				_isMissingFilePath(filePath) for filePath in item.files
+			):
+				return True
+		return False
+
 	def getNavigationPositionForText(self, text: str) -> tuple[int, int] | None:
 		"""Return the navigation offset and sequence when text is the current clipboard text."""
 		sequenceNumber = self._lastAppliedSequenceNumber
@@ -1185,6 +1213,33 @@ class ClipboardController:
 		except StorageError as error:
 			self._raiseUserStorageError(error)
 		self.oneDriveSync.notifyLocalChange()
+
+	def removeMissingFiles(self, category: CategoryId, itemIds: tuple[int, ...]) -> MissingFileCleanupResult:
+		"""Remove missing paths from selected file groups."""
+		try:
+			if self.isHistoryCategory(category):
+				changedCount, deletedCount, removedCount, replacementIds = (
+					self.storage.removeMissingHistoryFileReferences(
+						itemIds,
+						_isMissingFilePath,
+					)
+				)
+				if changedCount:
+					self._historyIndex = self.storage.getHistorySummaryAt(self._historyIndex)[1]
+			else:
+				assert isinstance(category, str)
+				changedCount, deletedCount, removedCount, replacementIds = (
+					self.storage.removeMissingCategoryFileReferences(
+						category,
+						itemIds,
+						_isMissingFilePath,
+					)
+				)
+		except StorageError as error:
+			self._raiseUserStorageError(error)
+		if changedCount:
+			self.oneDriveSync.notifyLocalChange()
+		return MissingFileCleanupResult(changedCount, deletedCount, removedCount, replacementIds)
 
 	def createCategory(self, name: str) -> str:
 		"""Create a user category and return its stored name."""
