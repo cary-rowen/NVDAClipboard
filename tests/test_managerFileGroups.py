@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Callable
-from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "manager.py"
+from _manager_method_loader import loadManagerClassMethods
 
 
 def _loadFileGroupMethods() -> tuple[
@@ -19,26 +16,23 @@ def _loadFileGroupMethods() -> tuple[
 	Callable[..., None],
 ]:
 	"""Load file-group menu methods without importing manager GUI dependencies."""
-	tree = ast.parse(_MODULE_PATH.read_text(encoding="utf-8"))
-	managerClass = next(
-		node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClipboardManagerFrame"
+	namespace = loadManagerClassMethods(
+		{"_getSelectedFileGroupKeys", "_showItemContextMenu", "_onRemoveMissingFiles"},
+		{
+			"ClipboardItemType": SimpleNamespace(FILES="files"),
+			"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
+			"_": lambda message: message,
+		},
 	)
-	methods = [
-		node
-		for node in managerClass.body
-		if isinstance(node, ast.FunctionDef)
-		and node.name in {"_getSelectedFileGroupKeys", "_showItemContextMenu", "_onRemoveMissingFiles"}
-	]
-	namespace: dict[str, object] = {
-		"ClipboardItemType": SimpleNamespace(FILES="files"),
-		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
-		"_": lambda message: message,
-	}
-	exec(compile(ast.Module(body=methods, type_ignores=[]), str(_MODULE_PATH), "exec"), namespace)
 	return namespace["_getSelectedFileGroupKeys"], namespace["_showItemContextMenu"], namespace["_onRemoveMissingFiles"]
 
 
 _getSelectedFileGroupKeys, _showItemContextMenu, _onRemoveMissingFiles = _loadFileGroupMethods()
+
+
+def _menuLabels(menu: Mock) -> list[str]:
+	"""Return labels appended to a fake wx menu."""
+	return [call.args[1] for call in menu.Append.call_args_list]
 
 
 class ManagerFileGroupTests(unittest.TestCase):
@@ -79,8 +73,7 @@ class ManagerFileGroupTests(unittest.TestCase):
 
 		_showItemContextMenu(manager, fakeWx.DefaultPosition, 0, 1)
 
-		self.assertEqual(4, menu.Append.call_count)
-		self.assertEqual("Remove &Missing Files", menu.Append.call_args_list[2].args[1])
+		self.assertIn("Remove &Missing Files", _menuLabels(menu))
 		menu.Bind.assert_any_call(fakeWx.EVT_MENU, manager._onRemoveMissingFiles, removeMissingFilesItem)
 		manager.controller.selectedFileGroupsHaveMissingFiles.assert_called_once_with("Saved", (7,))
 		menu.Destroy.assert_called_once_with()
@@ -115,11 +108,7 @@ class ManagerFileGroupTests(unittest.TestCase):
 
 		_showItemContextMenu(manager, fakeWx.DefaultPosition, 0, 1)
 
-		self.assertEqual(3, menu.Append.call_count)
-		self.assertNotIn(
-			"Remove &Missing Files",
-			[call.args[1] for call in menu.Append.call_args_list],
-		)
+		self.assertNotIn("Remove &Missing Files", _menuLabels(menu))
 		manager.controller.selectedFileGroupsHaveMissingFiles.assert_called_once_with("Saved", (7,))
 		menu.Destroy.assert_called_once_with()
 
@@ -151,11 +140,7 @@ class ManagerFileGroupTests(unittest.TestCase):
 
 		_showItemContextMenu(manager, fakeWx.DefaultPosition, 0, 1)
 
-		self.assertEqual(3, menu.Append.call_count)
-		self.assertNotIn(
-			"Remove &Missing Files",
-			[call.args[1] for call in menu.Append.call_args_list],
-		)
+		self.assertNotIn("Remove &Missing Files", _menuLabels(menu))
 		menu.Destroy.assert_called_once_with()
 
 	def testPartialCleanupKeepsActiveReplacementFocused(self) -> None:

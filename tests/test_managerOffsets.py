@@ -2,28 +2,17 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Callable
 from itertools import product
-from pathlib import Path
 from typing import cast
 import unittest
 
-
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "manager.py"
+from _manager_method_loader import loadManagerTopLevelFunctions
 
 
 def _loadOffsetFunctions() -> tuple[Callable[[str, int], int], Callable[[str, int], int]]:
 	"""Load the two pure helpers without importing manager GUI dependencies."""
-	tree = ast.parse(_MODULE_PATH.read_text(encoding="utf-8"))
-	nodes = [
-		node
-		for node in tree.body
-		if isinstance(node, ast.FunctionDef)
-		and node.name in {"_sourceToEditorOffset", "_editorToSourceOffset"}
-	]
-	namespace: dict[str, object] = {}
-	exec(compile(ast.Module(body=nodes, type_ignores=[]), str(_MODULE_PATH), "exec"), namespace)
+	namespace = loadManagerTopLevelFunctions({"_sourceToEditorOffset", "_editorToSourceOffset"})
 	return (
 		cast(Callable[[str, int], int], namespace["_sourceToEditorOffset"]),
 		cast(Callable[[str, int], int], namespace["_editorToSourceOffset"]),

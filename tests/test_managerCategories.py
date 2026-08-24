@@ -2,32 +2,22 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Callable
-from pathlib import Path
 from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "manager.py"
+from _manager_method_loader import loadManagerClassMethods
 
 
 def _loadManagerMethods(
 	fakeWx: SimpleNamespace,
 ) -> tuple[Callable[..., bool], Callable[..., None]]:
 	"""Load category methods without importing manager GUI dependencies."""
-	tree = ast.parse(_MODULE_PATH.read_text(encoding="utf-8"))
-	managerClass = next(
-		node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClipboardManagerFrame"
+	namespace = loadManagerClassMethods(
+		{"_selectCategory", "_onCategoryContextMenu"},
+		{"wx": fakeWx, "_": lambda message: message},
 	)
-	methods = [
-		node
-		for node in managerClass.body
-		if isinstance(node, ast.FunctionDef) and node.name in {"_selectCategory", "_onCategoryContextMenu"}
-	]
-	namespace: dict[str, object] = {"wx": fakeWx, "_": lambda message: message}
-	exec(compile(ast.Module(body=methods, type_ignores=[]), str(_MODULE_PATH), "exec"), namespace)
 	return namespace["_selectCategory"], namespace["_onCategoryContextMenu"]
 
 

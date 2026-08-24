@@ -2,34 +2,23 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Callable
-from pathlib import Path
 from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "manager.py"
+from _manager_method_loader import loadManagerClassMethods
 
 
 def _loadDraftMethods() -> tuple[Callable[..., None], Callable[..., None], Callable[..., None]]:
 	"""Load draft methods without importing manager GUI dependencies."""
-	tree = ast.parse(_MODULE_PATH.read_text(encoding="utf-8"))
-	managerClass = next(
-		node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClipboardManagerFrame"
+	namespace = loadManagerClassMethods(
+		{"refreshFromController", "_startPlainTextDraft", "_onNewEntry"},
+		{
+			"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="plainText"),
+			"wx": SimpleNamespace(CommandEvent=object),
+		},
 	)
-	methods = [
-		node
-		for node in managerClass.body
-		if isinstance(node, ast.FunctionDef)
-		and node.name in {"refreshFromController", "_startPlainTextDraft", "_onNewEntry"}
-	]
-	namespace: dict[str, object] = {
-		"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="plainText"),
-		"wx": SimpleNamespace(CommandEvent=object),
-	}
-	exec(compile(ast.Module(body=methods, type_ignores=[]), str(_MODULE_PATH), "exec"), namespace)
 	return namespace["refreshFromController"], namespace["_startPlainTextDraft"], namespace["_onNewEntry"]
 
 
