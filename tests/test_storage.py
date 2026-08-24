@@ -660,6 +660,117 @@ def _runSelfCheck() -> None:  # noqa: C901
 class StorageSelfCheckTests(unittest.TestCase):
 	"""Run the storage module's isolated behavior checks."""
 
+	def testRemoveMissingFilesOnlyUpdatesSelectedScope(self) -> None:
+		"""Clean selected file groups without changing other references."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "files.db", root / "missing-history.json")
+			storage.createCategory("Saved")
+			fileGroup = ClipboardItem(
+				ClipboardItemType.FILES,
+				files=("kept.txt", "missing.txt"),
+				canUpload=False,
+			)
+			historyId = storage.addHistory(fileGroup)
+			assert historyId is not None
+			storage.copyHistoryItemsToCategoryById((historyId,), "Saved")
+
+			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
+				"Saved",
+				(historyId,),
+				lambda filePath: filePath == "missing.txt",
+			)
+
+			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			self.assertEqual(storage.getHistoryItemById(historyId).files, ("kept.txt", "missing.txt"))
+			categoryItems = storage.getCategoryItems("Saved")
+			self.assertEqual(len(categoryItems), 1)
+			self.assertNotEqual(categoryItems[0].itemId, historyId)
+			self.assertEqual(
+				storage.getCategoryItemById("Saved", categoryItems[0].itemId).files,
+				("kept.txt",),
+			)
+			self.assertEqual(replacements, {historyId: categoryItems[0].itemId})
+			storage.close()
+
+	def testRemoveMissingFilesDeletesFullyMissingGroups(self) -> None:
+		"""Delete selected file groups when no paths remain."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "files.db", root / "missing-history.json")
+			fileGroup = ClipboardItem(ClipboardItemType.FILES, files=("missing.txt",))
+			itemId = storage.addHistory(fileGroup)
+			assert itemId is not None
+
+			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
+				(itemId,),
+				lambda _filePath: True,
+			)
+
+			self.assertEqual((changed, deleted, removed), (1, 1, 1))
+			self.assertEqual(replacements, {})
+			self.assertFalse(storage.history)
+			storage.close()
+
+	def testRemoveMissingHistoryFilesKeepsSelectedPositionOnCollision(self) -> None:
+		"""Keep a cleaned history row when the resulting file group already exists."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "files.db", root / "missing-history.json")
+			existingId = storage.addHistory(ClipboardItem(ClipboardItemType.FILES, files=("kept.txt",)))
+			selectedId = storage.addHistory(
+				ClipboardItem(ClipboardItemType.FILES, files=("missing.txt", "kept.txt")),
+			)
+			assert existingId is not None
+			assert selectedId is not None
+
+			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
+				(selectedId,),
+				lambda filePath: filePath == "missing.txt",
+			)
+
+			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			history = storage.history
+			self.assertEqual(2, len(history))
+			self.assertNotEqual(history[0].itemId, existingId)
+			self.assertEqual(storage.getHistoryItemById(history[0].itemId).files, ("kept.txt",))
+			self.assertEqual(history[1].itemId, existingId)
+			self.assertEqual(replacements, {selectedId: history[0].itemId})
+			storage.close()
+
+	def testRemoveMissingCategoryFilesKeepsSelectedPositionOnCollision(self) -> None:
+		"""Keep a cleaned category row when the resulting file group already exists."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "files.db", root / "missing-history.json")
+			storage.createCategory("Saved")
+			existingId = storage.addHistory(ClipboardItem(ClipboardItemType.FILES, files=("kept.txt",)))
+			selectedId = storage.addHistory(
+				ClipboardItem(ClipboardItemType.FILES, files=("missing.txt", "kept.txt")),
+			)
+			assert existingId is not None
+			assert selectedId is not None
+			storage.copyHistoryItemsToCategoryById((existingId,), "Saved")
+			storage.copyHistoryItemsToCategoryById((selectedId,), "Saved")
+
+			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
+				"Saved",
+				(selectedId,),
+				lambda filePath: filePath == "missing.txt",
+			)
+
+			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			categoryItems = storage.getCategoryItems("Saved")
+			self.assertEqual(2, len(categoryItems))
+			self.assertNotEqual(categoryItems[0].itemId, existingId)
+			self.assertEqual(
+				storage.getCategoryItemById("Saved", categoryItems[0].itemId).files,
+				("kept.txt",),
+			)
+			self.assertEqual(categoryItems[1].itemId, existingId)
+			self.assertEqual(replacements, {selectedId: categoryItems[0].itemId})
+			storage.close()
+
 	def testReadConnectionPinsOneSnapshot(self) -> None:
 		"""Keep a compound read on one snapshot across a concurrent commit."""
 		with TemporaryDirectory() as directory:

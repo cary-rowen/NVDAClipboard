@@ -970,6 +970,51 @@ def _moveCategoryItemsToFront(
 	)
 
 
+def _replaceHistoryReference(
+	connection: sqlite3.Connection,
+	oldItemId: int,
+	newItemId: int,
+) -> None:
+	"""Replace one history reference while preserving its position."""
+	if oldItemId == newItemId:
+		return
+	connection.execute(
+		"UPDATE history SET itemId = ? WHERE itemId = ?",
+		(newItemId, oldItemId),
+	)
+
+
+def _replaceCategoryReference(
+	connection: sqlite3.Connection,
+	categoryId: int,
+	oldItemId: int,
+	newItemId: int,
+) -> None:
+	"""Replace one category reference while preserving its position."""
+	if oldItemId == newItemId:
+		return
+	connection.execute(
+		"UPDATE categoryItems SET itemId = ? WHERE categoryId = ? AND itemId = ?",
+		(newItemId, categoryId, oldItemId),
+	)
+
+
+def _historyReferencesItem(connection: sqlite3.Connection, itemId: int) -> bool:
+	"""Return whether history already contains one item reference."""
+	return connection.execute("SELECT 1 FROM history WHERE itemId = ?", (itemId,)).fetchone() is not None
+
+
+def _categoryReferencesItem(connection: sqlite3.Connection, categoryId: int, itemId: int) -> bool:
+	"""Return whether one category already contains one item reference."""
+	return (
+		connection.execute(
+			"SELECT 1 FROM categoryItems WHERE categoryId = ? AND itemId = ?",
+			(categoryId, itemId),
+		).fetchone()
+		is not None
+	)
+
+
 def _prependVersion2HistoryItem(connection: sqlite3.Connection, item: ClipboardItem) -> None:
 	"""Merge one version 2 item at the newest end of history."""
 	dedupKey = _dedupKey(item)
@@ -2701,6 +2746,56 @@ class ClipboardStorage:
 			_deleteHistoryReferences(connection, itemIds, explicit=True)
 			_garbageCollect(connection)
 
+	def removeMissingHistoryFileReferences(
+		self,
+		itemIds: tuple[int, ...],
+		isMissing: Callable[[str], bool],
+	) -> tuple[int, int, int, dict[int, int]]:
+		"""Remove missing paths from selected history file groups."""
+		if not itemIds:
+			return (0, 0, 0, {})
+		if not callable(isMissing):
+			raise TypeError(isMissing)
+		with self._transaction() as connection:
+			changed = 0
+			deleted = 0
+			removed = 0
+			replacementIds: dict[int, int] = {}
+			for itemId in dict.fromkeys(itemIds):
+				self._requireHistoryItem(connection, itemId)
+				item = self._getItem(connection, itemId)
+				if item.contentType != ClipboardItemType.FILES:
+					continue
+				remainingFiles: list[str] = []
+				missingCount = 0
+				for filePath in item.files:
+					if isMissing(filePath):
+						missingCount += 1
+					else:
+						remainingFiles.append(filePath)
+				if not missingCount:
+					continue
+				changed += 1
+				removed += missingCount
+				if remainingFiles:
+					replacement = ClipboardItem(
+						ClipboardItemType.FILES,
+						files=tuple(remainingFiles),
+						canUpload=item.canUpload,
+					)
+					payloadHash = _payloadHash(replacement)
+					replacementId = _findReusableItemId(connection, replacement, payloadHash)
+					if replacementId is None or _historyReferencesItem(connection, replacementId):
+						replacementId = _insertItem(connection, replacement, payloadHash=payloadHash)
+					_replaceHistoryReference(connection, itemId, replacementId)
+					replacementIds[itemId] = replacementId
+				else:
+					_deleteHistoryReferences(connection, (itemId,), explicit=True)
+					deleted += 1
+			if changed:
+				_garbageCollect(connection)
+			return (changed, deleted, removed, replacementIds)
+
 	def deleteCategoryItemsById(self, categoryName: str, itemIds: tuple[int, ...]) -> None:
 		"""Delete stable category entries without changing history."""
 		if not itemIds:
@@ -2716,6 +2811,68 @@ class ClipboardStorage:
 				((categoryId, itemId) for itemId in itemIds),
 			)
 			_garbageCollect(connection)
+
+	def removeMissingCategoryFileReferences(
+		self,
+		categoryName: str,
+		itemIds: tuple[int, ...],
+		isMissing: Callable[[str], bool],
+	) -> tuple[int, int, int, dict[int, int]]:
+		"""Remove missing paths from selected category file groups."""
+		if not itemIds:
+			return (0, 0, 0, {})
+		if not callable(isMissing):
+			raise TypeError(isMissing)
+		with self._transaction() as connection:
+			categoryId = self._categoryId(connection, categoryName)
+			nameFolded = self._categoryName(connection, categoryId).casefold()
+			changed = 0
+			deleted = 0
+			removed = 0
+			replacementIds: dict[int, int] = {}
+			for itemId in dict.fromkeys(itemIds):
+				self._requireCategoryItem(connection, categoryId, itemId)
+				item = self._getItem(connection, itemId)
+				if item.contentType != ClipboardItemType.FILES:
+					continue
+				remainingFiles: list[str] = []
+				missingCount = 0
+				for filePath in item.files:
+					if isMissing(filePath):
+						missingCount += 1
+					else:
+						remainingFiles.append(filePath)
+				if not missingCount:
+					continue
+				changed += 1
+				removed += missingCount
+				_recordCategoryItem(connection, nameFolded, itemId, deleted=True)
+				if remainingFiles:
+					replacement = ClipboardItem(
+						ClipboardItemType.FILES,
+						files=tuple(remainingFiles),
+						canUpload=item.canUpload,
+					)
+					payloadHash = _payloadHash(replacement)
+					replacementId = _findReusableItemId(connection, replacement, payloadHash)
+					if replacementId is None or _categoryReferencesItem(
+						connection,
+						categoryId,
+						replacementId,
+					):
+						replacementId = _insertItem(connection, replacement, payloadHash=payloadHash)
+					_replaceCategoryReference(connection, categoryId, itemId, replacementId)
+					_recordCategoryItem(connection, nameFolded, replacementId, deleted=False)
+					replacementIds[itemId] = replacementId
+				else:
+					connection.execute(
+						"DELETE FROM categoryItems WHERE categoryId = ? AND itemId = ?",
+						(categoryId, itemId),
+					)
+					deleted += 1
+			if changed:
+				_garbageCollect(connection)
+			return (changed, deleted, removed, replacementIds)
 
 	def copyHistoryItemsToCategoryById(self, itemIds: tuple[int, ...], categoryName: str) -> None:
 		"""Reference ordered stable history entries at the front of a user category."""
