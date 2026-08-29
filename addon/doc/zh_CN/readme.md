@@ -4,19 +4,8 @@
 
 ## 系统要求
 
-- NVDA 2026.3 或更高版本，且必须使用 x64（AMD64）架构版本。当前尚不支持原生 ARM64 NVDA。
+- NVDA 2026.3 或更高版本，且可使用 x64（AMD64）版本或 Windows 11 上的 ARM64 版本。
 - 天坦剪贴板还需要 .NET 8 或更高版本。
-
-## [ ] 原生 ARM64 支持
-
-插件目前随附的 `_sqlite3.pyd`、`sqlite3.dll` 和 `ClipDataCloud.SDK.dll` 均为 x64 版本。插件启动时必须导入 `_sqlite3.pyd`，因此原生 ARM64 NVDA 当前无法加载本插件。天坦 SDK 是可选依赖，但在提供兼容 SDK 之前，ARM64 环境也无法使用天坦云剪贴板功能。
-
-正式声明支持原生 ARM64 前，需要完成：
-
-- 提供与 NVDA 内置 Python 版本匹配的 ARM64 `_sqlite3.pyd` 和 `sqlite3.dll`。
-- 提供 ARM64 `ClipDataCloud.SDK.dll`；如果没有兼容 SDK，则应在 ARM64 环境中禁用天坦云剪贴板功能。
-- 让插件包根据当前 NVDA 架构选择对应二进制文件，或根据条件选择是否加载二进制文件。
-- 在原生 ARM64 NVDA 中验证插件启动、SQLite 历史操作以及天坦云剪贴板的功能可用性。
 
 ## 浏览剪贴板
 

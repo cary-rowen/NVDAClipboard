@@ -9,11 +9,16 @@ from __future__ import annotations
 
 from ctypes import Array, CDLL, POINTER, byref, c_char, c_char_p, c_int, c_void_p, create_string_buffer
 from dataclasses import dataclass
-from pathlib import Path
+import platform
 from threading import Lock
 
+from ._nativeDeps import getNativeFilePath
 
-SDK_DLL_NAME = "ClipDataCloud.SDK.dll"
+
+_SDK_DLL_NAME_BY_MACHINE = {
+	"ARM64": "ClipDataCloud.SDK.ARM.dll",
+}
+_DEFAULT_SDK_DLL_NAME = "ClipDataCloud.SDK.dll"
 SUCCESS = 0
 INVALID_ARGUMENT = 1001
 BUFFER_TOO_SMALL = 1008
@@ -78,7 +83,7 @@ class CloudClipboardSdk:
 	"""Thin ctypes wrapper around the ClipDataCloud native SDK exports."""
 
 	def __init__(self) -> None:
-		dllPath = Path(__file__).with_name(SDK_DLL_NAME)
+		dllPath = getNativeFilePath(_getSdkDllName())
 		if not dllPath.exists():
 			raise CloudClipboardError(None, f"SDK DLL not found: {dllPath}") from None
 		try:
@@ -173,3 +178,8 @@ class CloudClipboardSdk:
 			return
 		message = errorBuffer.value.decode("utf-8", errors="replace")
 		raise CloudClipboardError(code, message)
+
+
+def _getSdkDllName() -> str:
+	"""Return the SDK DLL name for the current Windows CPU architecture."""
+	return _SDK_DLL_NAME_BY_MACHINE.get(platform.machine().upper(), _DEFAULT_SDK_DLL_NAME)

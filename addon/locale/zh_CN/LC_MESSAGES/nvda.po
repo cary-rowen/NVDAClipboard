@@ -5,7 +5,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: nvdaClipboard 0.1.0\n"
+"Project-Id-Version: nvdaClipboard 0.2.0\n"
 "Report-Msgid-Bugs-To: 'nvda-translations@groups.io'\n"
 "POT-Creation-Date: 2026-08-16 00:58+0800\n"
 "PO-Revision-Date: 2026-07-23 23:32+0800\n"
@@ -45,8 +45,8 @@ msgid "Synchronizes clipboard text between this computer and Tiantan Cloud Clipb
 msgstr "同步本机剪贴板到天坦云剪贴板。"
 
 #. Translators: Error shown when the native cloud clipboard library cannot be used.
-msgid "Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll."
-msgstr "天坦云剪贴板不可用：请检查 ClipDataCloud.SDK.dll。"
+msgid "Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK."
+msgstr "天坦云剪贴板不可用：请检查 ClipDataCloud SDK。"
 
 #. Translators: Message shown when another cloud account action is still running.
 msgid "Another Tiantan Cloud Clipboard account action is in progress"
@@ -207,8 +207,8 @@ msgid "Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart 
 msgstr "天坦云剪贴板已禁用。请在设置中启用，然后重启 NVDA。"
 
 #. Translators: Error shown when Tiantan Cloud Clipboard is not supported by the current NVDA process bitness.
-msgid "Tiantan Cloud Clipboard requires x64 NVDA."
-msgstr "天坦云剪贴板需要 x64 版 NVDA。"
+msgid "Tiantan Cloud Clipboard requires 64-bit NVDA."
+msgstr "天坦云剪贴板需要 64 位 NVDA。"
 
 #. Translators: Checkbox to enable Tiantan Cloud Clipboard after NVDA restarts.
 msgid "Enable &Tiantan Cloud Clipboard (requires restart)"
@@ -290,11 +290,6 @@ msgstr "正在登录..."
 #: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:123
 msgid "Signing out..."
 msgstr "正在退出..."
-
-#. Translators: Error shown when the native cloud clipboard library cannot be used.
-#: addon\globalPlugins\nvdaClipboard\cloudSync.py:51
-msgid "Tiantan is unavailable. Check ClipDataCloud.SDK.dll."
-msgstr "天坦不可用，请检查 ClipDataCloud.SDK.dll。"
 
 #. Translators: Message shown when another cloud account action is still running.
 #: addon\globalPlugins\nvdaClipboard\cloudSync.py:56
@@ -2214,16 +2209,15 @@ msgstr ""
 #. Translators: what's new content for the add-on version to be shown in the add-on store
 #: buildVars.py:41
 msgid ""
-"### 0.1.0\n"
+"### 0.2.0\n"
 "\n"
-"Initial development release with accessible clipboard navigation, bounded "
-"SQLite history, a type-aware manager, image and file support, last-spoken "
-"text commands, and optional cloud synchronization."
+"Bundled the runtime dependency trees under `_vendor`, separated "
+"architecture-specific native files under `_vendor/_native`, and kept the "
+"cloud and SQLite loaders thin and explicit."
 msgstr ""
-"### 0.1.0\n"
+"### 0.2.0\n"
 "\n"
-"首次开发版本，包含无障碍剪贴板浏览、容量受限的 SQLite 历史记录、类型感知管理"
-"器、图像和文件支持、最后朗读文本命令以及可选的云同步。"
+"将运行时依赖树统一打包到 `_vendor`，把架构相关的原生文件分到 `_vendor/_native`，并保持云端和 SQLite 加载器简洁明确。"
 
 #, python-brace-format
 #~ msgid "{count} text line"

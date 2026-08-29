@@ -51,7 +51,7 @@ class TiantanSupportTests(unittest.TestCase):
 		tiantanSupport.log.reset_mock()
 
 	def testUnsupportedProcessBitnessDoesNotLoadSdk(self) -> None:
-		"""Reject 32-bit NVDA before trying to load ClipDataCloud.SDK.dll."""
+		"""Reject 32-bit NVDA before trying to load the SDK."""
 		with (
 			patch.object(tiantanSupport.sys, "maxsize", 2**32),
 			patch.object(tiantanSupport.cloudClipboard, "CloudClipboardSdk") as sdkClass,
@@ -59,7 +59,7 @@ class TiantanSupportTests(unittest.TestCase):
 			state = tiantanSupport.getTiantanSupportState()
 
 		self.assertFalse(state.isAvailable)
-		self.assertEqual(state.statusMessage, "Tiantan Cloud Clipboard requires x64 NVDA.")
+		self.assertEqual(state.statusMessage, "Tiantan Cloud Clipboard requires 64-bit NVDA.")
 		sdkClass.assert_not_called()
 		tiantanSupport.log.debugWarning.assert_called_once()
 
@@ -75,7 +75,7 @@ class TiantanSupportTests(unittest.TestCase):
 		self.assertFalse(state.isAvailable)
 		self.assertEqual(
 			state.statusMessage,
-			"Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll.",
+			"Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.",
 		)
 		tiantanSupport.log.debugWarning.assert_called_once_with(
 			"ClipDataCloud SDK is unavailable.",

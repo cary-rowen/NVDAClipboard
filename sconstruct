@@ -52,6 +52,7 @@ addonDir: Final = Path("addon/")
 localeDir: Final = addonDir / "locale"
 docsDir: Final = addonDir / "doc"
 vendorDir: Final = addonDir / "globalPlugins" / "nvdaClipboard" / "_vendor"
+nativeDir: Final = vendorDir / "_native"
 requiredVendorFiles: Final = (
 	vendorDir / "msal" / "__init__.py",
 	vendorDir / "jwt" / "__init__.py",
@@ -59,6 +60,21 @@ requiredVendorFiles: Final = (
 if not all(path.is_file() for path in requiredVendorFiles):
 	raise UserError(
 		"Authentication dependencies are missing. "
+		"Run 'git submodule update --init --recursive' and build again."
+	)
+requiredNativeFiles: Final = (
+	nativeDir / "amd64" / "_sqlite3.pyd",
+	nativeDir / "amd64" / "sqlite3.dll",
+	nativeDir / "amd64" / "ClipDataCloud.SDK.dll",
+	nativeDir / "arm64" / "_sqlite3.pyd",
+	nativeDir / "arm64" / "sqlite3.dll",
+	nativeDir / "arm64" / "ClipDataCloud.SDK.ARM.dll",
+	nativeDir / "notices" / "PYTHON_LICENSE.txt",
+	nativeDir / "notices" / "SQLITE_NOTICE.txt",
+)
+if not all(path.is_file() for path in requiredNativeFiles):
+	raise UserError(
+		"Runtime native dependencies are missing from the submodule. "
 		"Run 'git submodule update --init --recursive' and build again."
 	)
 
@@ -119,11 +135,14 @@ for file in pythonFiles:
 
 staticFiles = expandGlobs(
 	[
-		"addon/globalPlugins/nvdaClipboard/ClipDataCloud.SDK.dll",
-		"addon/globalPlugins/nvdaClipboard/_sqlite3.pyd",
-		"addon/globalPlugins/nvdaClipboard/sqlite3.dll",
-		"addon/globalPlugins/nvdaClipboard/PYTHON_LICENSE.txt",
-		"addon/globalPlugins/nvdaClipboard/SQLITE_NOTICE.txt",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/amd64/_sqlite3.pyd",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/amd64/sqlite3.dll",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/amd64/ClipDataCloud.SDK.dll",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/arm64/_sqlite3.pyd",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/arm64/sqlite3.dll",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/arm64/ClipDataCloud.SDK.ARM.dll",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/notices/PYTHON_LICENSE.txt",
+		"addon/globalPlugins/nvdaClipboard/_vendor/_native/notices/SQLITE_NOTICE.txt",
 		"addon/Sounds/*.wav",
 	],
 )
