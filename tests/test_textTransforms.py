@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from tests._module_loader import loadAddonModule
 
@@ -77,6 +77,29 @@ class TextTransformTests(unittest.TestCase):
 		editor.SetInsertionPoint.assert_not_called()
 		editor.ShowPosition.assert_called_once_with(6)
 		editor.SetFocus.assert_called_once_with()
+
+	def testApplyEditorTextTransformUsesControlEndForFullBuffer(self) -> None:
+		"""Use wx control positions when replacing the whole editor content."""
+		editor = Mock()
+		editor.GetValue.side_effect = ["a\nb\nc", "a b c"]
+		editor.GetSelection.return_value = (0, 0)
+		editor.GetLastPosition.return_value = 7
+		editor.SetSelection = Mock()
+		editor.SetInsertionPoint = Mock()
+		editor.ShowPosition = Mock()
+		editor.SetFocus = Mock()
+
+		with patch.object(textTransforms, "_replaceEditorRange") as replaceEditorRange:
+			changed = textTransforms.applyEditorTextTransform(
+				editor,
+				textTransforms.replaceLineBreaksWithSpaces,
+				lineWise=True,
+			)
+
+		self.assertTrue(changed)
+		replaceEditorRange.assert_called_once_with(editor, 0, 7, "a b c")
+		editor.SetInsertionPoint.assert_called_once_with(0)
+		editor.SetSelection.assert_not_called()
 
 
 if __name__ == "__main__":
