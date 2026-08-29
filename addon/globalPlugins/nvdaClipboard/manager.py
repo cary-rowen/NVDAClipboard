@@ -14,9 +14,11 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 import locale
+from functools import partial
 from pathlib import Path
 import re
 from threading import Event
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import addonHandler
@@ -30,9 +32,10 @@ import wx
 
 from .cues import playNonPlainText
 from .clipboardData import MAX_TEXT_BYTES
+from . import textTransforms
 from .managerEditor import _ManagerEditorCommands
-from .search import normalizeSearchText, splitSearchKeywords
 from .configuration import getConfirmOnClose
+from .search import normalizeSearchText, splitSearchKeywords
 from .storage import ItemNotFoundError
 from .storageModels import ClipboardItemType
 
@@ -119,6 +122,8 @@ class ClipboardManagerFrame(wx.Frame):
 		self._categoryHasItems = False
 		self._itemTypeFilter: ClipboardItemType | None = None
 		self._viewFilterItems: dict[ClipboardItemType | None, wx.MenuItem] = {}
+		self._textCleanupMenuItem: wx.MenuItem | None = None
+		self._lineOperationsMenuItem: wx.MenuItem | None = None
 		self._selectedCategory: CategoryId | None = None
 		self._activeItemIndex: int | None = None
 		self._activeItemKey: int | None = None
@@ -305,6 +310,99 @@ class ClipboardManagerFrame(wx.Frame):
 			wx.ID_ANY,
 			# Translators: Edit menu command to move to a line in content.
 			_("&Go to Line...\tCtrl+G"),
+		)
+		editMenu.AppendSeparator()
+		textCleanupMenu = wx.Menu()
+		trailingSpacesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to trim trailing spaces from each line.
+			_("Trim Trailing &Spaces"),
+		)
+		leadingSpacesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to trim leading spaces from each line.
+			_("Trim Leading S&paces"),
+		)
+		leadingAndTrailingSpacesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to trim leading and trailing spaces from each line.
+			_("Trim Leading and Trailing S&paces"),
+		)
+		lineBreaksToSpacesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to replace line breaks with spaces.
+			_("Replace &Line Breaks with Spaces"),
+		)
+		self._textCleanupMenuItem = editMenu.AppendSubMenu(
+			textCleanupMenu,
+			# Translators: Submenu containing text cleanup commands.
+			_("Text &Cleanup"),
+		)
+		lineOperationsMenu = wx.Menu()
+		removeConsecutiveDuplicatesItem = lineOperationsMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to remove consecutive duplicate lines.
+			_("Remove Consecutive &Duplicate Lines"),
+		)
+		removeDuplicatesItem = lineOperationsMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to remove duplicate lines.
+			_("Remove &Duplicate Lines"),
+		)
+		sortLinesDescendingItem = lineOperationsMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to sort lines by length from longest to shortest.
+			_("Sort Lines by Length, &Descending"),
+		)
+		sortLinesAscendingItem = lineOperationsMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to sort lines by length from shortest to longest.
+			_("Sort Lines by Length, &Ascending"),
+		)
+		self._lineOperationsMenuItem = editMenu.AppendSubMenu(
+			lineOperationsMenu,
+			# Translators: Submenu containing line-based clipboard text operations.
+			_("&Line Operations"),
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.trimTrailingSpaces),
+			trailingSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.trimLeadingSpaces),
+			leadingSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.trimLeadingAndTrailingSpaces),
+			leadingAndTrailingSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.replaceLineBreaksWithSpaces),
+			lineBreaksToSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.removeConsecutiveDuplicateLines),
+			removeConsecutiveDuplicatesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.removeDuplicateLines),
+			removeDuplicatesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.sortLinesByLengthDescending),
+			sortLinesDescendingItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.sortLinesByLengthAscending),
+			sortLinesAscendingItem,
 		)
 		menuBar.Append(
 			editMenu,
@@ -1575,6 +1673,11 @@ class ClipboardManagerFrame(wx.Frame):
 		self.previousFindItem.Enable(hasTextContent)
 		self.replaceItem.Enable(isCurrentContent and self._contentEditable)
 		self.gotoLineItem.Enable(hasTextContent)
+		hasEditableContent = isCurrentContent and self._contentEditable
+		if self._textCleanupMenuItem is not None:
+			self._textCleanupMenuItem.Enable(hasEditableContent)
+		if self._lineOperationsMenuItem is not None:
+			self._lineOperationsMenuItem.Enable(hasEditableContent)
 
 	def _showError(self, error: Exception) -> None:
 		if not isinstance(error, (ValueError, re.error)):
@@ -2308,6 +2411,17 @@ class ClipboardManagerFrame(wx.Frame):
 		):
 			return
 		self._editorCommands.goToLine()
+
+	def _onApplyTextTransform(
+		self,
+		event: wx.CommandEvent,
+		*,
+		transform: Callable[[str], str],
+	) -> None:
+		"""Apply one text transform to the current editable content."""
+		if not self._isContentCurrent() or not self._contentEditable:
+			return
+		textTransforms.applyEditorTextTransform(self.editor, transform, lineWise=True)
 
 	def _onCloudSync(self, event: wx.CommandEvent) -> None:
 		"""Open the Tiantan Cloud Clipboard account dialog."""

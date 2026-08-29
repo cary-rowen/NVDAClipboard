@@ -1273,6 +1273,56 @@ msgstr "替换(&R)...\tCtrl+H"
 msgid "&Go to Line...\tCtrl+G"
 msgstr "转到行(&G)...\tCtrl+G"
 
+#. Translators: Submenu containing text cleanup commands.
+#: addon\globalPlugins\nvdaClipboard\manager.py:311
+msgid "Text &Cleanup"
+msgstr "文本清理(&C)"
+
+#. Translators: Edit menu command to trim trailing spaces from each line.
+#: addon\globalPlugins\nvdaClipboard\manager.py:314
+msgid "Trim Trailing &Spaces"
+msgstr "删除行尾空格(&S)"
+
+#. Translators: Edit menu command to trim leading spaces from each line.
+#: addon\globalPlugins\nvdaClipboard\manager.py:318
+msgid "Trim Leading S&paces"
+msgstr "删除行首空格(&P)"
+
+#. Translators: Edit menu command to trim leading and trailing spaces from each line.
+#: addon\globalPlugins\nvdaClipboard\manager.py:322
+msgid "Trim Leading and Trailing S&paces"
+msgstr "删除行首和行尾空格(&P)"
+
+#. Translators: Edit menu command to replace line breaks with spaces.
+#: addon\globalPlugins\nvdaClipboard\manager.py:326
+msgid "Replace &Line Breaks with Spaces"
+msgstr "将换行符替换为空格(&L)"
+
+#. Translators: Submenu containing line-based clipboard text operations.
+#: addon\globalPlugins\nvdaClipboard\manager.py:331
+msgid "&Line Operations"
+msgstr "行操作(&L)"
+
+#. Translators: Edit menu command to remove consecutive duplicate lines.
+#: addon\globalPlugins\nvdaClipboard\manager.py:334
+msgid "Remove Consecutive &Duplicate Lines"
+msgstr "删除连续重复行(&D)"
+
+#. Translators: Edit menu command to remove duplicate lines.
+#: addon\globalPlugins\nvdaClipboard\manager.py:338
+msgid "Remove &Duplicate Lines"
+msgstr "删除重复行(&D)"
+
+#. Translators: Edit menu command to sort lines by length from longest to shortest.
+#: addon\globalPlugins\nvdaClipboard\manager.py:342
+msgid "Sort Lines by Length, &Descending"
+msgstr "按行长降序排序(&D)"
+
+#. Translators: Edit menu command to sort lines by length from shortest to longest.
+#: addon\globalPlugins\nvdaClipboard\manager.py:346
+msgid "Sort Lines by Length, &Ascending"
+msgstr "按行长升序排序(&A)"
+
 #. Translators: Name of the Edit menu.
 #: addon\globalPlugins\nvdaClipboard\manager.py:311
 msgid "&Edit"
