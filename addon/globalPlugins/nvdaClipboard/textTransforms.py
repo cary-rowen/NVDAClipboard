@@ -8,8 +8,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import ctypes
 
 import textUtils
+
+_EM_SETSEL = 0x00B1
+_EM_REPLACESEL = 0x00C2
 
 
 def _applyLineTransform(text: str, transform: Callable[[list[str]], list[str]]) -> str:
@@ -98,15 +102,17 @@ def applyEditorTextTransform(
 		textStart, textEnd = offsetConverter.encodedToStrOffsets(selectionStart, selectionEnd)
 		if lineWise:
 			textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
+		encodedStart, encodedEnd = offsetConverter.strToEncodedOffsets(textStart, textEnd)
 	else:
 		textStart = 0
 		textEnd = len(text)
+		encodedStart = 0
+		encodedEnd = editor.GetLastPosition()
 	originalText = text[textStart:textEnd]
 	replacementText = transform(originalText)
 	if replacementText == originalText:
 		return False
-	encodedStart, encodedEnd = offsetConverter.strToEncodedOffsets(textStart, textEnd)
-	editor.Replace(encodedStart, encodedEnd, replacementText)
+	_replaceEditorRange(editor, encodedStart, encodedEnd, replacementText)
 	updatedText = editor.GetValue()
 	offsetConverter = textUtils.WideStringOffsetConverter(updatedText)
 	replacementStart, replacementEnd = offsetConverter.strToEncodedOffsets(
@@ -119,6 +125,32 @@ def applyEditorTextTransform(
 		editor.SetInsertionPoint(replacementStart)
 	editor.ShowPosition(replacementStart)
 	editor.SetFocus()
+	return True
+
+
+def _replaceEditorRange(editor: object, start: int, end: int, replacementText: str) -> None:
+	"""Replace editor text as a single native undoable action when possible."""
+	if _replaceEditorRangeWithWin32(editor, start, end, replacementText):
+		return
+	editor.Replace(start, end, replacementText)
+
+
+def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replacementText: str) -> bool:
+	"""Replace text via the Windows edit control API when a handle is available."""
+	getHandle = getattr(editor, "GetHandle", None)
+	if getHandle is None:
+		return False
+	try:
+		handle = int(getHandle())
+	except (TypeError, ValueError):
+		return False
+	if not handle or not hasattr(ctypes, "windll"):
+		return False
+	user32 = ctypes.windll.user32
+	if not user32.IsWindow(handle):
+		return False
+	user32.SendMessageW(handle, _EM_SETSEL, start, end)
+	user32.SendMessageW(handle, _EM_REPLACESEL, True, ctypes.c_wchar_p(replacementText))
 	return True
 
 
