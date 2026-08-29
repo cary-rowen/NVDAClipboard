@@ -113,17 +113,11 @@ def applyEditorTextTransform(
 	if replacementText == originalText:
 		return False
 	_replaceEditorRange(editor, encodedStart, encodedEnd, replacementText)
-	updatedText = editor.GetValue()
-	offsetConverter = textUtils.WideStringOffsetConverter(updatedText)
-	replacementStart, replacementEnd = offsetConverter.strToEncodedOffsets(
-		textStart,
-		textStart + len(replacementText),
-	)
 	if hasSelection:
-		editor.SetSelection(replacementStart, replacementEnd)
+		editor.SetSelection(encodedStart, editor.GetInsertionPoint())
 	else:
-		editor.SetInsertionPoint(replacementStart)
-	editor.ShowPosition(replacementStart)
+		editor.SetInsertionPoint(encodedStart)
+	editor.ShowPosition(encodedStart)
 	editor.SetFocus()
 	return True
 
@@ -150,8 +144,15 @@ def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replaceme
 	if not user32.IsWindow(handle):
 		return False
 	user32.SendMessageW(handle, _EM_SETSEL, start, end)
-	user32.SendMessageW(handle, _EM_REPLACESEL, True, ctypes.c_wchar_p(replacementText))
+	user32.SendMessageW(
+		handle, _EM_REPLACESEL, True, ctypes.c_wchar_p(_normalizeNewlinesForWin32(replacementText))
+	)
 	return True
+
+
+def _normalizeNewlinesForWin32(text: str) -> str:
+	"""Convert normalized Python newlines to Win32 edit control line breaks."""
+	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
 
 
 def _expandToWholeLines(text: str, start: int, end: int) -> tuple[int, int]:
@@ -183,7 +184,7 @@ def _removeConsecutiveBlankLines(lines: list[str]) -> list[str]:
 		isBlank = not line.strip(" \t")
 		if isBlank and previousBlank:
 			continue
-		result.append(line)
+		result.append("" if isBlank else line)
 		previousBlank = isBlank
 	return result
 

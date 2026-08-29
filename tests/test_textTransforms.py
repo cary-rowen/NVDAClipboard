@@ -47,6 +47,7 @@ class TextTransformTests(unittest.TestCase):
 		self.assertEqual("a\nb\n", textTransforms.removeBlankLines("a\n\n \n\t\nb\n"))
 		self.assertEqual("", textTransforms.removeBlankLines("\n \n\t\n"))
 		self.assertEqual("a\n\nb\n\n", textTransforms.removeConsecutiveBlankLines("a\n\n \n\t\nb\n\n"))
+		self.assertEqual("a\n\nb", textTransforms.removeConsecutiveBlankLines("a\n \n\t\nb"))
 		self.assertEqual("a\nb\na\n", textTransforms.removeConsecutiveDuplicateLines("a\na\nb\nb\na\n"))
 		self.assertEqual("a\nb\nc\n", textTransforms.removeDuplicateLines("a\nb\na\nc\nb\n"))
 		self.assertEqual("c\nbb\naa\n", textTransforms.sortLinesByLengthAscending("bb\naa\nc\n"))
@@ -55,8 +56,9 @@ class TextTransformTests(unittest.TestCase):
 	def testApplyEditorTextTransformExpandsTheSelectionToWholeLines(self) -> None:
 		"""Expand a partial selection to full lines before applying a cleanup."""
 		editor = Mock()
-		editor.GetValue.side_effect = ["alpha\n  beta  \ngamma\n", "alpha\nbeta\ngamma\n"]
+		editor.GetValue.return_value = "alpha\n  beta  \ngamma\n"
 		editor.GetSelection.return_value = (8, 10)
+		editor.GetInsertionPoint.return_value = 11
 		editor.Replace = Mock()
 		editor.SetValue = Mock()
 		editor.SetSelection = Mock()
@@ -73,7 +75,7 @@ class TextTransformTests(unittest.TestCase):
 		self.assertTrue(changed)
 		editor.Replace.assert_called_once_with(6, 15, "beta\n")
 		editor.SetValue.assert_not_called()
-		editor.SetSelection.assert_called_once()
+		editor.SetSelection.assert_called_once_with(6, 11)
 		editor.SetInsertionPoint.assert_not_called()
 		editor.ShowPosition.assert_called_once_with(6)
 		editor.SetFocus.assert_called_once_with()
@@ -81,7 +83,7 @@ class TextTransformTests(unittest.TestCase):
 	def testApplyEditorTextTransformUsesControlEndForFullBuffer(self) -> None:
 		"""Use wx control positions when replacing the whole editor content."""
 		editor = Mock()
-		editor.GetValue.side_effect = ["a\nb\nc", "a b c"]
+		editor.GetValue.return_value = "a\nb\nc"
 		editor.GetSelection.return_value = (0, 0)
 		editor.GetLastPosition.return_value = 7
 		editor.SetSelection = Mock()
@@ -100,6 +102,22 @@ class TextTransformTests(unittest.TestCase):
 		replaceEditorRange.assert_called_once_with(editor, 0, 7, "a b c")
 		editor.SetInsertionPoint.assert_called_once_with(0)
 		editor.SetSelection.assert_not_called()
+
+	def testWin32ReplacementUsesNativeLineBreaks(self) -> None:
+		"""Send CRLF line breaks to the native Windows edit control."""
+		editor = Mock()
+		editor.GetHandle.return_value = 100
+		user32 = Mock()
+		user32.IsWindow.return_value = True
+
+		with patch.object(textTransforms.ctypes, "windll", SimpleNamespace(user32=user32), create=True):
+			replaced = textTransforms._replaceEditorRangeWithWin32(editor, 0, 7, "a\nb\n")
+
+		self.assertTrue(replaced)
+		user32.SendMessageW.assert_any_call(100, textTransforms._EM_SETSEL, 0, 7)
+		replaceCall = user32.SendMessageW.call_args_list[-1]
+		self.assertEqual((100, textTransforms._EM_REPLACESEL, True), replaceCall.args[:3])
+		self.assertEqual("a\r\nb\r\n", replaceCall.args[3].value)
 
 
 if __name__ == "__main__":
