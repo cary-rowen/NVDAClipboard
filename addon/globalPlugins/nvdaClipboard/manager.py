@@ -32,6 +32,7 @@ from .cues import playNonPlainText
 from .clipboardData import MAX_TEXT_BYTES
 from .managerEditor import _ManagerEditorCommands
 from .search import normalizeSearchText, splitSearchKeywords
+from .configuration import getConfirmOnClose
 from .storage import ItemNotFoundError
 from .storageModels import ClipboardItemType
 
@@ -2407,10 +2408,13 @@ class ClipboardManagerFrame(wx.Frame):
 	def _onClose(self, event: wx.CloseEvent) -> None:
 		self._cancelPendingItemLoad()
 		if event.CanVeto():
-			if not self._confirmDirtyChanges():
-				event.Veto()
-				return
-			self._syncNavigationPositionOnClose()
+			if getConfirmOnClose():
+				if not self._confirmDirtyChanges():
+					event.Veto()
+					return
+				self._syncNavigationPositionOnClose()
+			elif not self._hasDirtyChanges():
+				self._syncNavigationPositionOnClose()
 			self._navigationSyncState = None
 			self.Hide()
 			self._resetSearchState(clearEntries=True)

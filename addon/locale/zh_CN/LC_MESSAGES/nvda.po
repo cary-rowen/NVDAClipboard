@@ -2003,6 +2003,11 @@ msgstr "将标点符号作为单独的导航单位(&P)"
 msgid "&Number of lines to move when paging up or down:"
 msgstr "向上或向下翻页时跳转的行数(&N)："
 
+#. Translators: Checkbox to ask before closing the clipboard manager with unsaved edits.
+#: addon\globalPlugins\nvdaClipboard\settings.py:120
+msgid "Ask before closing with unsaved &edits"
+msgstr "关闭有未保存编辑的内容前询问(&E)"
+
 #. Translators: Generic error reported when an add-on command fails.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:88
 msgid "The NVDA Clipboard command failed"
