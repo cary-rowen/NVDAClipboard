@@ -333,6 +333,16 @@ class ClipboardManagerFrame(wx.Frame):
 			# Translators: Edit menu command to replace line breaks with spaces.
 			_("Replace &Line Breaks with Spaces"),
 		)
+		removeBlankLinesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to remove blank lines.
+			_("Remove &Blank Lines"),
+		)
+		removeConsecutiveBlankLinesItem = textCleanupMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to collapse consecutive blank lines.
+			_("Remove Consecutive B&lank Lines"),
+		)
 		self._textCleanupMenuItem = editMenu.AppendSubMenu(
 			textCleanupMenu,
 			# Translators: Submenu containing text cleanup commands.
@@ -383,6 +393,16 @@ class ClipboardManagerFrame(wx.Frame):
 			wx.EVT_MENU,
 			partial(self._onApplyTextTransform, transform=textTransforms.replaceLineBreaksWithSpaces),
 			lineBreaksToSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.removeBlankLines),
+			removeBlankLinesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.removeConsecutiveBlankLines),
+			removeConsecutiveBlankLinesItem,
 		)
 		self.Bind(
 			wx.EVT_MENU,

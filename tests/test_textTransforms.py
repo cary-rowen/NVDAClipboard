@@ -44,6 +44,9 @@ class TextTransformTests(unittest.TestCase):
 		self.assertEqual("a\nb\nc\n", textTransforms.trimLeadingSpaces(" a\r\n\tb\nc\n"))
 		self.assertEqual("a\nb\nc\n", textTransforms.trimLeadingAndTrailingSpaces(" a \r\n\tb\t\n c \n"))
 		self.assertEqual("a b c", textTransforms.replaceLineBreaksWithSpaces("a\r\nb\nc"))
+		self.assertEqual("a\nb\n", textTransforms.removeBlankLines("a\n\n \n\t\nb\n"))
+		self.assertEqual("", textTransforms.removeBlankLines("\n \n\t\n"))
+		self.assertEqual("a\n\nb\n\n", textTransforms.removeConsecutiveBlankLines("a\n\n \n\t\nb\n\n"))
 		self.assertEqual("a\nb\na\n", textTransforms.removeConsecutiveDuplicateLines("a\na\nb\nb\na\n"))
 		self.assertEqual("a\nb\nc\n", textTransforms.removeDuplicateLines("a\nb\na\nc\nb\n"))
 		self.assertEqual("c\nbb\naa\n", textTransforms.sortLinesByLengthAscending("bb\naa\nc\n"))
@@ -52,8 +55,9 @@ class TextTransformTests(unittest.TestCase):
 	def testApplyEditorTextTransformExpandsTheSelectionToWholeLines(self) -> None:
 		"""Expand a partial selection to full lines before applying a cleanup."""
 		editor = Mock()
-		editor.GetValue.return_value = "alpha\n  beta  \ngamma\n"
+		editor.GetValue.side_effect = ["alpha\n  beta  \ngamma\n", "alpha\nbeta\ngamma\n"]
 		editor.GetSelection.return_value = (8, 10)
+		editor.Replace = Mock()
 		editor.SetValue = Mock()
 		editor.SetSelection = Mock()
 		editor.SetInsertionPoint = Mock()
@@ -67,7 +71,8 @@ class TextTransformTests(unittest.TestCase):
 		)
 
 		self.assertTrue(changed)
-		editor.SetValue.assert_called_once_with("alpha\nbeta\ngamma\n")
+		editor.Replace.assert_called_once_with(6, 15, "beta\n")
+		editor.SetValue.assert_not_called()
 		editor.SetSelection.assert_called_once()
 		editor.SetInsertionPoint.assert_not_called()
 		editor.ShowPosition.assert_called_once_with(6)
