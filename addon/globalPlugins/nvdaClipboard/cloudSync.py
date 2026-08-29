@@ -46,7 +46,7 @@ config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "b
 
 def _getSdkUnavailableMessage() -> str:
 	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll.")
+	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
 
 
 def _getStateOperationInProgressMessage() -> str:

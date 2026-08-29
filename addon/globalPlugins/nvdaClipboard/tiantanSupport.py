@@ -30,12 +30,12 @@ class TiantanSupportState:
 
 def _getUnsupportedArchitectureMessage() -> str:
 	# Translators: Error shown when Tiantan Cloud Clipboard is not supported by the current NVDA process bitness.
-	return _("Tiantan Cloud Clipboard requires x64 NVDA.")
+	return _("Tiantan Cloud Clipboard requires 64-bit NVDA.")
 
 
 def _getSdkUnavailableMessage() -> str:
 	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan Cloud Clipboard is unavailable. Check ClipDataCloud.SDK.dll.")
+	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
 
 
 @lru_cache(maxsize=1)

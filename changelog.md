@@ -1,6 +1,5 @@
-### 0.1.0
+### 0.2.0
 
-- Initial NVDA Clipboard development release.
-- Added accessible clipboard navigation and bounded SQLite history for text, formatted content, images, mixed entries, and file groups.
-- Added configurable clipboard navigation units using Windows word boundaries or Unicode punctuation, with configurable splitting of joined words based on capitalization.
-- Added a type-aware manager, user categories, last-spoken text commands, and optional Tiantan Clipboard and OneDrive synchronization.
+- Consolidated vendored runtime dependencies under `addon/globalPlugins/nvdaClipboard/_vendor`.
+- Split native runtime files into `_vendor/_native/amd64`, `_vendor/_native/arm64`, and `_vendor/_native/notices`.
+- Kept the cloud and SQLite loaders thin while preserving amd64 and ARM64 loading paths.

@@ -35,12 +35,12 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.1.0",
+	addon_version="0.2.0",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.1.0
+	addon_changelog=_("""### 0.2.0
 
-Initial development release with accessible clipboard navigation, bounded SQLite history, a type-aware manager, image and file support, last-spoken text commands, and optional cloud synchronization."""),
+Bundled the runtime dependency trees under `_vendor`, separated architecture-specific native files under `_vendor/_native`, and kept the cloud and SQLite loaders thin and explicit."""),
 	# Author(s)
 	addon_author="Cary-rowen <manchen_0528@outlook.com>",
 	# URL for the add-on documentation support
@@ -97,6 +97,7 @@ excludedFiles: list[str] = [
 	"globalPlugins/nvdaClipboard/_vendor/.gitattributes",
 	"globalPlugins/nvdaClipboard/_vendor/.gitignore",
 	"globalPlugins/nvdaClipboard/_vendor/README.md",
+	"globalPlugins/nvdaClipboard/_vendor/_native/README.md",
 ]
 
 # Base language for the NVDA add-on

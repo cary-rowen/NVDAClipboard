@@ -18,9 +18,8 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from logHandler import log
-
-from . import _sqlite3 as sqlite3
 from .clipboardData import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES
+from . import _sqlite3 as sqlite3
 from .storageModels import (
 	ClipboardItem,
 	ClipboardItemContent,
