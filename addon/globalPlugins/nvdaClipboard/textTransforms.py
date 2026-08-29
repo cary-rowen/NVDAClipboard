@@ -45,6 +45,24 @@ def replaceLineBreaksWithSpaces(text: str) -> str:
 	return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
 
+def removeBlankLines(text: str) -> str:
+	"""Remove lines containing only spaces or tabs."""
+	if not text:
+		return text
+	lines = [line for line in text.splitlines() if line.strip(" \t")]
+	if not lines:
+		return ""
+	result = "\n".join(lines)
+	if text.endswith(("\n", "\r")):
+		result += "\n"
+	return result
+
+
+def removeConsecutiveBlankLines(text: str) -> str:
+	"""Collapse consecutive blank lines to a single blank line."""
+	return _applyLineTransform(text, _removeConsecutiveBlankLines)
+
+
 def removeConsecutiveDuplicateLines(text: str) -> str:
 	"""Remove immediately repeated lines while keeping the first occurrence."""
 	return _applyLineTransform(text, _removeConsecutiveDuplicateLines)
@@ -75,8 +93,8 @@ def applyEditorTextTransform(
 	text = editor.GetValue()
 	selectionStart, selectionEnd = editor.GetSelection()
 	hasSelection = selectionStart != selectionEnd
+	offsetConverter = textUtils.WideStringOffsetConverter(text)
 	if hasSelection:
-		offsetConverter = textUtils.WideStringOffsetConverter(text)
 		textStart, textEnd = offsetConverter.encodedToStrOffsets(selectionStart, selectionEnd)
 		if lineWise:
 			textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
@@ -87,8 +105,9 @@ def applyEditorTextTransform(
 	replacementText = transform(originalText)
 	if replacementText == originalText:
 		return False
-	updatedText = text[:textStart] + replacementText + text[textEnd:]
-	editor.SetValue(updatedText)
+	encodedStart, encodedEnd = offsetConverter.strToEncodedOffsets(textStart, textEnd)
+	editor.Replace(encodedStart, encodedEnd, replacementText)
+	updatedText = editor.GetValue()
 	offsetConverter = textUtils.WideStringOffsetConverter(updatedText)
 	replacementStart, replacementEnd = offsetConverter.strToEncodedOffsets(
 		textStart,
@@ -121,6 +140,19 @@ def _removeConsecutiveDuplicateLines(lines: list[str]) -> list[str]:
 	for line in lines[1:]:
 		if line != result[-1]:
 			result.append(line)
+	return result
+
+
+def _removeConsecutiveBlankLines(lines: list[str]) -> list[str]:
+	"""Return lines with each run of blank lines collapsed to one line."""
+	result: list[str] = []
+	previousBlank = False
+	for line in lines:
+		isBlank = not line.strip(" \t")
+		if isBlank and previousBlank:
+			continue
+		result.append(line)
+		previousBlank = isBlank
 	return result
 
 
