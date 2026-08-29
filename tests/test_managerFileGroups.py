@@ -24,7 +24,11 @@ def _loadFileGroupMethods() -> tuple[
 			"_": lambda message: message,
 		},
 	)
-	return namespace["_getSelectedFileGroupKeys"], namespace["_showItemContextMenu"], namespace["_onRemoveMissingFiles"]
+	return (
+		namespace["_getSelectedFileGroupKeys"],
+		namespace["_showItemContextMenu"],
+		namespace["_onRemoveMissingFiles"],
+	)
 
 
 _getSelectedFileGroupKeys, _showItemContextMenu, _onRemoveMissingFiles = _loadFileGroupMethods()

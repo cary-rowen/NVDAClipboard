@@ -100,7 +100,9 @@ _MAIN_FRAME_UNAVAILABLE = _("NVDA's main window is unavailable")
 _HISTORY_CATEGORY_NAME = _("Clipboard history")
 
 # Translators: Message shown when Tiantan Cloud Clipboard is disabled.
-_TIANTAN_DISABLED_MESSAGE = _("Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart NVDA.")
+_TIANTAN_DISABLED_MESSAGE = _(
+	"Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart NVDA.",
+)
 
 _CANONICAL_SOLID_COLOR_NAMES = {
 	# Translators: Exact name of the RGB color (255, 0, 0).
@@ -480,7 +482,9 @@ class ClipboardController:
 		focusObject = self._getFocusObject()
 		if focusObject is None:
 			# Translators: Cloud paste cancellation because keyboard focus could not be identified safely.
-			ui.message(_("Keyboard focus could not be identified. Tiantan Cloud Clipboard paste was cancelled."))
+			ui.message(
+				_("Keyboard focus could not be identified. Tiantan Cloud Clipboard paste was cancelled."),
+			)
 			return
 		self._cloudFetchInProgress = True
 
@@ -488,7 +492,9 @@ class ClipboardController:
 			"""Write downloaded text only while keyboard focus remains unchanged."""
 			if not self._isSameFocus(focusObject):
 				# Translators: Cloud paste cancellation because focus changed while downloading.
-				raise CloudClipboardWriteError(_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."))
+				raise CloudClipboardWriteError(
+					_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."),
+				)
 			sequenceNumber = self._writeClipboardText(text, _ClipboardChangeSource.CLOUD_FETCH)
 			callLater(
 				_PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
