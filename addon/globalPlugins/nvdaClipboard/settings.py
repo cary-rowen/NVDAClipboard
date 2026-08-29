@@ -22,6 +22,7 @@ from .configuration import (
 	NavigationSplitMode,
 	getNavigationSplitSettings,
 	getPageLineCount,
+	getConfirmOnClose,
 	getTiantanEnabled,
 	saveSettings,
 )
@@ -114,6 +115,14 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 			max=MAX_PAGE_LINE_COUNT,
 			initial=getPageLineCount(),
 		)
+		self.confirmOnCloseCheckBox = sizerHelper.addItem(
+			wx.CheckBox(
+				self,
+				# Translators: Checkbox to ask before closing the clipboard manager with unsaved edits.
+				label=_("Ask before closing with unsaved &edits"),
+			),
+		)
+		self.confirmOnCloseCheckBox.SetValue(getConfirmOnClose())
 
 	def _onNavigationSplitModeChange(self, event: wx.CommandEvent) -> None:
 		"""Update punctuation control availability after a mode change."""
@@ -128,6 +137,7 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 			splitCamelCase=self.splitCamelCaseCheckBox.GetValue(),
 			separatePunctuation=self.separatePunctuationCheckBox.GetValue(),
 			tiantanEnabled=self.tiantanEnabledCheckBox.GetValue(),
+			confirmOnClose=self.confirmOnCloseCheckBox.GetValue(),
 		)
 
 	@override
