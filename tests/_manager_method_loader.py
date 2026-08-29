@@ -19,9 +19,7 @@ def loadManagerClassMethods(
 		node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClipboardManagerFrame"
 	)
 	methods = [
-		node
-		for node in managerClass.body
-		if isinstance(node, ast.FunctionDef) and node.name in methodNames
+		node for node in managerClass.body if isinstance(node, ast.FunctionDef) and node.name in methodNames
 	]
 	return _execNodes(methods, namespace)
 
@@ -33,9 +31,7 @@ def loadManagerTopLevelFunctions(
 	"""Load selected manager module functions without GUI dependencies."""
 	tree = ast.parse(_MANAGER_PATH.read_text(encoding="utf-8"))
 	functions = [
-		node
-		for node in tree.body
-		if isinstance(node, ast.FunctionDef) and node.name in functionNames
+		node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in functionNames
 	]
 	return _execNodes(functions, namespace)
 

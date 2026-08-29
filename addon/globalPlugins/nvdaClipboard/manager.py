@@ -605,7 +605,9 @@ class ClipboardManagerFrame(wx.Frame):
 				self.autoSyncTiantanItem.Enable(cloudState.isAvailable)
 			if self.sendToTiantanItem is not None:
 				self.sendToTiantanItem.Enable(
-					cloudState.isAvailable and cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
+					cloudState.isAvailable
+					and cloudState.isLoggedIn
+					and not cloudState.isManualSendInProgress,
 				)
 			if self.receiveFromTiantanItem is not None:
 				self.receiveFromTiantanItem.Enable(cloudState.isAvailable and cloudState.isLoggedIn)

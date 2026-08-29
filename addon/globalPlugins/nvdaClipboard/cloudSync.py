@@ -291,7 +291,7 @@ class CloudSyncManager:
 		if self._rejectConcurrentStateOperation(onDone, announce=False):
 			return
 		stateAtStart = self._stateOperationId
-			# Translators: Error prefix for a failed Tiantan cloud clipboard receive.
+		# Translators: Error prefix for a failed Tiantan cloud clipboard receive.
 		failureTemplate = _("Receive failed: {error}")
 
 		def worker() -> None:
