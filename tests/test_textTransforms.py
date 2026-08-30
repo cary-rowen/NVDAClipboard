@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -26,6 +27,62 @@ class _IdentityOffsetConverter:
 	def strToEncodedOffsets(self, *offsets: int) -> tuple[int, ...]:
 		"""Return the string offsets unchanged."""
 		return offsets
+
+
+class _WordSegFlag:
+	"""Provide the Chinese word segmentation flag used by the transform."""
+
+	CHINESE = object()
+
+
+class _WordSegmenter:
+	"""Record NVDA word segmenter calls and return predictable segmented text."""
+
+	def __init__(self, text: str, *, wordSegFlag: object) -> None:
+		"""Store constructor arguments for later assertions."""
+		if wordSegFlag is not _WordSegFlag.CHINESE:
+			raise AssertionError("Chinese word segmentation must use WordSegFlag.CHINESE")
+		self.text = text
+		self.wordSegFlag = wordSegFlag
+
+	def segmentedText(self, sep: str = " ", newSepIndex: list[int] | None = None) -> str:
+		"""Return text separated with the requested separator."""
+		return sep.join((self.text, "segmented"))
+
+
+class _ChineseWordSegmentationStrategy:
+	"""Record forced initialization of NVDA's Chinese segmenter."""
+
+	forceInitCalls: list[bool] = []
+
+	@classmethod
+	def _initCppJieba(cls, forceInit: bool = False) -> None:
+		"""Record whether cppjieba was force-initialized."""
+		cls.forceInitCalls.append(forceInit)
+
+
+def _makeTextUtilsPackage() -> dict[str, ModuleType]:
+	"""Create the subset of NVDA textUtils modules needed for segmentation tests."""
+	_ChineseWordSegmentationStrategy.forceInitCalls = []
+	textUtilsModule = ModuleType("textUtils")
+	textUtilsModule.__path__ = []
+	textUtilsModule.WideStringOffsetConverter = _IdentityOffsetConverter
+	wordSegPackage = ModuleType("textUtils._wordSeg")
+	wordSegPackage.__path__ = []
+	wordSegStrategyModule = ModuleType("textUtils._wordSeg.wordSegStrategy")
+	wordSegStrategyModule.ChineseWordSegmentationStrategy = _ChineseWordSegmentationStrategy
+	wordSegPackage.wordSegStrategy = wordSegStrategyModule
+	wordSegmenterModule = ModuleType("textUtils._wordSeg.wordSegmenter")
+	wordSegmenterModule.WordSegmenter = _WordSegmenter
+	segFlagModule = ModuleType("textUtils.segFlag")
+	segFlagModule.WordSegFlag = _WordSegFlag
+	return {
+		"textUtils": textUtilsModule,
+		"textUtils._wordSeg": wordSegPackage,
+		"textUtils._wordSeg.wordSegStrategy": wordSegStrategyModule,
+		"textUtils._wordSeg.wordSegmenter": wordSegmenterModule,
+		"textUtils.segFlag": segFlagModule,
+	}
 
 
 textTransforms = loadAddonModule(
@@ -52,6 +109,12 @@ class TextTransformTests(unittest.TestCase):
 		self.assertEqual("a\nb\nc\n", textTransforms.removeDuplicateLines("a\nb\na\nc\nb\n"))
 		self.assertEqual("c\nbb\naa\n", textTransforms.sortLinesByLengthAscending("bb\naa\nc\n"))
 		self.assertEqual("bb\naa\nc\n", textTransforms.sortLinesByLengthDescending("bb\naa\nc\n"))
+
+	def testSegmentChineseWordsUsesNvdaWordSegmenter(self) -> None:
+		"""Segment Chinese text through NVDA's word segmentation API."""
+		with patch.dict(sys.modules, _makeTextUtilsPackage()):
+			self.assertEqual("中文文本 segmented", textTransforms.segmentChineseWords("中文文本"))
+		self.assertEqual([True], _ChineseWordSegmentationStrategy.forceInitCalls)
 
 	def testApplyEditorTextTransformExpandsTheSelectionToWholeLines(self) -> None:
 		"""Expand a partial selection to full lines before applying a cleanup."""
