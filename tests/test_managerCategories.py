@@ -45,7 +45,6 @@ class ManagerCategoryContextMenuTests(unittest.TestCase):
 		manager = SimpleNamespace(
 			_categoryHasItems=False,
 			_categoryIds=["first", "second"],
-			_navigationSyncState=object(),
 			_selectedCategory="first",
 			_confirmDirtyChanges=Mock(return_value=True),
 			_loadActiveItem=Mock(),

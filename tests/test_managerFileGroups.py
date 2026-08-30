@@ -161,7 +161,6 @@ class ManagerFileGroupTests(unittest.TestCase):
 			_getSelectedFileGroupKeys=Mock(return_value=(7,)),
 			_confirm=Mock(return_value=True),
 			_showInfo=Mock(),
-			_navigationSyncState=object(),
 			_getSurvivingNeighborKey=Mock(return_value=11),
 			_reloadItemsFromController=Mock(),
 			_isContentCurrent=Mock(return_value=False),
@@ -175,7 +174,6 @@ class ManagerFileGroupTests(unittest.TestCase):
 		_onRemoveMissingFiles(manager, object())
 
 		manager._reloadItemsFromController.assert_called_once_with(preferredKey=9)
-		self.assertIsNotNone(manager._navigationSyncState)
 		manager._getSurvivingNeighborKey.assert_called_once_with(0, (7,))
 
 

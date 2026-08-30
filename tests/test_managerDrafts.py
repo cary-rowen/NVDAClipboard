@@ -7,22 +7,44 @@ from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from _manager_method_loader import loadManagerClassMethods
+from _manager_method_loader import loadManagerClassMethods, loadManagerTopLevelFunctions
 
 
-def _loadDraftMethods() -> tuple[Callable[..., None], Callable[..., None], Callable[..., None]]:
+def _loadDraftMethods() -> tuple[
+	Callable[..., None],
+	Callable[..., None],
+	Callable[..., None],
+	Callable[..., None],
+]:
 	"""Load draft methods without importing manager GUI dependencies."""
+	helpers = loadManagerTopLevelFunctions({"_sourceToEditorOffset"})
 	namespace = loadManagerClassMethods(
-		{"refreshFromController", "_startPlainTextDraft", "_onNewEntry"},
 		{
+			"refreshFromController",
+			"_restoreEditorOffsetFromClipboardNavigation",
+			"_startPlainTextDraft",
+			"_onNewEntry",
+		},
+		{
+			"_sourceToEditorOffset": helpers["_sourceToEditorOffset"],
 			"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="plainText"),
 			"wx": SimpleNamespace(CommandEvent=object),
 		},
 	)
-	return namespace["refreshFromController"], namespace["_startPlainTextDraft"], namespace["_onNewEntry"]
+	return (
+		namespace["refreshFromController"],
+		namespace["_restoreEditorOffsetFromClipboardNavigation"],
+		namespace["_startPlainTextDraft"],
+		namespace["_onNewEntry"],
+	)
 
 
-_refreshFromController, _startPlainTextDraft, _onNewEntry = _loadDraftMethods()
+(
+	_refreshFromController,
+	_restoreEditorOffsetFromClipboardNavigation,
+	_startPlainTextDraft,
+	_onNewEntry,
+) = _loadDraftMethods()
 
 
 class ManagerDraftTests(unittest.TestCase):
@@ -37,7 +59,6 @@ class ManagerDraftTests(unittest.TestCase):
 			_dirtyStateNeedsCheck=True,
 			_getSelectedCategory=Mock(return_value="Saved"),
 			_isDirty=True,
-			_navigationSyncState=object(),
 			_setContent=Mock(),
 			_updateUiState=Mock(),
 			editor=editor,
@@ -56,7 +77,6 @@ class ManagerDraftTests(unittest.TestCase):
 			canUpload=True,
 			isDraft=True,
 		)
-		self.assertIsNone(manager._navigationSyncState)
 		self.assertEqual("", manager._baselineText)
 		self.assertFalse(manager._isDirty)
 		self.assertFalse(manager._dirtyStateNeedsCheck)
@@ -82,7 +102,6 @@ class ManagerDraftTests(unittest.TestCase):
 			_contentEditable=True,
 			_contentItemKey=None,
 			_isSearchSessionActive=False,
-			_navigationSyncState=None,
 			_selectedCategory="Saved",
 			_getActiveItemKey=Mock(return_value=2),
 			_getSearchListState=Mock(return_value=(1, 0, (1,))),
@@ -92,7 +111,6 @@ class ManagerDraftTests(unittest.TestCase):
 			_refreshCategories=Mock(),
 			_reloadItemsFromController=Mock(),
 			_resetSearchState=Mock(),
-			_restoreNavigationSyncOffsetInEditor=Mock(),
 			_showError=Mock(),
 			_syncEnteredSearchResult=Mock(),
 			_updateUiState=Mock(),
@@ -112,7 +130,6 @@ class ManagerDraftTests(unittest.TestCase):
 			_contentItemKey=7,
 			_contentSourceText="example text",
 			_isSearchSessionActive=False,
-			_navigationSyncState=None,
 			_selectedCategory="Saved",
 			_getEditorCodePointOffset=Mock(return_value=5),
 			_getActiveItemKey=Mock(return_value=7),
@@ -122,7 +139,6 @@ class ManagerDraftTests(unittest.TestCase):
 			_loadActiveItem=Mock(),
 			_refreshCategories=Mock(),
 			_reloadItemsFromController=Mock(),
-			_restoreNavigationSyncOffsetInEditor=Mock(),
 			_setEditorCodePointOffset=Mock(),
 			_showError=Mock(),
 			_syncEnteredSearchResult=Mock(),
@@ -133,3 +149,16 @@ class ManagerDraftTests(unittest.TestCase):
 
 		manager._loadActiveItem.assert_called_once_with(confirmDirty=False)
 		manager._setEditorCodePointOffset.assert_called_once_with(5)
+
+	def testOpeningCanUseCurrentClipboardNavigationOffset(self) -> None:
+		"""Use clipboard navigation only to choose the initial editor cursor."""
+		manager = SimpleNamespace(
+			_contentSourceText="first\r\nsecond",
+			_setEditorCodePointOffset=Mock(),
+			controller=SimpleNamespace(getCurrentNavigationOffsetForText=Mock(return_value=8)),
+		)
+
+		_restoreEditorOffsetFromClipboardNavigation(manager)
+
+		manager.controller.getCurrentNavigationOffsetForText.assert_called_once_with("first\r\nsecond")
+		manager._setEditorCodePointOffset.assert_called_once_with(7)

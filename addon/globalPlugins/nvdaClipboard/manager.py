@@ -60,20 +60,6 @@ def _sourceToEditorOffset(text: str, offset: int) -> int:
 	return offset - text.count("\r\n", 0, offset)
 
 
-def _editorToSourceOffset(text: str, offset: int) -> int:
-	"""Map a normalized editor code-point offset to its source-text boundary."""
-	offset = max(offset, 0)
-	lowerBound = min(offset, len(text))
-	upperBound = min(offset * 2, len(text))
-	while lowerBound < upperBound:
-		candidate = (lowerBound + upperBound + 1) // 2
-		if candidate - text.count("\r\n", 0, candidate) <= offset:
-			lowerBound = candidate
-		else:
-			upperBound = candidate - 1
-	return lowerBound
-
-
 class _SearchTextCtrl(wx.TextCtrl):
 	"""Allow explicit search focus while omitting the control from keyboard traversal."""
 
@@ -130,7 +116,6 @@ class ClipboardManagerFrame(wx.Frame):
 		self._contentCategory: CategoryId | None = None
 		self._contentItemKey: int | None = None
 		self._contentActiveKey: int | None = None
-		self._navigationSyncState: tuple[str, int, int] | None = None
 		self._itemLoadTimer: wx.CallLater | None = None
 		self._searchTimer: wx.CallLater | None = None
 		self._searchKeywords: tuple[str, ...] = ()
@@ -533,7 +518,6 @@ class ClipboardManagerFrame(wx.Frame):
 		"""Show the manager at history's first item with focus on content."""
 		if not self.IsShown():
 			self._resetSearchState(clearEntries=True)
-			self._navigationSyncState = None
 			try:
 				categories = list(self.controller.getCategories())
 				historyCategory = next(
@@ -549,7 +533,7 @@ class ClipboardManagerFrame(wx.Frame):
 				self._refreshCategories(historyCategory)
 				self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
 				self._loadActiveItem(confirmDirty=False)
-				self._startNavigationSync()
+				self._restoreEditorOffsetFromClipboardNavigation()
 			except Exception as error:
 				self._showError(error)
 		if self.IsIconized():
@@ -582,30 +566,13 @@ class ClipboardManagerFrame(wx.Frame):
 			if self._contentEditable and self._contentItemKey is not None and not wasDirty:
 				preservedEditorText = self._contentSourceText
 				preservedEditorOffset = self._getEditorCodePointOffset()
-			preserveNavigationSync = False
-			if self._navigationSyncState is not None:
-				syncText, _syncOffset, expectedSequenceNumber = self._navigationSyncState
-				currentState = self.controller.getNavigationPositionForText(syncText)
-				if currentState is None or currentState[1] != expectedSequenceNumber:
-					self._navigationSyncState = None
-				else:
-					preserveNavigationSync = True
-					self._updateNavigationSyncOffsetFromEditor()
 			self._refreshCategories(previousCategory)
 			category = self._getSelectedCategory()
 			if self._isSearchSessionActive and category != previousCategory:
 				self._resetSearchState()
 			self._reloadItemsFromController(
-				preferredKey=(
-					previousActiveKey if category == previousCategory and not preserveNavigationSync else None
-				),
-				preferredIndex=(
-					0
-					if preserveNavigationSync
-					else previousActiveIndex
-					if category == previousCategory
-					else None
-				),
+				preferredKey=previousActiveKey if category == previousCategory else None,
+				preferredIndex=previousActiveIndex if category == previousCategory else None,
 				selectedKeys=previousSelectedKeys if category == previousCategory else (),
 			)
 			if wasDraft and category == previousCategory:
@@ -619,7 +586,6 @@ class ClipboardManagerFrame(wx.Frame):
 					and self._contentSourceText == preservedEditorText
 				):
 					self._setEditorCodePointOffset(preservedEditorOffset)
-				self._restoreNavigationSyncOffsetInEditor()
 			else:
 				self._syncEnteredSearchResult()
 		except Exception as error:
@@ -649,57 +615,6 @@ class ClipboardManagerFrame(wx.Frame):
 			and not oneDriveState.isSigningOut,
 		)
 
-	def _startNavigationSync(self) -> None:
-		"""Start one manager visibility session when the selected text is current."""
-		text = self._contentSourceText
-		state = self.controller.getNavigationPositionForText(text)
-		if state is None:
-			return
-		offset, sequenceNumber = state
-		self._navigationSyncState = (text, offset, sequenceNumber)
-		self._restoreNavigationSyncOffsetInEditor()
-
-	def _updateNavigationSyncOffsetFromEditor(self) -> None:
-		"""Capture the editor insertion point while it still displays synchronized text."""
-		state = self._navigationSyncState
-		if state is None or self._contentSourceText != state[0] or self._hasDirtyChanges():
-			return
-		text, _offset, sequenceNumber = state
-		offset = _editorToSourceOffset(text, self._getEditorCodePointOffset())
-		self._navigationSyncState = (text, offset, sequenceNumber)
-
-	def _restoreNavigationSyncOffsetInEditor(self) -> None:
-		"""Restore the synchronized insertion point when its source text is visible."""
-		state = self._navigationSyncState
-		if state is None or self._contentSourceText != state[0]:
-			return
-		text, offset, _sequenceNumber = state
-		self._setEditorCodePointOffset(_sourceToEditorOffset(text, offset))
-
-	def _rebindNavigationSyncAfterClipboardWrite(self, text: str, editorOffset: int) -> None:
-		"""Continue an eligible session across one successful manager clipboard write."""
-		if self._navigationSyncState is None:
-			return
-		state = self.controller.getNavigationPositionForText(text)
-		if state is None:
-			self._navigationSyncState = None
-			return
-		offset = _editorToSourceOffset(text, editorOffset)
-		self._navigationSyncState = (text, offset, state[1])
-
-	def _syncNavigationPositionOnClose(self) -> None:
-		"""Write the final collapsed editor position back when the session is still valid."""
-		self._updateNavigationSyncOffsetFromEditor()
-		state = self._navigationSyncState
-		if state is None:
-			return
-		text, offset, expectedSequenceNumber = state
-		self.controller.setNavigationPositionForText(
-			text,
-			offset,
-			expectedSequenceNumber=expectedSequenceNumber,
-		)
-
 	def _getEditorCodePointOffset(self, text: str | None = None) -> int:
 		"""Return the wx insertion point as a Python string offset."""
 		if text is None:
@@ -713,6 +628,12 @@ class ClipboardManagerFrame(wx.Frame):
 		encodedOffset = textUtils.WideStringOffsetConverter(text).strToEncodedOffsets(offset, offset)[0]
 		self.editor.SetInsertionPoint(encodedOffset)
 		self.editor.ShowPosition(encodedOffset)
+
+	def _restoreEditorOffsetFromClipboardNavigation(self) -> None:
+		"""Use the current clipboard navigation offset as the initial editor position."""
+		offset = self.controller.getCurrentNavigationOffsetForText(self._contentSourceText)
+		if offset is not None:
+			self._setEditorCodePointOffset(_sourceToEditorOffset(self._contentSourceText, offset))
 
 	def _refreshCategories(self, preferredCategory: CategoryId | None = None) -> None:
 		"""Reload categories and select a stable preferred category."""
@@ -1185,7 +1106,6 @@ class ClipboardManagerFrame(wx.Frame):
 			if not self._loadActiveItem():
 				self.searchCtrl.SetFocus()
 				return
-			self._navigationSyncState = None
 		self._markSearchResultConfirmed()
 		self.itemList.SetFocus()
 		self._updateUiState()
@@ -1266,8 +1186,6 @@ class ClipboardManagerFrame(wx.Frame):
 			self._showError(error)
 			self.searchCtrl.SetFocus()
 			return
-		if needsLoad:
-			self._navigationSyncState = None
 		self._activeItemIndex = self._getActiveItemIndex()
 		self._activeItemKey = self._getActiveItemKey()
 		self._markSearchResultConfirmed()
@@ -1319,7 +1237,6 @@ class ClipboardManagerFrame(wx.Frame):
 			self._isCurrentSearchResultConfirmed = False
 			return
 		try:
-			self._navigationSyncState = None
 			self._loadActiveItem(confirmDirty=False)
 			self._markSearchResultConfirmed()
 		except Exception as error:
@@ -1439,7 +1356,6 @@ class ClipboardManagerFrame(wx.Frame):
 			canUpload=True,
 			isDraft=True,
 		)
-		self._navigationSyncState = None
 		self._baselineText = ""
 		self._isDirty = bool(text)
 		self._dirtyStateNeedsCheck = False
@@ -1523,7 +1439,6 @@ class ClipboardManagerFrame(wx.Frame):
 		isSearchResult = self._isSearchSessionActive and self.FindFocus() is self.itemList
 		try:
 			if self._loadActiveItem() and isSearchResult:
-				self._navigationSyncState = None
 				self._markSearchResultConfirmed()
 				self._updateUiState()
 		except Exception as error:
@@ -1586,11 +1501,9 @@ class ClipboardManagerFrame(wx.Frame):
 		try:
 			text = self.editor.GetValue()
 			if self.controller.isHistoryCategory(category):
-				editorOffset = self._getEditorCodePointOffset(text)
 				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
 					return False
 				self._contentSourceText = text
-				self._rebindNavigationSyncAfterClipboardWrite(text, editorOffset)
 			else:
 				self.controller.savePlainTextToCategory(
 					category,
@@ -1644,7 +1557,6 @@ class ClipboardManagerFrame(wx.Frame):
 		if result == wx.ID_CANCEL:
 			return False
 		if result == wx.ID_NO:
-			self._navigationSyncState = None
 			self._isSettingContent = True
 			try:
 				self.editor.ChangeValue(self._baselineText)
@@ -1662,11 +1574,9 @@ class ClipboardManagerFrame(wx.Frame):
 		text = self.editor.GetValue()
 		try:
 			if category is None or self.controller.isHistoryCategory(category):
-				editorOffset = self._getEditorCodePointOffset(text)
 				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
 					return False
 				self._contentSourceText = text
-				self._rebindNavigationSyncAfterClipboardWrite(text, editorOffset)
 			else:
 				# A later dialog or operation may be cancelled or fail, so this save must refresh independently.
 				self.controller.savePlainTextToCategory(
@@ -1868,14 +1778,10 @@ class ClipboardManagerFrame(wx.Frame):
 					if self._isSearchSessionActive:
 						self.searchCtrl.SetFocus()
 					return
-				if activeChanged:
-					self._navigationSyncState = None
 			else:
 				self._cancelPendingItemLoad()
 				self._updateUiState()
 		except Exception as error:
-			if activeChanged:
-				self._navigationSyncState = None
 			self._showError(error)
 			return
 		if self._isSearchSessionActive:
@@ -2042,7 +1948,6 @@ class ClipboardManagerFrame(wx.Frame):
 				selectedKeys=selectedKeys,
 			)
 			if self._getActiveItemKey() != previousKey or not wasContentCurrent:
-				self._navigationSyncState = None
 				if not self._hasDirtyChanges():
 					self._loadActiveItem(confirmDirty=False)
 		except Exception as error:
@@ -2065,7 +1970,6 @@ class ClipboardManagerFrame(wx.Frame):
 			if previousCategory in self._categoryIds:
 				self.categoryList.SetSelection(self._categoryIds.index(previousCategory))
 			return False
-		self._navigationSyncState = None
 		try:
 			self._selectedCategory = category
 			self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
@@ -2094,7 +1998,6 @@ class ClipboardManagerFrame(wx.Frame):
 			if self._hasDirtyChanges():
 				self._activateFocusedSearchResult()
 			else:
-				self._navigationSyncState = None
 				self._activeItemIndex = self._getActiveItemIndex()
 				self._activeItemKey = self._getActiveItemKey()
 				self._updateUiState()
@@ -2102,13 +2005,10 @@ class ClipboardManagerFrame(wx.Frame):
 			return
 		if self._hasDirtyChanges():
 			try:
-				if self._loadActiveItem():
-					self._navigationSyncState = None
+				self._loadActiveItem()
 			except Exception as error:
-				self._navigationSyncState = None
 				self._showError(error)
 		else:
-			self._navigationSyncState = None
 			self._activeItemIndex = self._getActiveItemIndex()
 			self._activeItemKey = self._getActiveItemKey()
 			self._updateUiState()
@@ -2133,7 +2033,6 @@ class ClipboardManagerFrame(wx.Frame):
 			return
 		try:
 			actualName = self.controller.createCategory(name)
-			self._navigationSyncState = None
 			self._selectedCategory = actualName
 			self._refreshCategories(actualName)
 			self._reloadItemsFromController(selectedKeys=())
@@ -2283,8 +2182,6 @@ class ClipboardManagerFrame(wx.Frame):
 			return
 		try:
 			self.controller.deleteItems(category, selectedKeys)
-			if not activeWillRemain:
-				self._navigationSyncState = None
 			self._reloadItemsFromController(
 				preferredKey=activeKey if activeWillRemain else survivingNeighborKey,
 			)
@@ -2326,8 +2223,6 @@ class ClipboardManagerFrame(wx.Frame):
 			)
 			preferredKey = result.replacementIds.get(activeKey, activeKey)
 			activeWillRemain = activeKey not in fileGroupKeys or activeKey in result.replacementIds
-			if not activeWillRemain:
-				self._navigationSyncState = None
 			survivingNeighborKey = self._getSurvivingNeighborKey(index, fileGroupKeys)
 			self._reloadItemsFromController(
 				preferredKey=preferredKey if activeWillRemain else survivingNeighborKey,
@@ -2579,10 +2474,6 @@ class ClipboardManagerFrame(wx.Frame):
 				if not self._confirmDirtyChanges():
 					event.Veto()
 					return
-				self._syncNavigationPositionOnClose()
-			elif not self._hasDirtyChanges():
-				self._syncNavigationPositionOnClose()
-			self._navigationSyncState = None
 			self.Hide()
 			self._resetSearchState(clearEntries=True)
 			event.Veto()
