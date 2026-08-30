@@ -35,12 +35,12 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.2.0",
+	addon_version="0.2.1",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.2.0
+	addon_changelog=_("""### 0.2.1
 
-Bundled the runtime dependency trees under `_vendor`, separated architecture-specific native files under `_vendor/_native`, and kept the cloud and SQLite loaders thin and explicit."""),
+Minor fixes."""),
 	# Author(s)
 	addon_author="Cary-rowen <manchen_0528@outlook.com>",
 	# URL for the add-on documentation support
