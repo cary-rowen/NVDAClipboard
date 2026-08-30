@@ -1,4 +1,4 @@
-"""Tests for clipboard manager newline offset conversion without loading NVDA."""
+"""Tests for clipboard manager source-to-editor offset conversion."""
 
 from __future__ import annotations
 
@@ -10,22 +10,19 @@ import unittest
 from _manager_method_loader import loadManagerTopLevelFunctions
 
 
-def _loadOffsetFunctions() -> tuple[Callable[[str, int], int], Callable[[str, int], int]]:
-	"""Load the two pure helpers without importing manager GUI dependencies."""
-	namespace = loadManagerTopLevelFunctions({"_sourceToEditorOffset", "_editorToSourceOffset"})
-	return (
-		cast(Callable[[str, int], int], namespace["_sourceToEditorOffset"]),
-		cast(Callable[[str, int], int], namespace["_editorToSourceOffset"]),
-	)
+def _loadOffsetFunction() -> Callable[[str, int], int]:
+	"""Load the pure helper without importing manager GUI dependencies."""
+	namespace = loadManagerTopLevelFunctions({"_sourceToEditorOffset"})
+	return cast(Callable[[str, int], int], namespace["_sourceToEditorOffset"])
 
 
-_sourceToEditorOffset, _editorToSourceOffset = _loadOffsetFunctions()
+_sourceToEditorOffset = _loadOffsetFunction()
 
 
 class ManagerOffsetTests(unittest.TestCase):
-	"""Verify source and normalized editor offsets at every newline boundary."""
+	"""Verify source offsets map to wx's normalized editor offsets."""
 
-	def testOffsetsMatchDirectNormalization(self) -> None:
+	def testSourceOffsetsMatchDirectNormalization(self) -> None:
 		"""Preserve clamping and CRLF boundary behavior for mixed line endings."""
 		for length in range(7):
 			for characters in product("a\r\n", repeat=length):
@@ -43,9 +40,6 @@ class ManagerOffsetTests(unittest.TestCase):
 					)
 					self.assertEqual(expectedEditorOffset, _sourceToEditorOffset(text, offset))
 
-					remaining = max(offset, 0)
-					expectedSourceOffset = 0
-					while expectedSourceOffset < len(text) and remaining:
-						expectedSourceOffset += 2 if text.startswith("\r\n", expectedSourceOffset) else 1
-						remaining -= 1
-					self.assertEqual(expectedSourceOffset, _editorToSourceOffset(text, offset))
+
+if __name__ == "__main__":
+	unittest.main()

@@ -986,9 +986,8 @@ class ClipboardController:
 				return True
 		return False
 
-	def getNavigationPositionForText(self, text: str) -> tuple[int, int] | None:
-		"""Return the navigation offset and sequence when text is the current clipboard text."""
-		sequenceNumber = self._lastAppliedSequenceNumber
+	def getCurrentNavigationOffsetForText(self, text: str) -> int | None:
+		"""Return the navigation offset only when text is still the current clipboard text."""
 		if not (
 			text
 			and self._contentType
@@ -998,29 +997,11 @@ class ClipboardController:
 				ClipboardContentType.TEXT_AND_IMAGE,
 			)
 			and text == self._text
-			and sequenceNumber
-			and self.monitor.getSequenceNumber() == sequenceNumber
+			and self._lastAppliedSequenceNumber
+			and self.monitor.getSequenceNumber() == self._lastAppliedSequenceNumber
 		):
 			return None
-		return self.navigator.getPosition(), sequenceNumber
-
-	def setNavigationPositionForText(
-		self,
-		text: str,
-		offset: int,
-		*,
-		expectedSequenceNumber: int,
-	) -> bool:
-		"""Set the navigation offset only while the matching clipboard snapshot remains current."""
-		state = self.getNavigationPositionForText(text)
-		if state is None or state[1] != expectedSequenceNumber:
-			return False
-		previousOffset = state[0]
-		self.navigator.setPosition(offset)
-		if self.monitor.getSequenceNumber() != expectedSequenceNumber:
-			self.navigator.setPosition(previousOffset)
-			return False
-		return True
+		return self.navigator.getPosition()
 
 	def replaceClipboardWithText(self, text: str, *, canUpload: bool) -> bool:
 		"""Replace or clear the system clipboard from manager editor text."""
