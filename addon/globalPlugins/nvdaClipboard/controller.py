@@ -90,6 +90,8 @@ addonHandler.initTranslation()
 
 _PASTE_KEY_RELEASE_POLL_INTERVAL_MS = 25
 _PASTE_KEY_RELEASE_TIMEOUT_SECONDS = 3.0
+_LAST_SPOKEN_PASTE_RETRY_DELAY_MS = 50
+_LAST_SPOKEN_PASTE_MAX_RETRIES = 2
 _LAST_SPOKEN_CLIPBOARD_RESTORE_DELAY = 300
 _SUMMARY_REPORT_TIMEOUT_MS = 2000
 
@@ -1714,7 +1716,7 @@ class ClipboardController:
 		triggerKeyCodes: frozenset[int],
 		keyReleaseDeadline: float,
 	) -> None:
-		"""Write and paste temporary text, retrying one clipboard race."""
+		"""Write and paste temporary text, retrying brief clipboard races."""
 		if not self._isStarted:
 			self._lastSpokenPasteInProgress = False
 			return
@@ -1772,8 +1774,10 @@ class ClipboardController:
 				expectedSequenceNumber=expectedSequenceNumber,
 			)
 		except ClipboardSequenceChangedError:
-			if retryCount == 0:
-				self._beginLastSpokenPaste(
+			if retryCount < _LAST_SPOKEN_PASTE_MAX_RETRIES:
+				callLater(
+					_LAST_SPOKEN_PASTE_RETRY_DELAY_MS,
+					self._beginLastSpokenPaste,
 					text,
 					retryCount + 1,
 					triggerKeyCodes,
