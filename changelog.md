@@ -1,3 +1,7 @@
+### 0.2.1
+
+Minor fixes.
+
 ### 0.2.0
 
 - Consolidated vendored runtime dependencies under `addon/globalPlugins/nvdaClipboard/_vendor`.
