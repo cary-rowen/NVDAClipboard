@@ -15,6 +15,7 @@ def _loadDraftMethods() -> tuple[
 	Callable[..., None],
 	Callable[..., None],
 	Callable[..., None],
+	Callable[..., None],
 ]:
 	"""Load draft methods without importing manager GUI dependencies."""
 	helpers = loadManagerTopLevelFunctions({"_sourceToEditorOffset"})
@@ -23,6 +24,7 @@ def _loadDraftMethods() -> tuple[
 			"refreshFromController",
 			"_restoreEditorOffsetFromClipboardNavigation",
 			"_startPlainTextDraft",
+			"_markSystemClipboardTextSaved",
 			"_onNewEntry",
 		},
 		{
@@ -35,6 +37,7 @@ def _loadDraftMethods() -> tuple[
 		namespace["refreshFromController"],
 		namespace["_restoreEditorOffsetFromClipboardNavigation"],
 		namespace["_startPlainTextDraft"],
+		namespace["_markSystemClipboardTextSaved"],
 		namespace["_onNewEntry"],
 	)
 
@@ -43,6 +46,7 @@ def _loadDraftMethods() -> tuple[
 	_refreshFromController,
 	_restoreEditorOffsetFromClipboardNavigation,
 	_startPlainTextDraft,
+	_markSystemClipboardTextSaved,
 	_onNewEntry,
 ) = _loadDraftMethods()
 
@@ -121,6 +125,42 @@ class ManagerDraftTests(unittest.TestCase):
 		self.assertEqual(2, manager._contentActiveKey)
 		manager._loadActiveItem.assert_not_called()
 		manager._updateUiState.assert_called_once_with()
+
+	def testSystemClipboardSaveSurvivesHistoryRefresh(self) -> None:
+		"""Keep saved clipboard text visible when its history write refreshes the list."""
+		editor = Mock()
+		editor.GetValue.return_value = "first\nsecond"
+		manager = SimpleNamespace(
+			_baselineText="first",
+			_contentActiveKey=1,
+			_contentEditable=True,
+			_contentItemKey=1,
+			_contentSourceText="first",
+			_dirtyStateNeedsCheck=False,
+			_isDirty=False,
+			_isSearchSessionActive=False,
+			_selectedCategory="history",
+			_getActiveItemKey=Mock(return_value=2),
+			_getSearchListState=Mock(return_value=(1, 0, (1,))),
+			_getSelectedCategory=Mock(return_value="history"),
+			_hasDirtyChanges=Mock(return_value=False),
+			_loadActiveItem=Mock(),
+			_refreshCategories=Mock(),
+			_reloadItemsFromController=Mock(),
+			_resetSearchState=Mock(),
+			_showError=Mock(),
+			_syncEnteredSearchResult=Mock(),
+			_updateUiState=Mock(),
+			editor=editor,
+		)
+
+		_markSystemClipboardTextSaved(manager, "first\nsecond")
+		_refreshFromController(manager)
+
+		self.assertIsNone(manager._contentItemKey)
+		self.assertEqual("first\nsecond", manager._contentSourceText)
+		self.assertEqual(2, manager._contentActiveKey)
+		manager._loadActiveItem.assert_not_called()
 
 	def testRefreshPreservesEditorInsertionPointForCurrentStoredContent(self) -> None:
 		"""Keep the editor cursor where it was when a copy triggers a refresh."""

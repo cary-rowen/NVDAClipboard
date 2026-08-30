@@ -112,6 +112,25 @@ class ClipboardMonitorTests(unittest.TestCase):
 			monitor._buildWritableFormats(partial),
 		)
 
+	def testWritableUnicodeTextUsesWin32LineEndings(self) -> None:
+		"""Publish CF_UNICODETEXT with CRLF line endings."""
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._formats = SimpleNamespace(canIncludeHistory=101, canUpload=102)
+		snapshot = clipboardMonitor.ClipboardSnapshot(
+			clipboardMonitor.ClipboardContentType.TEXT,
+			text="first\nsecond\rthird\r\nfourth",
+		)
+
+		self.assertEqual(
+			[
+				(
+					clipboardMonitor.CF_UNICODETEXT,
+					"first\r\nsecond\r\nthird\r\nfourth".encode("utf-16-le") + b"\0\0",
+				),
+			],
+			monitor._buildWritableFormats(snapshot),
+		)
+
 	def testImageAnalysisRunsOnlyForWorkerReadsAfterClipboardClose(self) -> None:
 		"""Keep synchronous DIB reads fast and analyze worker images only after clipboard close."""
 		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)

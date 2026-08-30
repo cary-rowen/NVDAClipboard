@@ -141,6 +141,11 @@ def _isNewerClipboardSequence(candidate: int, previous: int) -> bool:
 	return 0 < difference < 0x80000000
 
 
+def _normalizeUnicodeTextForClipboard(text: str) -> str:
+	"""Return text with Win32 CF_UNICODETEXT line endings."""
+	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+
+
 class _ClipboardDataLimitError(ValueError):
 	pass
 
@@ -1124,7 +1129,13 @@ class ClipboardMonitor:
 			if snapshot.text:
 				if "\0" in snapshot.text:
 					raise ValueError(CF_UNICODETEXT)
-				textData = snapshot.text.encode("utf-16-le", errors="surrogatepass") + b"\0\0"
+				textData = (
+					_normalizeUnicodeTextForClipboard(snapshot.text).encode(
+						"utf-16-le",
+						errors="surrogatepass",
+					)
+					+ b"\0\0"
+				)
 				if len(textData) > MAX_TEXT_BYTES:
 					raise ValueError(CF_UNICODETEXT)
 				formats.append((CF_UNICODETEXT, textData))
