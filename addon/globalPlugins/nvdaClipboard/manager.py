@@ -265,13 +265,13 @@ class ClipboardManagerFrame(wx.Frame):
 		)
 		self.replaceClipboardItem = fileMenu.Append(
 			wx.ID_ANY,
-			# Translators: File menu command to put edited plain text on the clipboard.
-			_("Put &Text on System Clipboard\tCtrl+S"),
+			# Translators: File menu command to save the visible text to the active target.
+			_("Save to Target\tCtrl+S"),
 		)
 		self.savePlainTextToCategoryItem = fileMenu.Append(
 			wx.ID_ANY,
-			# Translators: File menu command to save a plain-text copy in the selected category.
-			_("Save Text to Current &Category\tCtrl+Shift+Enter"),
+			# Translators: File menu command to save the visible text and close the window.
+			_("Save to Target and Close Window\tCtrl+Shift+X"),
 		)
 		fileMenu.AppendSeparator()
 		exitItem = fileMenu.Append(
@@ -1553,6 +1553,64 @@ class ClipboardManagerFrame(wx.Frame):
 		self._dirtyStateNeedsCheck = False
 		self._updateUiState()
 
+	def _getSaveTargetLabel(self) -> str:
+		"""Return the current save target label for menu commands."""
+		category = self._getSelectedCategory()
+		if category is None or self.controller.isHistoryCategory(category):
+			# Translators: Label for the system clipboard target in save commands.
+			return _("System Clipboard")
+		return self.controller.getCategoryLabel(category)
+
+	def _formatMenuLabel(self, text: str) -> str:
+		"""Normalize user-facing menu text so control characters cannot break it."""
+		text = re.sub(r"[\x00-\x1F\x7F]+", " ", text).strip()
+		return text.replace("&", "&&")
+
+	def _updateSaveMenuLabels(self) -> None:
+		"""Update save command labels to match the selected category."""
+		targetLabel = self._formatMenuLabel(self._getSaveTargetLabel())
+		self.replaceClipboardItem.SetItemLabel(
+			_("Save to {target}\tCtrl+S").format(target=targetLabel),
+		)
+		self.savePlainTextToCategoryItem.SetItemLabel(
+			_("Save to {target} and Close Window\tCtrl+Shift+X").format(target=targetLabel),
+		)
+
+	def _saveVisibleContent(self, *, closeAfterSave: bool) -> bool:
+		"""Save the current editor text, optionally closing the manager."""
+		if not self._isContentCurrent() or not self._contentEditable:
+			return False
+		category = self._getSelectedCategory()
+		if category is None:
+			return False
+		try:
+			text = self.editor.GetValue()
+			if self.controller.isHistoryCategory(category):
+				editorOffset = self._getEditorCodePointOffset(text)
+				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
+					return False
+				self._contentSourceText = text
+				self._rebindNavigationSyncAfterClipboardWrite(text, editorOffset)
+			else:
+				self.controller.savePlainTextToCategory(
+					category,
+					text,
+					canUpload=self._contentCanUpload,
+					notifyManager=False,
+				)
+			self._markContentSaved(text)
+			if closeAfterSave:
+				self.Close()
+				return True
+			isHistory = self.controller.isHistoryCategory(category)
+			if not isHistory:
+				self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
+				self._loadActiveItem(confirmDirty=False)
+		except Exception as error:
+			self._showError(error)
+			return False
+		return True
+
 	def _confirmDirtyChanges(self, category: CategoryId | None = None) -> bool:
 		"""Save, discard, or retain pending plain-text changes."""
 		if not self._hasDirtyChanges():
@@ -1691,15 +1749,13 @@ class ClipboardManagerFrame(wx.Frame):
 		"""Enable commands valid for the visible content and category."""
 		category = self._getSelectedCategory()
 		hasCategory = category is not None
-		isHistory = hasCategory and self.controller.isHistoryCategory(category)
 		isCurrentContent = self._isContentCurrent()
 		hasContent = isCurrentContent and self.editor.GetLastPosition() != 0
 		hasTextContent = hasContent and self._contentKind != ClipboardItemType.IMAGE
+		self._updateSaveMenuLabels()
 		self.saveAsItem.Enable(hasTextContent)
 		self.replaceClipboardItem.Enable(isCurrentContent and self._contentEditable)
-		self.savePlainTextToCategoryItem.Enable(
-			hasContent and self._contentEditable and hasCategory and not isHistory,
-		)
+		self.savePlainTextToCategoryItem.Enable(hasContent and self._contentEditable and hasCategory)
 		self.findItem.Enable(hasTextContent)
 		self.continueFindItem.Enable(hasTextContent)
 		self.previousFindItem.Enable(hasTextContent)
@@ -2366,45 +2422,10 @@ class ClipboardManagerFrame(wx.Frame):
 			dialog.Destroy()
 
 	def _onReplaceClipboardWithText(self, event: wx.CommandEvent) -> None:
-		if not self._isContentCurrent() or not self._contentEditable:
-			return
-		try:
-			text = self.editor.GetValue()
-			editorOffset = self._getEditorCodePointOffset(text)
-			result = self.controller.replaceClipboardWithText(
-				text,
-				canUpload=self._contentCanUpload,
-			)
-			if result is False:
-				return
-			self._contentSourceText = text
-			self._rebindNavigationSyncAfterClipboardWrite(text, editorOffset)
-			self._markContentSaved(text)
-		except Exception as error:
-			self._showError(error)
+		self._saveVisibleContent(closeAfterSave=False)
 
 	def _onSavePlainTextToCategory(self, event: wx.CommandEvent) -> None:
-		category = self._getSelectedCategory()
-		if (
-			not self._isContentCurrent()
-			or category is None
-			or self.controller.isHistoryCategory(category)
-			or not self._contentEditable
-		):
-			return
-		try:
-			text = self.editor.GetValue()
-			self.controller.savePlainTextToCategory(
-				category,
-				text,
-				canUpload=self._contentCanUpload,
-				notifyManager=False,
-			)
-			self._markContentSaved(text)
-			self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
-			self._loadActiveItem(confirmDirty=False)
-		except Exception as error:
-			self._showError(error)
+		self._saveVisibleContent(closeAfterSave=True)
 
 	def _onFind(self, event: wx.CommandEvent, backwards: bool = False) -> None:
 		"""Open the editor find dialog when visible content can be searched."""

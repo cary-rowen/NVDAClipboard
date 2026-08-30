@@ -1223,15 +1223,30 @@ msgstr "打开文本文件(&O)...\tCtrl+O"
 msgid "Save &Text As...\tCtrl+Shift+S"
 msgstr "文本另存为(&T)...\tCtrl+Shift+S"
 
-#. Translators: File menu command to put edited plain text on the clipboard.
-#: addon\globalPlugins\nvdaClipboard\manager.py:263
-msgid "Put &Text on System Clipboard\tCtrl+S"
-msgstr "将文本放入系统剪贴板(&T)\tCtrl+S"
+#. Translators: File menu command to save the visible text to the active target.
+#: addon\globalPlugins\nvdaClipboard\manager.py:266
+msgid "Save to Target\tCtrl+S"
+msgstr "保存到目标\tCtrl+S"
 
-#. Translators: File menu command to save a plain-text copy in the selected category.
-#: addon\globalPlugins\nvdaClipboard\manager.py:268
-msgid "Save Text to Current &Category\tCtrl+Shift+Enter"
-msgstr "将文本保存到当前类别(&C)\tCtrl+Shift+Enter"
+#. Translators: File menu command to save the visible text and close the window.
+#: addon\globalPlugins\nvdaClipboard\manager.py:271
+msgid "Save to Target and Close Window\tCtrl+Shift+X"
+msgstr "保存到目标并关闭窗口\tCtrl+Shift+X"
+
+#. Translators: Label for the system clipboard target in save commands.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1560
+msgid "System Clipboard"
+msgstr "系统剪贴板"
+
+#. Translators: File menu command to save the visible text to the active target.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1567
+msgid "Save to {target}\tCtrl+S"
+msgstr "保存到{target}\tCtrl+S"
+
+#. Translators: File menu command to save the visible text and close the window.
+#: addon\globalPlugins\nvdaClipboard\manager.py:1569
+msgid "Save to {target} and Close Window\tCtrl+Shift+X"
+msgstr "保存到{target}并关闭窗口\tCtrl+Shift+X"
 
 #. Translators: File menu command to hide the clipboard manager.
 #: addon\globalPlugins\nvdaClipboard\manager.py:274
