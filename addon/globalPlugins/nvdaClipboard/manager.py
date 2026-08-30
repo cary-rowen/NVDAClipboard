@@ -1468,6 +1468,11 @@ class ClipboardManagerFrame(wx.Frame):
 		self._dirtyStateNeedsCheck = False
 		self._updateUiState()
 
+	def _markSystemClipboardTextSaved(self, text: str) -> None:
+		"""Keep saved clipboard text visible until the asynchronous history refresh catches up."""
+		self._contentSourceText = text
+		self._contentItemKey = None
+
 	def _getSaveTargetLabel(self) -> str:
 		"""Return the current save target label for menu commands."""
 		category = self._getSelectedCategory()
@@ -1503,7 +1508,7 @@ class ClipboardManagerFrame(wx.Frame):
 			if self.controller.isHistoryCategory(category):
 				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
 					return False
-				self._contentSourceText = text
+				self._markSystemClipboardTextSaved(text)
 			else:
 				self.controller.savePlainTextToCategory(
 					category,
@@ -1576,7 +1581,7 @@ class ClipboardManagerFrame(wx.Frame):
 			if category is None or self.controller.isHistoryCategory(category):
 				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
 					return False
-				self._contentSourceText = text
+				self._markSystemClipboardTextSaved(text)
 			else:
 				# A later dialog or operation may be cancelled or fail, so this save must refresh independently.
 				self.controller.savePlainTextToCategory(
