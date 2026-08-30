@@ -1,3 +1,8 @@
+### 0.2.2
+
+- Clarified Clipboard Manager save commands so they show the active save target and added a save-and-close command.
+- Limited Clipboard Manager editor synchronization with clipboard navigation to the initial open, so editing no longer changes global clipboard navigation position.
+
 ### 0.2.1
 
 Minor fixes.
