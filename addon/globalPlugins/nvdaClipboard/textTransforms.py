@@ -157,7 +157,10 @@ def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replaceme
 		return False
 	user32.SendMessageW(handle, _EM_SETSEL, start, end)
 	user32.SendMessageW(
-		handle, _EM_REPLACESEL, True, ctypes.c_wchar_p(_normalizeNewlinesForWin32(replacementText))
+		handle,
+		_EM_REPLACESEL,
+		True,
+		ctypes.c_wchar_p(_normalizeNewlinesForWin32(replacementText)),
 	)
 	return True
 
