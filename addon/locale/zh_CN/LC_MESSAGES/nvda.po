@@ -1293,6 +1293,11 @@ msgstr "删除行首和行尾空格(&P)"
 msgid "Replace &Line Breaks with Spaces"
 msgstr "将换行符替换为空格(&L)"
 
+#. Translators: Edit menu command to insert spaces at Chinese word boundaries.
+#: addon\globalPlugins\nvdaClipboard\manager.py:339
+msgid "Segment Chinese &Words"
+msgstr "中文分词(&W)"
+
 #. Translators: Edit menu command to remove blank lines.
 #: addon\globalPlugins\nvdaClipboard\manager.py:339
 msgid "Remove &Blank Lines"

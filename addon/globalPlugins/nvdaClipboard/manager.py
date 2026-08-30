@@ -311,6 +311,11 @@ class ClipboardManagerFrame(wx.Frame):
 			# Translators: Edit menu command to move to a line in content.
 			_("&Go to Line...\tCtrl+G"),
 		)
+		segmentChineseWordsItem = editMenu.Append(
+			wx.ID_ANY,
+			# Translators: Edit menu command to insert spaces at Chinese word boundaries.
+			_("Segment Chinese &Words"),
+		)
 		editMenu.AppendSeparator()
 		textCleanupMenu = wx.Menu()
 		trailingSpacesItem = textCleanupMenu.Append(
@@ -393,6 +398,11 @@ class ClipboardManagerFrame(wx.Frame):
 			wx.EVT_MENU,
 			partial(self._onApplyTextTransform, transform=textTransforms.replaceLineBreaksWithSpaces),
 			lineBreaksToSpacesItem,
+		)
+		self.Bind(
+			wx.EVT_MENU,
+			partial(self._onApplyTextTransform, transform=textTransforms.segmentChineseWords),
+			segmentChineseWordsItem,
 		)
 		self.Bind(
 			wx.EVT_MENU,

@@ -49,6 +49,18 @@ def replaceLineBreaksWithSpaces(text: str) -> str:
 	return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
 
+def segmentChineseWords(text: str) -> str:
+	"""Insert spaces at Chinese word boundaries using NVDA's word segmenter."""
+	if not text:
+		return text
+	from textUtils._wordSeg import wordSegStrategy
+	from textUtils._wordSeg.wordSegmenter import WordSegmenter
+	from textUtils.segFlag import WordSegFlag
+
+	wordSegStrategy.ChineseWordSegmentationStrategy._initCppJieba(forceInit=True)
+	return WordSegmenter(text, wordSegFlag=WordSegFlag.CHINESE).segmentedText(sep=" ")
+
+
 def removeBlankLines(text: str) -> str:
 	"""Remove lines containing only spaces or tabs."""
 	if not text:
