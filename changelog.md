@@ -1,3 +1,7 @@
+### 0.2.3
+
+- Improved temporary pasting of NVDA's last spoken text by retrying brief clipboard sequence races before failing.
+
 ### 0.2.2
 
 - Clarified Clipboard Manager save commands so they show the active save target and added a save-and-close command.
