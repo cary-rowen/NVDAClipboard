@@ -49,11 +49,6 @@ def _getSdkUnavailableMessage() -> str:
 	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
 
 
-def _getStateOperationInProgressMessage() -> str:
-	# Translators: Message shown when another cloud account action is still running.
-	return _("Another Tiantan Cloud Clipboard account action is in progress")
-
-
 class CloudClipboardWriteError(Exception):
 	"""Raised when fetched cloud text cannot be written to the local clipboard."""
 
@@ -391,7 +386,10 @@ class CloudSyncManager:
 		"""Reject work that could race with a login-state operation."""
 		if not self._stateOperationInProgress:
 			return False
-		self._finish(False, _getStateOperationInProgressMessage(), onDone, announce)
+		# Translators: Message shown when another cloud account action is still running.
+		self._finish(
+			False, _("Another Tiantan Cloud Clipboard account action is in progress"), onDone, announce
+		)
 		return True
 
 	def _runSdkOperation(
@@ -531,10 +529,9 @@ class CloudSyncManager:
 			)
 		if stateOperationId is not None:
 			self._stateOperationInProgress = False
-		if isinstance(error, CloudClipboardError):
-			if error.code == USER_NOT_LOGGED_IN:
-				# Translators: Cloud clipboard status reported by the native SDK.
-				self._setLoggedOut(_("Not signed in"))
+		if isinstance(error, CloudClipboardError) and error.code == USER_NOT_LOGGED_IN:
+			# Translators: Cloud clipboard status reported by the native SDK.
+			self._setLoggedOut(_("Not signed in"))
 		message = failureTemplate.format(
 			error=self._formatError(error),
 		)

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from hashlib import sha256
 import json
 import os
@@ -419,10 +419,8 @@ def _migrateSchemaVersion1(connection: sqlite3.Connection) -> None:
 		connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 		connection.execute("COMMIT")
 	except Exception:
-		try:
+		with suppress(sqlite3.Error):
 			connection.execute("ROLLBACK")
-		except sqlite3.Error:
-			pass
 		raise
 
 
@@ -819,14 +817,6 @@ def _reviveCategoryIfNeeded(connection: sqlite3.Connection, categoryId: int) -> 
 	return nameFolded
 
 
-def _textPreview(text: str) -> str:
-	return " ".join(text[: SUMMARY_TEXT_LIMIT * 2].split())[:SUMMARY_TEXT_LIMIT]
-
-
-def _filePreview(files: tuple[str, ...]) -> tuple[str, ...]:
-	return tuple(Path(filePath).name or filePath for filePath in files[:FILE_PREVIEW_LIMIT])
-
-
 def _validateItem(item: ClipboardItem) -> None:
 	"""Validate the field combinations for one fixed clipboard entry type."""
 	if not isinstance(item.contentType, ClipboardItemType) or not isinstance(item.canUpload, bool):
@@ -884,7 +874,10 @@ def _insertItem(
 ) -> int:
 	"""Insert one validated immutable entry and return its identifier."""
 	filesJson = json.dumps(item.files, ensure_ascii=False)
-	filesPreviewJson = json.dumps(_filePreview(item.files), ensure_ascii=False)
+	filesPreviewJson = json.dumps(
+		tuple(Path(filePath).name or filePath for filePath in item.files[:FILE_PREVIEW_LIMIT]),
+		ensure_ascii=False,
+	)
 	cursor = connection.execute(
 		"""
 		INSERT INTO items (
@@ -896,7 +889,7 @@ def _insertItem(
 		(
 			item.contentType.value,
 			item.text,
-			_textPreview(item.text),
+			" ".join(item.text[: SUMMARY_TEXT_LIMIT * 2].split())[:SUMMARY_TEXT_LIMIT],
 			item.html,
 			item.rtf,
 			item.imageData,
