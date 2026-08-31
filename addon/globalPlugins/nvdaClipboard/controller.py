@@ -152,6 +152,11 @@ def _normalizeUnicodeText(text: str) -> str:
 	return text.encode("utf-16-le", errors="surrogatepass").decode("utf-16-le", errors="replace")
 
 
+def _normalizeClipboardLineEndings(text: str) -> str:
+	"""Return text as it is read back from Win32 CF_UNICODETEXT writes."""
+	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+
+
 class _ClipboardChangeSource(Enum):
 	"""Identify why one clipboard snapshot is being applied."""
 
@@ -227,7 +232,7 @@ def _isLastSpokenTemporarySnapshot(
 	"""Match temporary text after Windows has synthesized additional clipboard formats."""
 	return (
 		snapshot.contentType == ClipboardContentType.TEXT
-		and snapshot.text == state.temporaryText
+		and snapshot.text == _normalizeClipboardLineEndings(state.temporaryText)
 		and not snapshot.canIncludeInHistory
 		and not snapshot.canUpload
 		and bool(snapshot.sequenceNumber)
