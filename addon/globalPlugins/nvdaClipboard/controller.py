@@ -327,12 +327,6 @@ class ClipboardController:
 		self._lastSpokenPasteState: _LastSpokenPasteState | None = None
 		self._isStarted = False
 
-	@property
-	def isCloudAvailable(self) -> bool:
-		"""Return whether the native cloud clipboard SDK is available."""
-		cloudSync = self.cloudSync
-		return bool(cloudSync is not None and cloudSync.getState().isAvailable)
-
 	def start(self) -> None:
 		"""Start cloud state detection and clipboard monitoring."""
 		if self._isStarted:
@@ -415,7 +409,7 @@ class ClipboardController:
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
-		if not self.isCloudAvailable:
+		if not cloudSync.getState().isAvailable:
 			ui.message(cloudSync.getState().statusMessage)
 			return
 		if self.cloudDialog is not None:

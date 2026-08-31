@@ -1617,9 +1617,7 @@ class OneDriveSyncManager:
 			if not self._isInitialized:
 				# Translators: Error when OneDrive is used before its service starts.
 				rejectionMessage = _("OneDrive synchronization is not initialized")
-			elif not self._state.isAvailable:
-				rejectionMessage = self._state.statusMessage
-			elif self._state.isSigningOut and not isSigningOut:
+			elif not self._state.isAvailable or self._state.isSigningOut and not isSigningOut:
 				rejectionMessage = self._state.statusMessage
 			elif requiresLogin and not self._state.isLoggedIn:
 				rejectionMessage = _ERROR_SIGN_IN_REQUIRED

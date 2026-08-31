@@ -74,7 +74,7 @@ class OneDriveSyncDialog(wx.Dialog):
 			_("&Status:"),
 			size=(-1, 58),
 		)
-		self.privacyCtrl = self._addReadOnlyText(
+		self._addReadOnlyText(
 			mainSizer,
 			# Translators: Label for a short description of OneDrive synchronization.
 			_("A&bout:"),

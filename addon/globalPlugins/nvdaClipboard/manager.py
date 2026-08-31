@@ -1070,10 +1070,9 @@ class ClipboardManagerFrame(wx.Frame):
 			self._isRefreshingList = False
 		self._activeItemIndex = targetIndex
 		self._activeItemKey = targetKey
-		if not self._isStoredContentCurrent():
-			if not self._loadActiveItem(confirmDirty=False):
-				self.searchCtrl.SetFocus()
-				return
+		if not self._isStoredContentCurrent() and not self._loadActiveItem(confirmDirty=False):
+			self.searchCtrl.SetFocus()
+			return
 		self.itemList.SetFocus()
 		self._updateUiState()
 
@@ -1838,9 +1837,10 @@ class ClipboardManagerFrame(wx.Frame):
 				preferredIndex=previousIndex,
 				selectedKeys=selectedKeys,
 			)
-			if self._getActiveItemKey() != previousKey or not wasContentCurrent:
-				if not self._hasDirtyChanges():
-					self._loadActiveItem(confirmDirty=False)
+			if (
+				self._getActiveItemKey() != previousKey or not wasContentCurrent
+			) and not self._hasDirtyChanges():
+				self._loadActiveItem(confirmDirty=False)
 		except Exception as error:
 			self._showError(error)
 
@@ -2406,10 +2406,9 @@ class ClipboardManagerFrame(wx.Frame):
 	def _onClose(self, event: wx.CloseEvent) -> None:
 		self._cancelPendingItemLoad()
 		if event.CanVeto():
-			if getConfirmOnClose():
-				if not self._confirmDirtyChanges():
-					event.Veto()
-					return
+			if getConfirmOnClose() and not self._confirmDirtyChanges():
+				event.Veto()
+				return
 			self.Hide()
 			self._resetSearchState(clearEntries=True)
 			event.Veto()
