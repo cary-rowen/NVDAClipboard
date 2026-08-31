@@ -651,10 +651,12 @@ msgstr "无法以文本方式浏览图像内容"
 msgid "{index}. {summary}"
 msgstr "{index}. {summary}"
 
-#. Translators: Message shown when global clipboard history contains no entries.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2354
-msgid "Clipboard history is empty"
-msgstr "剪贴板历史为空"
+#. Translators: Category and entry count reported by the global category navigation command.
+#: addon\globalPlugins\nvdaClipboard\controller.py:2377
+#, python-brace-format
+msgid "{category}, {count} entry"
+msgid_plural "{category}, {count} entries"
+msgstr[0] "{category}，{count} 个条目"
 
 #. Translators: Clipboard list summary when text contains no visible characters.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2398
@@ -2047,23 +2049,28 @@ msgstr "从天坦云剪贴板接收并粘贴"
 msgid "Copies an image of the current navigator object to the clipboard"
 msgstr "将当前导航对象的图像复制到剪贴板"
 
-#. Translators: Input help description for moving to the next clipboard history entry.
+#. Translators: Input help description for cycling through categories of stored entries.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:309
-msgid "Moves to the next clipboard history entry"
-msgstr "移动到下一条剪贴板历史记录"
+msgid "Cycles through categories of stored entries"
+msgstr "循环切换已存条目类别"
 
-#. Translators: Input help description for moving to the previous clipboard history entry.
+#. Translators: Input help description for moving to the next stored entry in the current category.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:319
-msgid "Moves to the previous clipboard history entry"
-msgstr "移动到上一条剪贴板历史记录"
+msgid "Moves to the next stored entry in the current category"
+msgstr "移动到当前类别中的下一个已存条目"
 
-#. Translators: Input help description for restoring the selected clipboard history entry.
+#. Translators: Input help description for moving to the previous stored entry in the current category.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:329
-msgid "Puts the selected clipboard history entry on the system clipboard"
-msgstr "将所选剪贴板历史记录放入系统剪贴板"
+msgid "Moves to the previous stored entry in the current category"
+msgstr "移动到当前类别中的上一个已存条目"
+
+#. Translators: Input help description for putting the selected stored entry on the system clipboard.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:339
+msgid "Puts the selected stored entry on the system clipboard"
+msgstr "将选中的已存条目放入系统剪贴板"
 
 #. Translators: Input help description for saving a clipboard image.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:339
+#: addon\globalPlugins\nvdaClipboard\__init__.py:349
 msgid "Saves the clipboard image to a file"
 msgstr "将剪贴板图像保存到文件"
 

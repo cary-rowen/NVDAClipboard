@@ -305,34 +305,43 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.copyNavigatorObjectImage)
 
 	@script(
-		# Translators: Input help description for moving to the next clipboard history entry.
-		description=_("Moves to the next clipboard history entry"),
+		# Translators: Input help description for cycling through categories of stored entries.
+		description=_("Cycles through categories of stored entries"),
+		speakOnDemand=True,
+	)
+	def script_cycleStoredItemCategory(self, gesture: inputCore.InputGesture) -> None:
+		"""Select the next category of stored items."""
+		self._runAction(self.controller.cycleStoredItemCategory)
+
+	@script(
+		# Translators: Input help description for moving to the next stored entry in the current category.
+		description=_("Moves to the next stored entry in the current category"),
 		gestures=("kb:control+windows+numpadPlus", "kb(laptop):control+windows+]"),
 		speakOnDemand=True,
 	)
-	def script_nextClipboardHistoryItem(self, gesture: inputCore.InputGesture) -> None:
-		"""Move to the next clipboard history item."""
-		self._runAction(self.controller.moveToNextHistoryItem)
+	def script_nextStoredItem(self, gesture: inputCore.InputGesture) -> None:
+		"""Move to the next stored item in the current category."""
+		self._runAction(self.controller.moveToNextStoredItem)
 
 	@script(
-		# Translators: Input help description for moving to the previous clipboard history entry.
-		description=_("Moves to the previous clipboard history entry"),
+		# Translators: Input help description for moving to the previous stored entry in the current category.
+		description=_("Moves to the previous stored entry in the current category"),
 		gestures=("kb:control+windows+numpadMinus", "kb(laptop):control+windows+["),
 		speakOnDemand=True,
 	)
-	def script_previousClipboardHistoryItem(self, gesture: inputCore.InputGesture) -> None:
-		"""Move to the previous clipboard history item."""
-		self._runAction(self.controller.moveToPreviousHistoryItem)
+	def script_previousStoredItem(self, gesture: inputCore.InputGesture) -> None:
+		"""Move to the previous stored item in the current category."""
+		self._runAction(self.controller.moveToPreviousStoredItem)
 
 	@script(
-		# Translators: Input help description for restoring the selected clipboard history entry.
-		description=_("Puts the selected clipboard history entry on the system clipboard"),
+		# Translators: Input help description for putting the selected stored entry on the system clipboard.
+		description=_("Puts the selected stored entry on the system clipboard"),
 		gestures=("kb:control+windows+numpadMultiply", "kb(laptop):control+windows+\\"),
 		speakOnDemand=True,
 	)
-	def script_restoreClipboardHistoryItem(self, gesture: inputCore.InputGesture) -> None:
-		"""Put the selected clipboard history item on the system clipboard."""
-		self._runAction(self.controller.restoreCurrentHistoryItem)
+	def script_restoreStoredItem(self, gesture: inputCore.InputGesture) -> None:
+		"""Put the selected stored item on the system clipboard."""
+		self._runAction(self.controller.restoreCurrentStoredItem)
 
 	@script(
 		# Translators: Input help description for saving a clipboard image.

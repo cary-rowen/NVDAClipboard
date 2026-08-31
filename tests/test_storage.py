@@ -541,6 +541,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert positionedItem is not None
 		assert (positionedItem.textPreview, positionedIndex, itemCount) == ("gap latest", 1, 3)
 		storage.createCategory("Saved")
+		assert storage.getCategorySummaryAt("Saved", 99, 1) == (None, 0, 0)
 		plainLatestId = next(item.itemId for item in storage.history if item.textPreview == "latest")
 		storage.copyHistoryItemsToCategoryById((plainLatestId,), "Saved")
 		assert tuple(item.textPreview for item in storage.getCategoryItems("Saved")) == ("latest",)
@@ -574,6 +575,9 @@ def _runSelfCheck() -> None:  # noqa: C901
 		storage.copyHistoryItemsToCategoryById((formattedId, formattedId, plainHistoryId), "Saved")
 		savedItemIds = tuple(item.itemId for item in storage.getCategoryItems("Saved"))
 		assert savedItemIds == (formattedId, plainHistoryId, plainLatestId)
+		positionedItem, positionedIndex, itemCount = storage.getCategorySummaryAt("Saved", 99, -1)
+		assert positionedItem is not None
+		assert (positionedItem.itemId, positionedIndex, itemCount) == (plainHistoryId, 1, 3)
 		_expectRaises(
 			ItemNotFoundError,
 			lambda: storage.moveCategoryItemsById("Saved", (formattedId, -1), "Moved"),
