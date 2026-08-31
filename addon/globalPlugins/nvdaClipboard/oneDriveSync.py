@@ -16,16 +16,16 @@ from dataclasses import dataclass, replace
 from functools import partial
 from hashlib import sha1
 import json
-import os
 from pathlib import Path
 import re
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import TemporaryDirectory
 from threading import Event, Lock, Thread, Timer
 from time import monotonic
 from typing import Any, cast
 from urllib.parse import quote
 
 import addonHandler
+import fileUtils
 from gui.message import MessageDialog, ReturnCode
 from logHandler import log
 import requests
@@ -378,16 +378,9 @@ class _AuthManager:
 		try:
 			self.cachePath.parent.mkdir(parents=True, exist_ok=True)
 			data = _protectData(self.cache.serialize().encode("utf-8"))
-			with NamedTemporaryFile(
-				mode="wb",
-				dir=self.cachePath.parent,
-				prefix=f"{self.cachePath.name}.",
-				suffix=".tmp",
-				delete=False,
-			) as cacheFile:
-				cacheFile.write(data)
+			with fileUtils.FaultTolerantFile(str(self.cachePath)) as cacheFile:
 				temporaryPath = Path(cacheFile.name)
-			os.replace(temporaryPath, self.cachePath)
+				cacheFile.write(data)
 		except OSError as error:
 			self.cache.has_state_changed = True
 			if temporaryPath is not None:

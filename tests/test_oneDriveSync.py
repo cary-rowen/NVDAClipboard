@@ -102,6 +102,8 @@ _GUI_MESSAGE.MessageDialog = MagicMock()
 _GUI_MESSAGE.ReturnCode = SimpleNamespace(OK=1)
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = MagicMock()
+_FILE_UTILS = ModuleType("fileUtils")
+_FILE_UTILS.FaultTolerantFile = MagicMock()
 _REQUESTS = ModuleType("requests")
 _REQUESTS.RequestException = OSError
 _REQUESTS.Response = object
@@ -129,6 +131,7 @@ with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicM
 			"addonHandler": _ADDON_HANDLER,
 			"gui": _GUI,
 			"gui.message": _GUI_MESSAGE,
+			"fileUtils": _FILE_UTILS,
 			"logHandler": _LOG_HANDLER,
 			"requests": _REQUESTS,
 			"wx": _WX,
@@ -587,6 +590,27 @@ class OneDriveSyncTests(unittest.TestCase):
 				with self.assertRaises(oneDriveSync.OneDriveError) as context:
 					auth._saveCache()
 			self.assertEqual(str(context.exception), "Could not save Microsoft sign-in data")
+
+	def testCacheUsesFaultTolerantFile(self) -> None:
+		"""Write encrypted cache bytes through NVDA's fault-tolerant file helper."""
+		with TemporaryDirectory() as temporaryDirectory:
+			cachePath = Path(temporaryDirectory) / "cache.dat"
+			cacheFile = SimpleNamespace(name=str(cachePath.with_suffix(".tmp")), write=Mock())
+			faultTolerantFile = MagicMock()
+			faultTolerantFile.return_value.__enter__.return_value = cacheFile
+			auth = object.__new__(oneDriveSync._AuthManager)
+			auth.cachePath = cachePath
+			auth.cache = SimpleNamespace(has_state_changed=True, serialize=Mock(return_value="cached"))
+
+			with (
+				patch.object(oneDriveSync, "_shouldWriteToDisk", return_value=True),
+				patch.object(oneDriveSync, "_protectData", return_value=b"encrypted"),
+				patch.object(oneDriveSync.fileUtils, "FaultTolerantFile", faultTolerantFile),
+			):
+				auth._saveCache()
+
+		faultTolerantFile.assert_called_once_with(str(cachePath))
+		cacheFile.write.assert_called_once_with(b"encrypted")
 
 	def testTwoDeviceLifecycleConverges(self) -> None:
 		"""Upload, download, merge concurrent additions, and synchronize deletion."""
