@@ -17,10 +17,3 @@ uv run python -m unittest -v tests.test_storage
 ```
 
 The test suite runs on Windows because the add-on loads its bundled SQLite extension.
-
-## Type Checking
-
-Pyright is included in the development environment to follow the NVDA add-on template.
-The current NVDA source APIs are dynamically typed and are not shipped with complete
-stubs, so the Pyright Prek hook is skipped by the build workflow while the type debt is
-reduced incrementally.

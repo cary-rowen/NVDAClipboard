@@ -52,7 +52,6 @@ lint = [
 	"uv==0.11.15",
 	"ruff==0.14.5",
 	"prek==0.4.8",
-	"pyright[nodejs]==1.1.407",
 ]
 dev = [
 	{ include-group = "build" },
@@ -107,43 +106,3 @@ logger-objects = ["logHandler.log"]
 # sconscripts contains many inbuilt functions not recognised by the lint,
 # so ignore F821.
 "sconstruct" = ["F821"]
-
-[tool.pyright]
-venvPath = ".venv"
-venv = "."
-pythonPlatform = "Windows"
-typeCheckingMode = "strict"
-
-include = [
-	"addon/**/*.py",
-]
-
-exclude = [
-	"sconstruct",
-	".git",
-	"__pycache__",
-	".venv",
-	"site_scons",
-	".github/scripts",
-	"tests",
-]
-
-# NVDA's source tree is normally checked out beside the add-on repository.
-# Keep this path configurable for developers whose checkout layout differs.
-extraPaths = [
-	"./addon",
-	"../nvda/source",
-]
-
-analyzeUnannotatedFunctions = true
-deprecateTypingAliases = true
-strictParameterNoneValue = true
-strictListInference = true
-strictDictionaryInference = true
-strictSetInference = true
-
-# The add-on imports NVDA's dynamically typed APIs and bundled native modules.
-# Keep Pyright available for incremental cleanup while allowing those boundaries.
-reportMissingImports = false
-reportMissingModuleSource = false
-reportMissingTypeStubs = false
