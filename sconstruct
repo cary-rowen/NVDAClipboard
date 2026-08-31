@@ -12,8 +12,7 @@ from typing import Final
 
 # While names imported below are available by default in every SConscript
 # Linters aren't aware about them.
-# To avoid PyRight `reportUndefinedVariable` errors about them they are imported explicitly.
-# When using other  Scons functions please add them to the line below.
+# When using other SCons functions please add them to the line below.
 from SCons.Script import EnsurePythonVersion, Variables, BoolVariable, Environment, Copy
 from SCons.Errors import UserError
 

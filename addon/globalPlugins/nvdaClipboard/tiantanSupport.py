@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 import sys
 
 import addonHandler
@@ -28,28 +28,24 @@ class TiantanSupportState:
 	statusMessage: str
 
 
-def _getUnsupportedArchitectureMessage() -> str:
-	# Translators: Error shown when Tiantan Cloud Clipboard is not supported by the current NVDA process bitness.
-	return _("Tiantan Cloud Clipboard requires 64-bit NVDA.")
+# Translators: Error shown when Tiantan Cloud Clipboard is not supported by the current NVDA process bitness.
+_UNSUPPORTED_ARCHITECTURE_MESSAGE = _("Tiantan Cloud Clipboard requires 64-bit NVDA.")
+# Translators: Error shown when the native cloud clipboard library cannot be used.
+_SDK_UNAVAILABLE_MESSAGE = _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
 
 
-def _getSdkUnavailableMessage() -> str:
-	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
-
-
-@lru_cache(maxsize=1)
+@cache
 def getTiantanSupportState() -> TiantanSupportState:
 	"""Return the cached Tiantan Cloud Clipboard support state."""
 	if sys.maxsize <= 2**32:
 		log.debugWarning("Tiantan Cloud Clipboard requires a 64-bit NVDA process.")
-		return TiantanSupportState(False, _getUnsupportedArchitectureMessage())
+		return TiantanSupportState(False, _UNSUPPORTED_ARCHITECTURE_MESSAGE)
 	try:
 		cloudClipboard.CloudClipboardSdk()
 	except cloudClipboard.CloudClipboardError as error:
 		log.debugWarning("ClipDataCloud SDK is unavailable.", exc_info=error)
-		return TiantanSupportState(False, _getSdkUnavailableMessage())
+		return TiantanSupportState(False, _SDK_UNAVAILABLE_MESSAGE)
 	except Exception:
 		log.exception("Unexpected ClipDataCloud SDK probe failure.")
-		return TiantanSupportState(False, _getSdkUnavailableMessage())
+		return TiantanSupportState(False, _SDK_UNAVAILABLE_MESSAGE)
 	return TiantanSupportState(True, "")
