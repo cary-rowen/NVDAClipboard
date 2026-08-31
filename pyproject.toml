@@ -7,7 +7,7 @@ name = "nvdaClipboard"
 dynamic = ["version"]
 description = "NVDA Clipboard add-on for NVDA"
 maintainers = [
-	{name = "Cary-rowen", email = "manchen_0528@outlook.com"},
+	{name = "Cary-rowen", email = "cary-rowen@outlook.com"},
 ]
 requires-python = ">=3.13,<3.14"
 classifiers = [
