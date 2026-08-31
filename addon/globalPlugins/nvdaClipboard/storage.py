@@ -2748,10 +2748,10 @@ class ClipboardStorage:
 	def removeMissingHistoryFileReferences(
 		self,
 		itemIds: tuple[int, ...],
-		isMissing: Callable[[str], bool],
+		missingPaths: frozenset[str],
 	) -> tuple[int, int, int, dict[int, int]]:
 		"""Remove missing paths from selected history file groups."""
-		return self._removeMissingFileReferences(itemIds, isMissing)
+		return self._removeMissingFileReferences(itemIds, missingPaths)
 
 	def deleteCategoryItemsById(self, categoryName: str, itemIds: tuple[int, ...]) -> None:
 		"""Delete stable category entries without changing history."""
@@ -2773,22 +2773,20 @@ class ClipboardStorage:
 		self,
 		categoryName: str,
 		itemIds: tuple[int, ...],
-		isMissing: Callable[[str], bool],
+		missingPaths: frozenset[str],
 	) -> tuple[int, int, int, dict[int, int]]:
 		"""Remove missing paths from selected category file groups."""
-		return self._removeMissingFileReferences(itemIds, isMissing, categoryName)
+		return self._removeMissingFileReferences(itemIds, missingPaths, categoryName)
 
 	def _removeMissingFileReferences(
 		self,
 		itemIds: tuple[int, ...],
-		isMissing: Callable[[str], bool],
+		missingPaths: frozenset[str],
 		categoryName: str | None = None,
 	) -> tuple[int, int, int, dict[int, int]]:
 		"""Remove missing paths from selected history or category file groups."""
-		if not itemIds:
+		if not itemIds or not missingPaths:
 			return (0, 0, 0, {})
-		if not callable(isMissing):
-			raise TypeError(isMissing)
 		with self._transaction() as connection:
 			categoryId = None
 			nameFolded = None
@@ -2807,7 +2805,7 @@ class ClipboardStorage:
 				item = self._getItem(connection, itemId)
 				if item.contentType != ClipboardItemType.FILES:
 					continue
-				remainingFiles = [filePath for filePath in item.files if not isMissing(filePath)]
+				remainingFiles = [filePath for filePath in item.files if filePath not in missingPaths]
 				missingCount = len(item.files) - len(remainingFiles)
 				if not missingCount:
 					continue

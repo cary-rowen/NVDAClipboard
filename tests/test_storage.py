@@ -678,7 +678,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
 				"Saved",
 				(historyId,),
-				lambda filePath: filePath == "missing.txt",
+				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, deleted, removed), (1, 0, 1))
@@ -704,7 +704,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 
 			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
 				(itemId,),
-				lambda _filePath: True,
+				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, deleted, removed), (1, 1, 1))
@@ -726,7 +726,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 
 			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
 				(selectedId,),
-				lambda filePath: filePath == "missing.txt",
+				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, deleted, removed), (1, 0, 1))
@@ -756,7 +756,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
 				"Saved",
 				(selectedId,),
-				lambda filePath: filePath == "missing.txt",
+				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, deleted, removed), (1, 0, 1))
