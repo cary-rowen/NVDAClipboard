@@ -511,24 +511,19 @@ class ClipboardManagerFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self._onReplace, self.replaceItem)
 		self.Bind(wx.EVT_MENU, self._onGotoLine, self.gotoLineItem)
 
-	def showManager(self) -> None:
-		"""Show the manager at history's first item with focus on content."""
+	def showManager(self, preferredCategory: CategoryId, preferredIndex: int) -> None:
+		"""Show the manager at the global navigation position with focus on content."""
 		if not self.IsShown():
 			self._resetSearchState(clearEntries=True)
 			try:
-				categories = list(self.controller.getCategories())
-				historyCategory = next(
-					(category for category in categories if self.controller.isHistoryCategory(category)),
-					categories[0] if categories else None,
-				)
-				self._selectedCategory = historyCategory
+				self._selectedCategory = preferredCategory
 				self._activeItemKey = None
 				self._isDirty = False
 				self._dirtyStateNeedsCheck = False
 				self._itemTypeFilter = None
 				self._viewFilterItems[None].Check(True)
-				self._refreshCategories(historyCategory)
-				self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
+				self._refreshCategories(preferredCategory)
+				self._reloadItemsFromController(preferredIndex=preferredIndex, selectedKeys=())
 				self._loadActiveItem(confirmDirty=False)
 				self._restoreEditorOffsetFromClipboardNavigation()
 			except Exception as error:

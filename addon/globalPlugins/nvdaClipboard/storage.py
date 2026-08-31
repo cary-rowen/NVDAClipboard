@@ -2607,6 +2607,35 @@ class ClipboardStorage:
 			).fetchall()
 			return tuple(_rowToSummary(row) for row in rows)
 
+	def getCategorySummaryAt(
+		self,
+		categoryName: str,
+		index: int,
+		offset: int = 0,
+	) -> tuple[ClipboardItemSummary | None, int, int]:
+		"""Clamp an index, apply an offset, and return one category summary, index, and total."""
+		with self._readConnection() as connection:
+			categoryId = self._categoryId(connection, categoryName)
+			countRow = connection.execute(
+				"SELECT COUNT(*) FROM categoryItems WHERE categoryId = ?",
+				(categoryId,),
+			).fetchone()
+			if countRow is None:
+				raise StorageFormatError
+			itemCount = cast(int, countRow[0])
+			if itemCount == 0:
+				return None, 0, 0
+			currentIndex = max(0, min(index, itemCount - 1))
+			resolvedIndex = max(0, min(currentIndex + offset, itemCount - 1))
+			row = connection.execute(
+				f"SELECT {_SUMMARY_COLUMNS} FROM categoryItems JOIN items USING (itemId) "
+				"WHERE categoryId = ? ORDER BY categoryItems.sortOrder LIMIT 1 OFFSET ?",
+				(categoryId, resolvedIndex),
+			).fetchone()
+			if row is None:
+				raise StorageFormatError
+			return _rowToSummary(row), resolvedIndex, itemCount
+
 	def getCategoryItemById(self, categoryName: str, itemId: int) -> ClipboardItem:
 		"""Load one complete entry after confirming it still belongs to a category."""
 		with self._readConnection() as connection:

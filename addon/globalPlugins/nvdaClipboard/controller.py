@@ -316,7 +316,8 @@ class ClipboardController:
 		# Translators: Summary used when the system clipboard is empty.
 		self._summary = _("Clipboard is empty")
 		self.navigator.setText(self._summary)
-		self._historyIndex = 0
+		self._storedItemCategory: CategoryId = _HISTORY_CATEGORY_ID
+		self._storedItemIndex = 0
 		self._pendingWrites: set[int] = set()
 		self._pendingPngRestore: Future[_PreparedPngRestore] | None = None
 		self._awaitingInitialSnapshot = False
@@ -399,7 +400,7 @@ class ClipboardController:
 				from .manager import ClipboardManagerFrame
 
 				self.manager = ClipboardManagerFrame(mainFrame, self)
-			self.manager.showManager()
+			self.manager.showManager(self._resolveStoredItemCategory(), self._storedItemIndex)
 		finally:
 			mainFrame.postPopup()
 
@@ -857,25 +858,39 @@ class ClipboardController:
 		finally:
 			mainFrame.postPopup()
 
-	def moveToNextHistoryItem(self) -> None:
-		"""Move to and report the next older history entry."""
-		self._moveHistoryItem(1)
+	def cycleStoredItemCategory(self) -> None:
+		"""Select and report the next category of stored clipboard items."""
+		categories = self.getCategories()
+		if self._storedItemCategory in categories:
+			categoryIndex = (categories.index(self._storedItemCategory) + 1) % len(categories)
+			self._storedItemCategory = categories[categoryIndex]
+		else:
+			self._storedItemCategory = _HISTORY_CATEGORY_ID
+		self._storedItemIndex = 0
+		_item, self._storedItemIndex, itemCount = self._getStoredItemSummaryAt(
+			self._storedItemCategory,
+		)
+		self._reportStoredItemCategory(
+			self._storedItemCategory,
+			itemCount,
+		)
 
-	def moveToPreviousHistoryItem(self) -> None:
-		"""Move to and report the previous newer history entry."""
-		self._moveHistoryItem(-1)
+	def moveToNextStoredItem(self) -> None:
+		"""Move to and report the next stored item in the current category."""
+		self._moveStoredItem(1)
 
-	def restoreCurrentHistoryItem(self) -> None:
-		"""Put the globally selected history entry on the system clipboard."""
-		try:
-			item, resolvedIndex, _itemCount = self.storage.getHistorySummaryAt(self._historyIndex)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+	def moveToPreviousStoredItem(self) -> None:
+		"""Move to and report the previous stored item in the current category."""
+		self._moveStoredItem(-1)
+
+	def restoreCurrentStoredItem(self) -> None:
+		"""Put the globally selected stored item on the system clipboard."""
+		category = self._resolveStoredItemCategory()
+		item, self._storedItemIndex, _itemCount = self._getStoredItemSummaryAt(category)
 		if item is None:
-			self._reportEmptyHistory()
+			self._reportEmptyStoredItemCategory(category)
 			return
-		self._historyIndex = resolvedIndex
-		self.restoreItemToClipboard(_HISTORY_CATEGORY_ID, item.itemId)
+		self.restoreItemToClipboard(category, item.itemId)
 
 	def getCategories(self) -> list[CategoryId]:
 		"""Return stable category identifiers with history first."""
@@ -1034,6 +1049,8 @@ class ClipboardController:
 			)
 		except StorageError as error:
 			self._raiseUserStorageError(error)
+		if self._storedItemCategory == category:
+			self._storedItemIndex = 0
 		self.oneDriveSync.notifyLocalChange()
 		if notifyManager:
 			self._refreshManager()
@@ -1179,6 +1196,10 @@ class ClipboardController:
 				self.storage.moveCategoryItemsById(sourceCategory, itemIds, targetCategory)
 		except (StorageError, ValueError) as error:
 			self._raiseUserStorageError(error)
+		if self._storedItemCategory == targetCategory or (
+			isinstance(sourceCategory, str) and self._storedItemCategory == sourceCategory
+		):
+			self._storedItemIndex = 0
 		self.oneDriveSync.notifyLocalChange()
 
 	def deleteItems(self, category: CategoryId, itemIds: tuple[int, ...]) -> None:
@@ -1186,7 +1207,6 @@ class ClipboardController:
 		try:
 			if self.isHistoryCategory(category):
 				self.storage.deleteHistoryItemsById(itemIds)
-				self._historyIndex = self.storage.getHistorySummaryAt(self._historyIndex)[1]
 			else:
 				assert isinstance(category, str)
 				self.storage.deleteCategoryItemsById(category, itemIds)
@@ -1270,8 +1290,6 @@ class ClipboardController:
 			return
 		if isinstance(result, MissingFileCleanupResult) and result.changedCount:
 			try:
-				if self.isHistoryCategory(category):
-					self._historyIndex = self.storage.getHistorySummaryAt(self._historyIndex)[1]
 				self.oneDriveSync.notifyLocalChange()
 			except Exception as error:
 				result = error
@@ -1292,6 +1310,8 @@ class ClipboardController:
 			actualName = self.storage.renameCategory(oldName, newName)
 		except StorageError as error:
 			self._raiseUserStorageError(error)
+		if self._storedItemCategory == oldName:
+			self._storedItemCategory = actualName
 		self.oneDriveSync.notifyLocalChange()
 		return actualName
 
@@ -1301,6 +1321,9 @@ class ClipboardController:
 			self.storage.deleteCategory(name)
 		except StorageError as error:
 			self._raiseUserStorageError(error)
+		if self._storedItemCategory == name:
+			self._storedItemCategory = _HISTORY_CATEGORY_ID
+			self._storedItemIndex = 0
 		self.oneDriveSync.notifyLocalChange()
 
 	def _saveCurrentClipboardImage(self, parent: wx.Window) -> None:
@@ -1620,7 +1643,8 @@ class ClipboardController:
 				# Translators: Message shown when an image exceeds the total history storage limit.
 				ui.message(_("The image was not added because image history storage is full"))
 			return
-		self._historyIndex = 0
+		if self.isHistoryCategory(self._storedItemCategory):
+			self._storedItemIndex = 0
 		if result.imageWasDropped:
 			# Translators: Message shown when mixed clipboard content is retained as text only.
 			ui.message(_("The text was saved in history, but its image could not be stored"))
@@ -2324,23 +2348,21 @@ class ClipboardController:
 				speech.speakSpelling(hex(codePoint))
 		braille.handler.message("; ".join(f"{codePoint}, {hex(codePoint)}" for codePoint in codePoints))
 
-	def _moveHistoryItem(self, direction: int) -> None:
-		"""Move the global history position and report one concise summary."""
+	def _moveStoredItem(self, direction: int) -> None:
+		"""Move the global stored-item position and report one concise summary."""
 		if direction not in (-1, 1):
 			raise ValueError(direction)
-		try:
-			item, newIndex, itemCount = self.storage.getHistorySummaryAt(self._historyIndex, direction)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		category = self._resolveStoredItemCategory()
+		item, newIndex, itemCount = self._getStoredItemSummaryAt(category, direction)
 		if item is None:
-			self._reportEmptyHistory()
+			self._reportEmptyStoredItemCategory(category)
 			return
-		self._historyIndex = newIndex
+		self._storedItemIndex = newIndex
 		if item.contentType != ClipboardItemType.PLAIN_TEXT:
 			playNonPlainText()
 		elif newIndex in (0, itemCount - 1):
 			playBoundary()
-		# Translators: Numbered clipboard history summary reported by the global navigation commands.
+		# Translators: Numbered clipboard entry summary reported by the global category navigation commands.
 		ui.message(
 			_("{index}. {summary}").format(
 				index=newIndex + 1,
@@ -2348,10 +2370,42 @@ class ClipboardController:
 			),
 		)
 
-	def _reportEmptyHistory(self) -> None:
+	def _reportEmptyStoredItemCategory(self, category: CategoryId) -> None:
+		"""Report that the current stored-item category has no entries."""
 		playBoundary()
-		# Translators: Message shown when global clipboard history contains no entries.
-		ui.message(_("Clipboard history is empty"))
+		self._reportStoredItemCategory(category, 0)
+
+	def _reportStoredItemCategory(self, category: CategoryId, itemCount: int) -> None:
+		"""Report a stored-item category and its entry count."""
+		ui.message(
+			ngettext(
+				# Translators: Category and entry count reported by the global category navigation command.
+				"{category}, {count} entry",
+				"{category}, {count} entries",
+				itemCount,
+			).format(category=self.getCategoryLabel(category), count=itemCount),
+		)
+
+	def _resolveStoredItemCategory(self) -> CategoryId:
+		"""Return the current stored-item category, falling back to history if needed."""
+		if self._storedItemCategory not in self.getCategories():
+			self._storedItemCategory = _HISTORY_CATEGORY_ID
+			self._storedItemIndex = 0
+		return self._storedItemCategory
+
+	def _getStoredItemSummaryAt(
+		self,
+		category: CategoryId,
+		offset: int = 0,
+	) -> tuple[ClipboardItemSummary | None, int, int]:
+		"""Return one stored-item summary at the current position plus an offset."""
+		try:
+			if self.isHistoryCategory(category):
+				return self.storage.getHistorySummaryAt(self._storedItemIndex, offset)
+			assert isinstance(category, str)
+			return self.storage.getCategorySummaryAt(category, self._storedItemIndex, offset)
+		except StorageError as error:
+			self._raiseUserStorageError(error)
 
 	def _getCategorySummaries(self, category: CategoryId) -> tuple[ClipboardItemSummary, ...]:
 		"""Return metadata-only entries for one manager category."""
@@ -2751,10 +2805,11 @@ class ClipboardController:
 			self._clearOneDriveDialog(dialog)
 
 	def _onOneDriveDataChanged(self) -> None:
-		"""Reset history navigation and refresh the manager after a remote merge."""
+		"""Reset the stored-item position and refresh the manager after a remote merge."""
 		if not self._isStarted:
 			return
-		self._historyIndex = 0
+		self._storedItemCategory = _HISTORY_CATEGORY_ID
+		self._storedItemIndex = 0
 		self._refreshManager()
 
 	def _getFocusObject(self) -> object | None:

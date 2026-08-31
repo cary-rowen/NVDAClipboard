@@ -41,7 +41,7 @@ Formatted text keeps its original formatting when restored. Editing its text in 
 
 Older history entries are removed automatically, while entries in your own categories are retained. Older uncollected images may be removed sooner because image storage is limited.
 
-You can also use the global history commands to move through recent entries without opening the manager and then put the selected entry back on the clipboard.
+You can also browse stored entries without opening the manager. Assign the "Cycle through categories of stored entries" command in NVDA's Input Gestures dialog to cycle through clipboard history and user categories; the existing previous and next commands move within the selected category, and the restore command puts the selected stored entry on the system clipboard. Opening the manager starts at the same category and entry.
 
 ## Images
 
@@ -93,7 +93,8 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Temporarily paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
 | Receive and paste Tiantan Cloud Clipboard text | `NVDA+Alt+V` | `NVDA+Alt+V` |
 | Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
-| Next clipboard history entry | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |
-| Previous clipboard history entry | `Ctrl+Windows+NumPad Minus` | `Ctrl+Windows+[` |
-| Put the selected history entry on the clipboard | `Ctrl+Windows+NumPad Multiply` | `Ctrl+Windows+\` |
+| Cycle through categories of stored entries | Unassigned | Unassigned |
+| Next stored entry in the current category | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |
+| Previous stored entry in the current category | `Ctrl+Windows+NumPad Minus` | `Ctrl+Windows+[` |
+| Put the selected stored entry on the system clipboard | `Ctrl+Windows+NumPad Multiply` | `Ctrl+Windows+\` |
 | Save the current clipboard image | `NVDA+Alt+PrintScreen` | `NVDA+Alt+PrintScreen` |
