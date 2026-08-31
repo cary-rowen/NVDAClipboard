@@ -35,10 +35,17 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.2.5",
+	addon_version="0.2.6",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.2.5
+	addon_changelog=_("""### 0.2.6
+
+- Added global navigation across clipboard history and user categories for stored entries. The category cycling command is unassigned by default and can be configured in NVDA's Input Gestures dialog.
+- Updated the next, previous, and restore commands to operate within the selected category, and opened Clipboard Manager at the current global navigation position.
+- Added indexed category summary lookups for responsive repeated navigation.
+- Updated terminology, documentation, and Chinese translations.
+
+### 0.2.5
 
 - Improved Clipboard Manager search, file-group cleanup, and save behavior for more reliable editing and responsive operation.
 - Normalized line endings when pasting NVDA's last spoken text.
