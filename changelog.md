@@ -1,3 +1,10 @@
+### 0.2.5
+
+- Improved Clipboard Manager search, file-group cleanup, and save behavior for more reliable editing and responsive operation.
+- Normalized line endings when pasting NVDA's last spoken text.
+- Improved OneDrive token cache writes and synchronization reliability.
+- Removed redundant internal code and simplified maintenance tooling.
+
 ### 0.2.3
 
 - Improved temporary pasting of NVDA's last spoken text by retrying brief clipboard sequence races before failing.
