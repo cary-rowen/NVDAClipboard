@@ -12,6 +12,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import dataclass, replace
 from enum import Enum, auto
+from functools import partial
 from pathlib import Path
 from threading import BoundedSemaphore, Event
 from time import monotonic
@@ -1373,7 +1374,12 @@ class ClipboardController:
 			else:
 				item = self._clipboardItemFromSnapshot(snapshot)
 				if item is not None:
-					self._queueHistoryItem(item)
+					self._queueHistoryItem(
+						item,
+						expectedText=item.text
+						if source == _ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT
+						else None,
+					)
 		if shouldRecord and snapshot.canUpload and snapshot.text:
 			cloudSync = self.cloudSync
 			if cloudSync is not None:
@@ -1428,10 +1434,18 @@ class ClipboardController:
 			navigationText = self._summary
 		self.navigator.setText(navigationText)
 
-	def _queueHistoryItem(self, item: ClipboardItem, imageWasDropped: bool = False) -> None:
+	def _queueHistoryItem(
+		self,
+		item: ClipboardItem,
+		imageWasDropped: bool = False,
+		*,
+		expectedText: str | None = None,
+	) -> None:
 		"""Queue one immutable item for ordered history storage."""
 		future = self._historyExecutor.submit(self._storeHistoryItem, item, imageWasDropped)
-		future.add_done_callback(self._queueHistoryWriteCompletion)
+		future.add_done_callback(
+			partial(self._queueHistoryWriteCompletion, expectedText=expectedText),
+		)
 
 	def _queueImageHistorySnapshot(self, snapshot: ClipboardSnapshot, *, pngIsDecodable: bool) -> None:
 		"""Queue one image snapshot without allowing unbounded retained image data."""
@@ -1515,9 +1529,14 @@ class ClipboardController:
 			imageWasTooLarge=imageWasTooLarge or len(item.imageData or b"") > MAX_IMAGE_BYTES,
 		)
 
-	def _queueHistoryWriteCompletion(self, future: Future[_HistoryWriteResult]) -> None:
+	def _queueHistoryWriteCompletion(
+		self,
+		future: Future[_HistoryWriteResult],
+		*,
+		expectedText: str | None = None,
+	) -> None:
 		try:
-			wx.CallAfter(self._finishHistoryWrite, future)
+			wx.CallAfter(self._finishHistoryWrite, future, expectedText)
 		except RuntimeError:
 			if self._isStarted:
 				log.debugWarning("Could not schedule a clipboard history write result.", exc_info=True)
@@ -1527,7 +1546,11 @@ class ClipboardController:
 		self._imageHistorySlots.release()
 		self._queueHistoryWriteCompletion(future)
 
-	def _finishHistoryWrite(self, future: Future[_HistoryWriteResult]) -> None:
+	def _finishHistoryWrite(
+		self,
+		future: Future[_HistoryWriteResult],
+		expectedText: str | None = None,
+	) -> None:
 		"""Report history write results and refresh visible metadata on the main thread."""
 		if not self._isStarted:
 			return
@@ -1561,7 +1584,13 @@ class ClipboardController:
 			# Translators: Message shown when mixed clipboard content is retained as text only.
 			ui.message(_("The text was saved in history, but its image could not be stored"))
 		self.oneDriveSync.notifyLocalChange()
-		self._refreshManager()
+		if expectedText is None:
+			self._refreshManager()
+		else:
+			self._refreshManager(
+				preferredHistoryItemId=result.itemId,
+				expectedText=expectedText,
+			)
 
 	def _clipboardItemFromSnapshot(self, snapshot: ClipboardSnapshot) -> ClipboardItem | None:
 		"""Convert one supported snapshot to the fixed immutable storage model."""
@@ -2594,16 +2623,30 @@ class ClipboardController:
 	def _raiseUserStorageError(self, error: Exception) -> Never:
 		raise ValueError(self._formatItemError(error)) from error
 
-	def _refreshManager(self) -> None:
+	def _refreshManager(
+		self,
+		preferredHistoryItemId: int | None = None,
+		expectedText: str | None = None,
+	) -> None:
 		manager = self.manager
 		if manager is not None:
 			try:
-				wx.CallAfter(self._refreshManagerIfCurrent, manager)
+				wx.CallAfter(
+					self._refreshManagerIfCurrent,
+					manager,
+					preferredHistoryItemId,
+					expectedText,
+				)
 			except RuntimeError:
 				if self._isStarted:
 					log.debugWarning("Could not schedule a clipboard manager refresh.", exc_info=True)
 
-	def _refreshManagerIfCurrent(self, manager: ClipboardManagerFrame) -> None:
+	def _refreshManagerIfCurrent(
+		self,
+		manager: ClipboardManagerFrame,
+		preferredHistoryItemId: int | None = None,
+		expectedText: str | None = None,
+	) -> None:
 		"""Refresh a queued manager only while it still belongs to this controller."""
 		if not self._isStarted or self.manager is not manager:
 			return
@@ -2614,7 +2657,13 @@ class ClipboardController:
 		if isBeingDeleted:
 			self.manager = None
 		elif manager.IsShown():
-			manager.refreshFromController()
+			if preferredHistoryItemId is None and expectedText is None:
+				manager.refreshFromController()
+			else:
+				manager.refreshFromController(
+					preferredHistoryItemId=preferredHistoryItemId,
+					expectedText=expectedText,
+				)
 
 	def _clearCloudDialog(self) -> None:
 		self.cloudDialog = None

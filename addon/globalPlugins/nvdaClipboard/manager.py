@@ -554,13 +554,25 @@ class ClipboardManagerFrame(wx.Frame):
 		if destroyWindow:
 			self.Destroy()
 
-	def refreshFromController(self) -> None:
+	def refreshFromController(
+		self,
+		preferredHistoryItemId: int | None = None,
+		expectedText: str | None = None,
+	) -> None:
 		"""Refresh stored summaries while preserving the visible selection."""
 		try:
 			previousCategory = self._selectedCategory
 			previousActiveKey, previousActiveIndex, previousSelectedKeys = self._getSearchListState()
 			wasDirty = self._hasDirtyChanges()
 			wasDraft = self._contentEditable and self._contentItemKey is None
+			isPendingHistorySave = (
+				wasDraft
+				and not wasDirty
+				and expectedText is not None
+				and self._contentSourceText == expectedText
+				and self._baselineText == expectedText
+				and self.editor.GetValue() == expectedText
+			)
 			preservedEditorOffset: int | None = None
 			preservedEditorText: str | None = None
 			if self._contentEditable and self._contentItemKey is not None and not wasDirty:
@@ -575,7 +587,16 @@ class ClipboardManagerFrame(wx.Frame):
 				preferredIndex=previousActiveIndex if category == previousCategory else None,
 				selectedKeys=previousSelectedKeys if category == previousCategory else (),
 			)
-			if wasDraft and category == previousCategory:
+			if (
+				isPendingHistorySave
+				and category == previousCategory
+				and self.controller.isHistoryCategory(category)
+				and preferredHistoryItemId is not None
+				and preferredHistoryItemId in self._itemKeys
+			):
+				self._reloadItemsFromController(preferredKey=preferredHistoryItemId)
+				self._loadActiveItem(confirmDirty=False)
+			elif wasDraft and category == previousCategory:
 				self._contentActiveKey = self._getActiveItemKey()
 				self._updateUiState()
 			elif not wasDirty and not self._isSearchSessionActive:
