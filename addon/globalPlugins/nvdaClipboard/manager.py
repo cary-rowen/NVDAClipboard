@@ -40,7 +40,7 @@ from .storage import ItemNotFoundError
 from .storageModels import ClipboardItemType
 
 if TYPE_CHECKING:
-	from .controller import CategoryId, ClipboardController
+	from .controller import CategoryId, ClipboardController, MissingFileCleanupResult
 
 __all__ = ["ClipboardManagerFrame"]
 
@@ -1843,18 +1843,6 @@ class ClipboardManagerFrame(wx.Frame):
 		if not itemCount:
 			return
 		fileGroupKeys = self._getSelectedFileGroupKeys()
-		showRemoveMissingFiles = False
-		if fileGroupKeys:
-			category = self._getSelectedCategory()
-			if category is not None:
-				try:
-					showRemoveMissingFiles = self.controller.selectedFileGroupsHaveMissingFiles(
-						category,
-						fileGroupKeys,
-					)
-				except Exception as error:
-					self._showError(error)
-					return
 		menu = wx.Menu()
 		if itemCount == 1:
 			restoreItem = menu.Append(
@@ -1868,7 +1856,7 @@ class ClipboardManagerFrame(wx.Frame):
 			# Translators: Context menu command to move or collect selected entries.
 			_("&Move or Collect..."),
 		)
-		if showRemoveMissingFiles:
+		if fileGroupKeys:
 			removeMissingFilesItem = menu.Append(
 				wx.ID_ANY,
 				# Translators: Context menu command to remove missing paths from selected file groups.
@@ -2223,6 +2211,7 @@ class ClipboardManagerFrame(wx.Frame):
 		category = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
 		activeKey = self._getActiveItemKey()
+		selectedKeys = self._getSelectedItemKeys()
 		fileGroupKeys = self._getSelectedFileGroupKeys()
 		if category is None or index is None or activeKey is None or not fileGroupKeys:
 			return
@@ -2234,29 +2223,62 @@ class ClipboardManagerFrame(wx.Frame):
 		):
 			return
 		try:
-			result = self.controller.removeMissingFiles(category, fileGroupKeys)
-			if not result.changedCount:
-				# Translators: Message shown when selected file groups have no missing paths.
-				self._showInfo(_("No missing files"))
-				return
-			self._showInfo(
-				ngettext(
-					# Translators: Message shown after removing one or multiple missing paths from file groups.
-					"Removed {count} missing file",
-					"Removed {count} missing files",
-					result.removedCount,
-				).format(count=result.removedCount),
+			self.controller.startMissingFileCleanup(
+				category,
+				fileGroupKeys,
+				partial(
+					self._finishRemoveMissingFiles,
+					category=category,
+					index=index,
+					activeKey=activeKey,
+					selectedKeys=selectedKeys,
+					fileGroupKeys=fileGroupKeys,
+				),
 			)
-			preferredKey = result.replacementIds.get(activeKey, activeKey)
-			activeWillRemain = activeKey not in fileGroupKeys or activeKey in result.replacementIds
-			survivingNeighborKey = self._getSurvivingNeighborKey(index, fileGroupKeys)
-			self._reloadItemsFromController(
-				preferredKey=preferredKey if activeWillRemain else survivingNeighborKey,
-			)
-			if not self._isContentCurrent() and not self._hasDirtyChanges():
-				self._loadActiveItem(confirmDirty=False)
 		except Exception as error:
 			self._showError(error)
+
+	def _finishRemoveMissingFiles(
+		self,
+		result: MissingFileCleanupResult | Exception,
+		*,
+		category: CategoryId,
+		index: int,
+		activeKey: int,
+		selectedKeys: tuple[int, ...],
+		fileGroupKeys: tuple[int, ...],
+	) -> None:
+		"""Apply one missing-file cleanup result to the visible manager."""
+		if self._isBeingDestroyed or not self.IsShown():
+			return
+		if isinstance(result, Exception):
+			self._showError(result)
+			return
+		if not result.changedCount:
+			# Translators: Message shown when selected file groups have no missing paths.
+			self._showInfo(_("No missing files"))
+			return
+		self._showInfo(
+			ngettext(
+				# Translators: Message shown after removing one or multiple missing paths from file groups.
+				"Removed {count} missing file",
+				"Removed {count} missing files",
+				result.removedCount,
+			).format(count=result.removedCount),
+		)
+		if self._getSelectedCategory() != category:
+			return
+		if self._getActiveItemKey() != activeKey or self._getSelectedItemKeys() != selectedKeys:
+			self.refreshFromController()
+			return
+		preferredKey = result.replacementIds.get(activeKey, activeKey)
+		activeWillRemain = activeKey not in fileGroupKeys or activeKey in result.replacementIds
+		survivingNeighborKey = self._getSurvivingNeighborKey(index, fileGroupKeys)
+		self._reloadItemsFromController(
+			preferredKey=preferredKey if activeWillRemain else survivingNeighborKey,
+		)
+		if not self._isContentCurrent() and not self._hasDirtyChanges():
+			self._loadActiveItem(confirmDirty=False)
 
 	def _onSaveSelectedImage(self, event: wx.CommandEvent) -> None:
 		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):

@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from threading import BoundedSemaphore, Event
+from threading import BoundedSemaphore, Event, Thread
 from time import monotonic
 from typing import TYPE_CHECKING, Never
 
@@ -312,6 +312,7 @@ class ClipboardController:
 		self._pendingFileSizeReport: FileSizeCalculation | None = None
 		self._textStatisticsCalculation: TextStatisticsCalculation | None = None
 		self._pendingTextStatisticsReport: TextStatisticsCalculation | None = None
+		self._missingFileCleanupInProgress = False
 		# Translators: Summary used when the system clipboard is empty.
 		self._summary = _("Clipboard is empty")
 		self.navigator.setText(self._summary)
@@ -984,16 +985,6 @@ class ClipboardController:
 			canUpload=item.canUpload,
 		)
 
-	def selectedFileGroupsHaveMissingFiles(self, category: CategoryId, itemIds: tuple[int, ...]) -> bool:
-		"""Return whether selected file groups contain any missing paths."""
-		for itemId in itemIds:
-			item = self._getStoredItemContentById(category, itemId)
-			if item.contentType == ClipboardItemType.FILES and any(
-				_isMissingFilePath(filePath) for filePath in item.files
-			):
-				return True
-		return False
-
 	def getCurrentNavigationOffsetForText(self, text: str) -> int | None:
 		"""Return the navigation offset only when text is still the current clipboard text."""
 		if not (
@@ -1209,32 +1200,88 @@ class ClipboardController:
 			self._raiseUserStorageError(error)
 		self.oneDriveSync.notifyLocalChange()
 
-	def removeMissingFiles(self, category: CategoryId, itemIds: tuple[int, ...]) -> MissingFileCleanupResult:
-		"""Remove missing paths from selected file groups."""
+	def startMissingFileCleanup(
+		self,
+		category: CategoryId,
+		itemIds: tuple[int, ...],
+		onComplete: Callable[[MissingFileCleanupResult | Exception], None],
+	) -> None:
+		"""Start one missing-file cleanup worker unless one is already active."""
+		if not self._isStarted or self._missingFileCleanupInProgress:
+			return
+		self._missingFileCleanupInProgress = True
+
+		def run() -> None:
+			try:
+				missingPaths = frozenset(
+					filePath
+					for itemId in dict.fromkeys(itemIds)
+					for filePath in self._getStoredItemContentById(category, itemId).files
+					if _isMissingFilePath(filePath)
+				)
+				if not self._isStarted or not missingPaths:
+					result: MissingFileCleanupResult | Exception = MissingFileCleanupResult(0, 0, 0, {})
+				else:
+					try:
+						if self.isHistoryCategory(category):
+							changedCount, deletedCount, removedCount, replacementIds = (
+								self.storage.removeMissingHistoryFileReferences(itemIds, missingPaths)
+							)
+						else:
+							assert isinstance(category, str)
+							changedCount, deletedCount, removedCount, replacementIds = (
+								self.storage.removeMissingCategoryFileReferences(
+									category,
+									itemIds,
+									missingPaths,
+								)
+							)
+					except StorageError as error:
+						self._raiseUserStorageError(error)
+					result = MissingFileCleanupResult(
+						changedCount,
+						deletedCount,
+						removedCount,
+						replacementIds,
+					)
+			except Exception as error:
+				result = error
+			try:
+				wx.CallAfter(self._finishMissingFileCleanup, category, onComplete, result)
+			except RuntimeError:
+				self._missingFileCleanupInProgress = False
+				if self._isStarted:
+					log.debugWarning("Could not schedule a missing-file cleanup result.", exc_info=True)
+
 		try:
-			if self.isHistoryCategory(category):
-				changedCount, deletedCount, removedCount, replacementIds = (
-					self.storage.removeMissingHistoryFileReferences(
-						itemIds,
-						_isMissingFilePath,
-					)
-				)
-				if changedCount:
+			worker = Thread(
+				target=run,
+				name="nvdaClipboard.missingFileCleanup",
+				daemon=True,
+			)
+			worker.start()
+		except RuntimeError:
+			self._missingFileCleanupInProgress = False
+			raise
+
+	def _finishMissingFileCleanup(
+		self,
+		category: CategoryId,
+		onComplete: Callable[[MissingFileCleanupResult | Exception], None],
+		result: MissingFileCleanupResult | Exception,
+	) -> None:
+		"""Finish one missing-file cleanup on the NVDA thread."""
+		self._missingFileCleanupInProgress = False
+		if not self._isStarted:
+			return
+		if isinstance(result, MissingFileCleanupResult) and result.changedCount:
+			try:
+				if self.isHistoryCategory(category):
 					self._historyIndex = self.storage.getHistorySummaryAt(self._historyIndex)[1]
-			else:
-				assert isinstance(category, str)
-				changedCount, deletedCount, removedCount, replacementIds = (
-					self.storage.removeMissingCategoryFileReferences(
-						category,
-						itemIds,
-						_isMissingFilePath,
-					)
-				)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
-		if changedCount:
-			self.oneDriveSync.notifyLocalChange()
-		return MissingFileCleanupResult(changedCount, deletedCount, removedCount, replacementIds)
+				self.oneDriveSync.notifyLocalChange()
+			except Exception as error:
+				result = error
+		onComplete(result)
 
 	def createCategory(self, name: str) -> str:
 		"""Create a user category and return its stored name."""
