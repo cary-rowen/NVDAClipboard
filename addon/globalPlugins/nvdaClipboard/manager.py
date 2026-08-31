@@ -108,6 +108,9 @@ class ClipboardManagerFrame(wx.Frame):
 		self._categoryHasItems = False
 		self._itemTypeFilter: ClipboardItemType | None = None
 		self._viewFilterItems: dict[ClipboardItemType | None, wx.MenuItem] = {}
+		self._newItem: wx.MenuItem | None = None
+		self._openItem: wx.MenuItem | None = None
+		self._segmentChineseWordsItem: wx.MenuItem | None = None
 		self._textCleanupMenuItem: wx.MenuItem | None = None
 		self._lineOperationsMenuItem: wx.MenuItem | None = None
 		self._selectedCategory: CategoryId | None = None
@@ -126,16 +129,10 @@ class ClipboardManagerFrame(wx.Frame):
 			max_workers=1,
 			thread_name_prefix="nvdaClipboard.managerSearch",
 		)
-		self._searchRequestId = 0
-		self._searchQueryValue = ""
 		self._pendingSearchListState: tuple[int | None, int | None, tuple[int, ...]] | None = None
 		self._enterSearchResultsWhenReady = False
 		self._isSearchSessionActive = False
-		self._hasEnteredSearchResults = False
-		self._isCurrentSearchResultConfirmed = False
-		self._searchRestoreActiveIndex: int | None = None
-		self._searchRestoreActiveKey: int | None = None
-		self._searchRestoreSelectedKeys: tuple[int, ...] = ()
+		self._searchRestoreListState: tuple[int | None, int | None, tuple[int, ...]] = (None, None, ())
 		self._isBeingDestroyed = False
 		self._makeUi()
 		self._editorCommands = _ManagerEditorCommands(
@@ -233,12 +230,12 @@ class ClipboardManagerFrame(wx.Frame):
 	def _makeMenus(self) -> None:
 		menuBar = wx.MenuBar()
 		fileMenu = wx.Menu()
-		newItem = fileMenu.Append(
+		self._newItem = fileMenu.Append(
 			wx.ID_NEW,
 			# Translators: File menu command to start a blank clipboard text entry.
 			_("&New\tCtrl+N"),
 		)
-		openItem = fileMenu.Append(
+		self._openItem = fileMenu.Append(
 			wx.ID_OPEN,
 			# Translators: File menu command to open a text file as a draft.
 			_("&Open Text File...\tCtrl+O"),
@@ -296,7 +293,7 @@ class ClipboardManagerFrame(wx.Frame):
 			# Translators: Edit menu command to move to a line in content.
 			_("&Go to Line...\tCtrl+G"),
 		)
-		segmentChineseWordsItem = editMenu.Append(
+		self._segmentChineseWordsItem = editMenu.Append(
 			wx.ID_ANY,
 			# Translators: Edit menu command to insert spaces at Chinese word boundaries.
 			_("Segment Chinese &Words"),
@@ -387,7 +384,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self.Bind(
 			wx.EVT_MENU,
 			partial(self._onApplyTextTransform, transform=textTransforms.segmentChineseWords),
-			segmentChineseWordsItem,
+			self._segmentChineseWordsItem,
 		)
 		self.Bind(
 			wx.EVT_MENU,
@@ -502,8 +499,8 @@ class ClipboardManagerFrame(wx.Frame):
 		self.refreshCloudMenuState()
 
 		self.SetMenuBar(menuBar)
-		self.Bind(wx.EVT_MENU, self._onNewEntry, newItem)
-		self.Bind(wx.EVT_MENU, self._onOpenFile, openItem)
+		self.Bind(wx.EVT_MENU, self._onNewEntry, self._newItem)
+		self.Bind(wx.EVT_MENU, self._onOpenFile, self._openItem)
 		self.Bind(wx.EVT_MENU, self._onSaveAs, self.saveAsItem)
 		self.Bind(wx.EVT_MENU, self._onReplaceClipboardWithText, self.replaceClipboardItem)
 		self.Bind(wx.EVT_MENU, self._onSavePlainTextToCategory, self.savePlainTextToCategoryItem)
@@ -599,16 +596,19 @@ class ClipboardManagerFrame(wx.Frame):
 			elif wasDraft and category == previousCategory:
 				self._contentActiveKey = self._getActiveItemKey()
 				self._updateUiState()
-			elif not wasDirty and not self._isSearchSessionActive:
-				self._loadActiveItem(confirmDirty=False)
-				if (
-					preservedEditorOffset is not None
-					and preservedEditorText is not None
-					and self._contentSourceText == preservedEditorText
-				):
-					self._setEditorCodePointOffset(preservedEditorOffset)
+			elif not wasDirty:
+				if self._isSearchSessionActive:
+					self._loadActiveSearchResult()
+				else:
+					self._loadActiveItem(confirmDirty=False)
+					if (
+						preservedEditorOffset is not None
+						and preservedEditorText is not None
+						and self._contentSourceText == preservedEditorText
+					):
+						self._setEditorCodePointOffset(preservedEditorOffset)
 			else:
-				self._syncEnteredSearchResult()
+				self._updateUiState()
 		except Exception as error:
 			self._showError(error)
 
@@ -797,22 +797,21 @@ class ClipboardManagerFrame(wx.Frame):
 			return min(max(preferredIndex, 0), len(itemKeys) - 1)
 		return 0 if itemKeys else None
 
+	def _getCurrentListState(self) -> tuple[int | None, int | None, tuple[int, ...]]:
+		"""Return the active key, active index, and selected keys."""
+		return (self._getActiveItemKey(), self._getActiveItemIndex(), self._getSelectedItemKeys())
+
 	def _getSearchListState(self) -> tuple[int | None, int | None, tuple[int, ...]]:
 		"""Return stable list state, including state hidden by an in-progress search."""
 		if self._isSearchSessionActive:
 			if self._pendingSearchListState is not None:
 				return self._pendingSearchListState
-			if self._matchingSearchKeys is None and not self._hasEnteredSearchResults:
-				return (
-					self._searchRestoreActiveKey,
-					self._searchRestoreActiveIndex,
-					self._searchRestoreSelectedKeys,
-				)
-		return (self._getActiveItemKey(), self._getActiveItemIndex(), self._getSelectedItemKeys())
+			if self._matchingSearchKeys is None:
+				return self._searchRestoreListState
+		return self._getCurrentListState()
 
 	def _cancelSearchScan(self) -> None:
 		"""Cancel background search work and invalidate its queued completion."""
-		self._searchRequestId += 1
 		cancelEvent = self._searchCancelEvent
 		self._searchCancelEvent = None
 		if cancelEvent is not None:
@@ -845,7 +844,6 @@ class ClipboardManagerFrame(wx.Frame):
 			)
 		cancelEvent = Event()
 		self._searchCancelEvent = cancelEvent
-		requestId = self._searchRequestId
 		future = self._searchExecutor.submit(
 			self.controller.getSearchResultKeys,
 			category,
@@ -854,37 +852,32 @@ class ClipboardManagerFrame(wx.Frame):
 			cancelEvent,
 		)
 		self._searchFuture = future
-		future.add_done_callback(
-			lambda completedFuture: self._queueSearchScanCompletion(requestId, completedFuture),
-		)
+		future.add_done_callback(self._queueSearchScanCompletion)
 
 	def _queueSearchScanCompletion(
 		self,
-		requestId: int,
 		future: Future[tuple[int, ...]],
 	) -> None:
 		"""Queue one live worker completion for the wx thread."""
-		if self._isBeingDestroyed or requestId != self._searchRequestId:
+		if self._isBeingDestroyed or future is not self._searchFuture:
 			return
 		try:
-			wx.CallAfter(self._finishSearchScan, requestId, future)
+			wx.CallAfter(self._finishSearchScan, future)
 		except RuntimeError:
-			if self._isBeingDestroyed or requestId != self._searchRequestId:
+			if self._isBeingDestroyed or future is not self._searchFuture:
 				return
-			if future is self._searchFuture:
-				self._searchFuture = None
-				self._searchCancelEvent = None
-				self._pendingSearchListState = None
-				self._enterSearchResultsWhenReady = False
+			self._searchFuture = None
+			self._searchCancelEvent = None
+			self._pendingSearchListState = None
+			self._enterSearchResultsWhenReady = False
 			log.debugWarning("Could not schedule a clipboard manager search result.", exc_info=True)
 
 	def _finishSearchScan(
 		self,
-		requestId: int,
 		future: Future[tuple[int, ...]],
 	) -> None:
 		"""Apply one current background result on the wx thread."""
-		if self._isBeingDestroyed or requestId != self._searchRequestId:
+		if self._isBeingDestroyed or future is not self._searchFuture:
 			return
 		self._searchFuture = None
 		self._searchCancelEvent = None
@@ -915,7 +908,7 @@ class ClipboardManagerFrame(wx.Frame):
 			self._enterSearchResultsWhenReady = False
 			self._moveIntoSearchResults()
 		else:
-			self._syncEnteredSearchResult()
+			self._loadActiveSearchResult()
 
 	def _updateItemsLabel(self, resultCount: int) -> None:
 		"""Show passive search status and the completed result count."""
@@ -950,30 +943,29 @@ class ClipboardManagerFrame(wx.Frame):
 		self.searchCtrl.ChangeValue("")
 		self._searchKeywords = ()
 		self._matchingSearchKeys = None
-		self._searchQueryValue = ""
 		self._pendingSearchListState = None
 		self._enterSearchResultsWhenReady = False
 		self._isSearchSessionActive = False
-		self._hasEnteredSearchResults = False
-		self._isCurrentSearchResultConfirmed = False
-		self._searchRestoreActiveIndex = None
-		self._searchRestoreActiveKey = None
-		self._searchRestoreSelectedKeys = ()
+		self._searchRestoreListState = (None, None, ())
+		self.editor.SetEditable(self._contentEditable and self._isContentCurrent())
 		self.clearSearchButton.Disable()
 		self.categoryList.Enable(bool(self._categoryIds))
 		self._updateItemsLabel(0)
 		if clearEntries:
 			self._allEntries = ()
 
-	def _beginSearchSession(self) -> None:
-		"""Capture stable list state once, before the first debounced filter update."""
+	def _beginSearchSession(self) -> bool:
+		"""Reject drafts or edits and capture state before filtering."""
 		if self._isSearchSessionActive:
-			return
-		self._searchRestoreActiveIndex = self._getActiveItemIndex()
-		self._searchRestoreActiveKey = self._getActiveItemKey()
-		self._searchRestoreSelectedKeys = self._getSelectedItemKeys()
+			return True
+		if self._contentEditable and (self._contentItemKey is None or self._hasDirtyChanges()):
+			return False
+		self._searchRestoreListState = self._getCurrentListState()
 		self._isSearchSessionActive = True
 		self.categoryList.Disable()
+		self.editor.SetEditable(False)
+		self._updateUiState()
+		return True
 
 	def _applySearchQuery(self) -> bool:
 		"""Start filtering the current query without moving keyboard focus."""
@@ -982,12 +974,12 @@ class ClipboardManagerFrame(wx.Frame):
 		keywords = splitSearchKeywords(normalizeSearchText(queryValue))
 		if not keywords:
 			return self._exitSearch()
-		self._beginSearchSession()
+		if not self._beginSearchSession():
+			self.searchCtrl.ChangeValue("")
+			self.clearSearchButton.Disable()
+			return False
 		keywordsChanged = keywords != self._searchKeywords
-		if keywordsChanged and self._isCurrentSearchResultConfirmed and self._isStoredContentCurrent():
-			self._saveSearchRestoreState()
 		previousKey, previousIndex, selectedKeys = self._getSearchListState()
-		self._searchQueryValue = queryValue
 		if not keywordsChanged:
 			if self._searchFuture is None and (
 				self._matchingSearchKeys is None or self._pendingSearchListState is not None
@@ -1000,7 +992,6 @@ class ClipboardManagerFrame(wx.Frame):
 				)
 			self.clearSearchButton.Enable()
 			return True
-		self._isCurrentSearchResultConfirmed = False
 		self._searchKeywords = keywords
 		self.clearSearchButton.Enable()
 		self._startSearchScan(
@@ -1021,67 +1012,23 @@ class ClipboardManagerFrame(wx.Frame):
 			self.searchCtrl.SetFocus()
 
 	def _exitSearch(self) -> bool:
-		"""Restore full entries using either pre-search or confirmed result state."""
+		"""Exit search and restore the list state captured before searching."""
 		self._enterSearchResultsWhenReady = False
 		self._cancelPendingSearch()
 		self._cancelSearchScan()
-		restoreStoredContent = self._hasEnteredSearchResults
-		if restoreStoredContent:
-			useLiveState = self._isCurrentSearchResultConfirmed and self._isStoredContentCurrent()
-			selectedKeys = self._getSelectedItemKeys() if useLiveState else self._searchRestoreSelectedKeys
-			preferredIndex = self._getActiveItemIndex() if useLiveState else self._searchRestoreActiveIndex
-			preferredKey = self._contentActiveKey if useLiveState else self._searchRestoreActiveKey
-		elif self._isSearchSessionActive:
-			selectedKeys = self._searchRestoreSelectedKeys
-			preferredIndex = self._searchRestoreActiveIndex
-			preferredKey = self._searchRestoreActiveKey
+		if self._isSearchSessionActive:
+			preferredKey, preferredIndex, selectedKeys = self._searchRestoreListState
 		else:
-			selectedKeys = self._getSelectedItemKeys()
-			preferredIndex = self._getActiveItemIndex()
-			preferredKey = self._getActiveItemKey()
+			preferredKey, preferredIndex, selectedKeys = self._getCurrentListState()
 		category = self._getSelectedCategory()
-		itemKeys = tuple(
-			itemKey
-			for itemKey, _label, itemKind in self._allEntries
-			if self._itemTypeFilter is None or itemKind == self._itemTypeFilter
-		)
-		selectedKeySet = set(selectedKeys)
-		selectedIndices = [index for index, key in enumerate(itemKeys) if key in selectedKeySet]
-		targetIndex = self._chooseActiveItemIndex(
-			itemKeys,
-			selectedIndices,
-			preferredKey,
-			preferredIndex,
-			preferFirstResult=False,
-		)
-		targetKey = itemKeys[targetIndex] if targetIndex is not None else None
-		contentKey = self._contentItemKey if restoreStoredContent else self._contentActiveKey
-		contentMatchesTarget = (self._contentCategory, contentKey) == (category, targetKey) and (
-			not restoreStoredContent or contentKey is not None
-		)
-		if not contentMatchesTarget and self._hasDirtyChanges():
-			if not self._confirmDirtyChanges():
-				currentKeywords = splitSearchKeywords(normalizeSearchText(self.searchCtrl.GetValue()))
-				restoredKeywords = splitSearchKeywords(normalizeSearchText(self._searchQueryValue))
-				if not currentKeywords and restoredKeywords:
-					self.searchCtrl.ChangeValue(self._searchQueryValue)
-					currentKeywords = restoredKeywords
-				if currentKeywords:
-					self._applySearchQuery()
-				else:
-					self._resetSearchState()
-				self.searchCtrl.SetFocus()
-				return False
 		self._resetSearchState()
 		self._refreshItems(
 			preferredKey=preferredKey,
 			preferredIndex=preferredIndex,
 			selectedKeys=selectedKeys,
 		)
-		isContentCurrent = (
-			self._isStoredContentCurrent() if restoreStoredContent else self._isContentCurrent()
-		)
-		if not isContentCurrent:
+		self.editor.SetEditable(self._contentEditable and self._isContentCurrent())
+		if not self._isContentCurrent():
 			try:
 				self._loadActiveItem(confirmDirty=False)
 			except Exception:
@@ -1092,7 +1039,7 @@ class ClipboardManagerFrame(wx.Frame):
 		return True
 
 	def _enterSearchResults(self) -> None:
-		"""Move from search to the best matching result, confirming a content change."""
+		"""Move from search to the best matching result and preview it."""
 		if not self._applySearchQuery():
 			return
 		if not self._searchKeywords:
@@ -1110,9 +1057,9 @@ class ClipboardManagerFrame(wx.Frame):
 			ui.message(_("No matching entries."))
 			self.searchCtrl.SetFocus()
 			return
-		preferredKey = (
-			self._contentActiveKey if self._hasEnteredSearchResults else self._searchRestoreActiveKey
-		)
+		preferredKey = self._getActiveItemKey()
+		if preferredKey is None:
+			preferredKey = self._searchRestoreListState[0]
 		targetKey = preferredKey if preferredKey in self._itemKeys else self._itemKeys[0]
 		targetIndex = self._itemKeys.index(targetKey)
 		self._isRefreshingList = True
@@ -1124,19 +1071,25 @@ class ClipboardManagerFrame(wx.Frame):
 		self._activeItemIndex = targetIndex
 		self._activeItemKey = targetKey
 		if not self._isStoredContentCurrent():
-			if not self._loadActiveItem():
+			if not self._loadActiveItem(confirmDirty=False):
 				self.searchCtrl.SetFocus()
 				return
-		self._markSearchResultConfirmed()
 		self.itemList.SetFocus()
 		self._updateUiState()
 
 	def _onSearchTextChanged(self, event: wx.CommandEvent) -> None:
 		"""Debounce live search after the query text changes."""
 		self._enterSearchResultsWhenReady = False
-		if self.searchCtrl.GetValue():
-			self._beginSearchSession()
-		self.clearSearchButton.Enable(bool(self.searchCtrl.GetValue()) or self._isSearchSessionActive)
+		queryValue = self.searchCtrl.GetValue()
+		if queryValue and not self._isSearchSessionActive:
+			keywords = splitSearchKeywords(normalizeSearchText(queryValue))
+			if keywords and not self._beginSearchSession():
+				self._cancelPendingSearch()
+				self.searchCtrl.ChangeValue("")
+				self.clearSearchButton.Disable()
+				event.Skip()
+				return
+		self.clearSearchButton.Enable(bool(queryValue) or self._isSearchSessionActive)
 		if self._searchTimer is None:
 			self._searchTimer = wx.CallLater(_SEARCH_DELAY_MS, self._runScheduledSearch)
 		else:
@@ -1150,10 +1103,8 @@ class ClipboardManagerFrame(wx.Frame):
 		except Exception as error:
 			self._showError(error)
 
-	def _prepareSearchListInteraction(self, *, enterWhenReady: bool) -> bool:
+	def _prepareSearchListInteraction(self, *, enterWhenReady: bool = False) -> bool:
 		"""Flush debounce and reject list actions until current results are ready."""
-		if not self._isSearchSessionActive:
-			return True
 		try:
 			if self._searchTimer is not None and not self._applySearchQuery():
 				return False
@@ -1178,29 +1129,31 @@ class ClipboardManagerFrame(wx.Frame):
 		return True
 
 	def _onItemListSetFocus(self, event: wx.FocusEvent) -> None:
-		"""Confirm the focused search result even when its row focus did not change."""
+		"""Load the focused search result even when its row focus did not change."""
 		event.Skip()
 		if self._isSearchSessionActive and self._prepareSearchListInteraction(enterWhenReady=True):
-			wx.CallAfter(self._activateFocusedSearchResult)
+			wx.CallAfter(self._loadActiveSearchResult, requireListFocus=True)
 
-	def _activateFocusedSearchResult(self) -> None:
-		"""Load the focused result after a successful move into the search list."""
+	def _loadActiveSearchResult(self, *, requireListFocus: bool = False) -> None:
+		"""Load the active search result when completed results are available."""
 		if (
 			self._isBeingDestroyed
 			or not self._isSearchSessionActive
 			or self._searchFuture is not None
 			or self._matchingSearchKeys is None
-			or self.FindFocus() is not self.itemList
+			or (requireListFocus and self.FindFocus() is not self.itemList)
 		):
 			return
 		category = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
 		key = self._getActiveItemKey()
-		if category is None or index is None or key is None:
+		if category is None:
 			return
-		needsLoad = not self._isStoredContentCurrent()
+		if index is None or key is None:
+			self._clearContent(category)
+			return
 		try:
-			if needsLoad and not self._loadActiveItem():
+			if not self._isStoredContentCurrent() and not self._loadActiveItem(confirmDirty=False):
 				self.searchCtrl.SetFocus()
 				return
 		except Exception as error:
@@ -1209,61 +1162,7 @@ class ClipboardManagerFrame(wx.Frame):
 			return
 		self._activeItemIndex = self._getActiveItemIndex()
 		self._activeItemKey = self._getActiveItemKey()
-		self._markSearchResultConfirmed()
 		self._updateUiState()
-
-	def _markSearchResultConfirmed(self) -> None:
-		"""Remember the active item and selection as the latest confirmed search state."""
-		if not self._isStoredContentCurrent():
-			self._isCurrentSearchResultConfirmed = False
-			return
-		self._hasEnteredSearchResults = True
-		self._isCurrentSearchResultConfirmed = True
-		self._saveSearchRestoreState()
-
-	def _saveSearchRestoreState(self) -> None:
-		"""Save the active item and selection restored when search exits."""
-		self._searchRestoreActiveIndex = self._getActiveItemIndex()
-		self._searchRestoreActiveKey = self._getActiveItemKey()
-		self._searchRestoreSelectedKeys = self._getSelectedItemKeys()
-
-	def _syncEnteredSearchResult(self) -> None:
-		"""Keep confirmed search content aligned after a list refresh without moving focus."""
-		if (
-			not self._isCurrentSearchResultConfirmed
-			or self._searchFuture is not None
-			or self._matchingSearchKeys is None
-		):
-			return
-		focus = self.FindFocus()
-		if focus is self.searchCtrl:
-			if not self._isStoredContentCurrent():
-				self._isCurrentSearchResultConfirmed = False
-			return
-		if self._getActiveItemKey() is None:
-			self._isCurrentSearchResultConfirmed = False
-			if self._hasDirtyChanges():
-				if focus is self.itemList:
-					self.searchCtrl.SetFocus()
-			else:
-				self._clearContent(self._getSelectedCategory())
-			return
-		if focus is self.itemList:
-			wx.CallAfter(self._activateFocusedSearchResult)
-			return
-		if self._isStoredContentCurrent():
-			self._markSearchResultConfirmed()
-			return
-		if self._hasDirtyChanges():
-			self._isCurrentSearchResultConfirmed = False
-			return
-		try:
-			self._loadActiveItem(confirmDirty=False)
-			self._markSearchResultConfirmed()
-		except Exception as error:
-			self._isCurrentSearchResultConfirmed = False
-			self._showError(error)
-			self.searchCtrl.SetFocus()
 
 	def _loadActiveItem(self, *, confirmDirty: bool = True) -> bool:
 		"""Load the active stored item into the content control."""
@@ -1334,14 +1233,10 @@ class ClipboardManagerFrame(wx.Frame):
 		isDraft: bool = False,
 	) -> None:
 		"""Replace content silently and record its source and capabilities."""
-		if self._isCurrentSearchResultConfirmed and self._isStoredContentCurrent():
-			self._saveSearchRestoreState()
 		self._contentEditable = isEditable
 		self._contentCategory = category
 		self._contentItemKey = itemKey
 		self._contentActiveKey = self._getActiveItemKey()
-		if self._isSearchSessionActive and (itemKey is None or itemKey != self._contentActiveKey):
-			self._isCurrentSearchResultConfirmed = False
 		self._contentKind = kind
 		self._contentHasImage = hasImage
 		self._contentCanUpload = canUpload
@@ -1350,7 +1245,7 @@ class ClipboardManagerFrame(wx.Frame):
 		try:
 			self.editor.SetEditable(True)
 			self.editor.ChangeValue(text)
-			self.editor.SetEditable(isEditable)
+			self.editor.SetEditable(isEditable and not self._isSearchSessionActive)
 			self.editor.SetName(contentKind)
 			self.contentLabel.SetLabel(
 				# Translators: Dynamic label for manager content. ``kind`` describes the selected content type.
@@ -1459,8 +1354,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self._itemLoadTimer = None
 		isSearchResult = self._isSearchSessionActive and self.FindFocus() is self.itemList
 		try:
-			if self._loadActiveItem() and isSearchResult:
-				self._markSearchResultConfirmed()
+			if self._loadActiveItem(confirmDirty=not self._isSearchSessionActive) and isSearchResult:
 				self._updateUiState()
 		except Exception as error:
 			self._showError(error)
@@ -1476,7 +1370,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onContentChanged(self, event: wx.CommandEvent) -> None:
 		"""Mark editable content for a deferred baseline comparison."""
-		if not self._isSettingContent and self._contentEditable:
+		if not self._isSettingContent and self._contentEditable and not self._isSearchSessionActive:
 			self._isDirty = True
 			self._dirtyStateNeedsCheck = True
 			self._updateUiState()
@@ -1519,7 +1413,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _saveVisibleContent(self, *, closeAfterSave: bool) -> bool:
 		"""Save the current editor text, optionally closing the manager."""
-		if not self._isContentCurrent() or not self._contentEditable:
+		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
 			return False
 		category = self._getSelectedCategory()
 		if category is None:
@@ -1688,20 +1582,26 @@ class ClipboardManagerFrame(wx.Frame):
 		isCurrentContent = self._isContentCurrent()
 		hasContent = isCurrentContent and self.editor.GetLastPosition() != 0
 		hasTextContent = hasContent and self._contentKind != ClipboardItemType.IMAGE
+		canEditContent = isCurrentContent and self._contentEditable and not self._isSearchSessionActive
 		self._updateSaveMenuLabels()
+		if self._newItem is not None:
+			self._newItem.Enable(not self._isSearchSessionActive)
+		if self._openItem is not None:
+			self._openItem.Enable(not self._isSearchSessionActive)
 		self.saveAsItem.Enable(hasTextContent)
-		self.replaceClipboardItem.Enable(isCurrentContent and self._contentEditable)
-		self.savePlainTextToCategoryItem.Enable(hasContent and self._contentEditable and hasCategory)
+		self.replaceClipboardItem.Enable(canEditContent)
+		self.savePlainTextToCategoryItem.Enable(hasContent and canEditContent and hasCategory)
 		self.findItem.Enable(hasTextContent)
 		self.continueFindItem.Enable(hasTextContent)
 		self.previousFindItem.Enable(hasTextContent)
-		self.replaceItem.Enable(isCurrentContent and self._contentEditable)
+		self.replaceItem.Enable(canEditContent)
 		self.gotoLineItem.Enable(hasTextContent)
-		hasEditableContent = isCurrentContent and self._contentEditable
+		if self._segmentChineseWordsItem is not None:
+			self._segmentChineseWordsItem.Enable(canEditContent)
 		if self._textCleanupMenuItem is not None:
-			self._textCleanupMenuItem.Enable(hasEditableContent)
+			self._textCleanupMenuItem.Enable(canEditContent)
 		if self._lineOperationsMenuItem is not None:
-			self._lineOperationsMenuItem.Enable(hasEditableContent)
+			self._lineOperationsMenuItem.Enable(canEditContent)
 
 	def _showError(self, error: Exception) -> None:
 		if not isinstance(error, (ValueError, re.error)):
@@ -1745,6 +1645,8 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onCategoryContextMenu(self, event: wx.ContextMenuEvent) -> None:
 		"""Select the clicked category and show commands for it."""
+		if getattr(self, "_isSearchSessionActive", False):
+			return
 		eventPosition = event.GetPosition()
 		if eventPosition != wx.DefaultPosition:
 			selection = self.categoryList.HitTest(self.categoryList.ScreenToClient(eventPosition))
@@ -1783,7 +1685,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onItemContextMenu(self, event: wx.ContextMenuEvent) -> None:
 		"""Prepare the targeted entries and show their context menu."""
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		eventPosition = event.GetPosition()
 		previousActiveKey = self._activeItemKey
@@ -1800,7 +1702,7 @@ class ClipboardManagerFrame(wx.Frame):
 		try:
 			needsLoad = activeChanged or (self._contentCategory, self._contentItemKey) != (category, key)
 			if needsLoad:
-				if not self._loadActiveItem():
+				if not self._loadActiveItem(confirmDirty=not self._isSearchSessionActive):
 					if self._isSearchSessionActive:
 						self.searchCtrl.SetFocus()
 					return
@@ -1810,8 +1712,6 @@ class ClipboardManagerFrame(wx.Frame):
 		except Exception as error:
 			self._showError(error)
 			return
-		if self._isSearchSessionActive:
-			self._markSearchResultConfirmed()
 		itemCount = self.itemList.GetSelectedItemCount()
 		self._showItemContextMenu(eventPosition, index, itemCount)
 
@@ -1911,36 +1811,13 @@ class ClipboardManagerFrame(wx.Frame):
 				return
 		previousKey, previousIndex, selectedKeys = self._getSearchListState()
 		if self._isSearchSessionActive:
-			focus = self.FindFocus()
-			contentEntry = next(
-				(
-					entry
-					for entry in self._allEntries
-					if (self._contentCategory, entry[0])
-					== (self._getSelectedCategory(), self._contentActiveKey)
-				),
-				None,
-			)
-			contentSurvives = contentEntry is not None and (itemType is None or contentEntry[2] == itemType)
-			switchContent = (
-				focus is not self.searchCtrl
-				and self._hasEnteredSearchResults
-				and self._isContentCurrent()
-				and not contentSurvives
-			)
-			if switchContent and self._hasDirtyChanges() and not self._confirmDirtyChanges():
-				self._viewFilterItems[previousFilter].Check(True)
-				self.searchCtrl.SetFocus()
-				return
 			self._itemTypeFilter = itemType
-			if switchContent:
-				self._isCurrentSearchResultConfirmed = True
 			self._refreshItems(
 				preferredKey=previousKey,
 				preferredIndex=previousIndex,
 				selectedKeys=selectedKeys,
 			)
-			self._syncEnteredSearchResult()
+			self._loadActiveSearchResult()
 			return
 		selectedKind = self._itemKinds[previousIndex] if previousIndex is not None else None
 		selectedEntrySurvives = previousKey is not None and (itemType is None or selectedKind == itemType)
@@ -1973,7 +1850,11 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _selectCategory(self, selection: int) -> bool:
 		"""Select and load one category, restoring the previous selection when cancelled."""
-		if selection == wx.NOT_FOUND or selection >= len(self._categoryIds):
+		if (
+			getattr(self, "_isSearchSessionActive", False)
+			or selection == wx.NOT_FOUND
+			or selection >= len(self._categoryIds)
+		):
 			return False
 		self.categoryList.SetSelection(selection)
 		category = self._categoryIds[selection]
@@ -2005,17 +1886,14 @@ class ClipboardManagerFrame(wx.Frame):
 		activeChanged = self._getActiveItemKey() != self._activeItemKey
 		if not activeChanged:
 			if self._isSearchSessionActive:
-				self._activateFocusedSearchResult()
+				self._loadActiveSearchResult(requireListFocus=True)
 			return
 		self._playActiveItemCue()
 		if self._isSearchSessionActive:
-			if self._hasDirtyChanges():
-				self._activateFocusedSearchResult()
-			else:
-				self._activeItemIndex = self._getActiveItemIndex()
-				self._activeItemKey = self._getActiveItemKey()
-				self._updateUiState()
-				self._scheduleActiveItemLoad()
+			self._activeItemIndex = self._getActiveItemIndex()
+			self._activeItemKey = self._getActiveItemKey()
+			self._updateUiState()
+			self._scheduleActiveItemLoad()
 			return
 		if self._hasDirtyChanges():
 			try:
@@ -2100,7 +1978,7 @@ class ClipboardManagerFrame(wx.Frame):
 			self._showError(error)
 
 	def _onRestoreItemToClipboard(self, event: wx.Event) -> None:
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		category = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
@@ -2114,7 +1992,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onTransferItemsToCategory(self, event: wx.CommandEvent) -> None:
 		"""Move or collect the selected entries in one operation."""
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		sourceCategory = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
@@ -2173,7 +2051,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onDeleteItems(self, event: wx.Event) -> None:
 		"""Delete the selected entries in one operation."""
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		category = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
@@ -2206,7 +2084,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onRemoveMissingFiles(self, event: wx.Event) -> None:
 		"""Remove missing paths from the selected file groups."""
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		category = self._getSelectedCategory()
 		index = self._getActiveItemIndex()
@@ -2281,7 +2159,7 @@ class ClipboardManagerFrame(wx.Frame):
 			self._loadActiveItem(confirmDirty=False)
 
 	def _onSaveSelectedImage(self, event: wx.CommandEvent) -> None:
-		if self._isSearchSessionActive and not self._prepareSearchListInteraction(enterWhenReady=False):
+		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		if not self._isContentCurrent():
 			return
@@ -2297,12 +2175,16 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onNewEntry(self, event: wx.CommandEvent) -> None:
 		"""Start a blank plain-text entry in the selected category."""
+		if getattr(self, "_isSearchSessionActive", False):
+			return
 		if not self._confirmDirtyChanges():
 			return
 		self._startPlainTextDraft()
 		self.editor.SetFocus()
 
 	def _onOpenFile(self, event: wx.CommandEvent) -> None:
+		if getattr(self, "_isSearchSessionActive", False):
+			return
 		if not self._confirmDirtyChanges():
 			return
 		dialog = wx.FileDialog(
@@ -2394,7 +2276,11 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onReplace(self, event: wx.CommandEvent) -> None:
 		"""Open the editor replacement dialog for editable content."""
-		if not self._isContentCurrent() or not self._contentEditable:
+		if (
+			getattr(self, "_isSearchSessionActive", False)
+			or not self._isContentCurrent()
+			or not self._contentEditable
+		):
 			return
 		self._editorCommands.showReplace()
 
@@ -2415,7 +2301,11 @@ class ClipboardManagerFrame(wx.Frame):
 		transform: Callable[[str], str],
 	) -> None:
 		"""Apply one text transform to the current editable content."""
-		if not self._isContentCurrent() or not self._contentEditable:
+		if (
+			getattr(self, "_isSearchSessionActive", False)
+			or not self._isContentCurrent()
+			or not self._contentEditable
+		):
 			return
 		textTransforms.applyEditorTextTransform(self.editor, transform, lineWise=True)
 
@@ -2494,9 +2384,7 @@ class ClipboardManagerFrame(wx.Frame):
 			self.Close()
 			return
 		if self.FindFocus() is self.itemList and keyCode == ord("A") and modifiers == wx.MOD_CONTROL:
-			if self._isSearchSessionActive and not self._prepareSearchListInteraction(
-				enterWhenReady=False,
-			):
+			if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 				return
 			self.itemList.SetItemState(-1, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
 			return
