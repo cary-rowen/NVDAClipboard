@@ -1,3 +1,8 @@
+# A part of the NVDA Clipboard add-on for NVDA.
+# Copyright (C) 2026 Cary-rowen <cary-rowen@outlook.com>
+# This file is covered by the GNU General Public License.
+# See the file COPYING.txt for more details.
+
 """Tests for clipboard manager source-to-editor offset conversion."""
 
 from __future__ import annotations

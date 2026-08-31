@@ -1,5 +1,5 @@
 # A part of the NVDA Clipboard add-on for NVDA.
-# Copyright (C) 2026 Cary-rowen
+# Copyright (C) 2026 Cary-rowen <cary-rowen@outlook.com>
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
@@ -52,7 +52,7 @@ Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."
 - Improved OneDrive token cache writes and synchronization reliability.
 - Removed redundant internal code and simplified maintenance tooling."""),
 	# Author(s)
-	addon_author="Cary-rowen <manchen_0528@outlook.com>",
+	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
 	addon_url="https://www.nvdacn.com/",
 	# URL for the add-on repository where the source code can be found
