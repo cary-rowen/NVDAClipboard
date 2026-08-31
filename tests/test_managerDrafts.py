@@ -162,6 +162,55 @@ class ManagerDraftTests(unittest.TestCase):
 		self.assertEqual(2, manager._contentActiveKey)
 		manager._loadActiveItem.assert_not_called()
 
+	def testSystemClipboardSaveBindsReturnedHistoryItem(self) -> None:
+		"""Bind a clean saved clipboard draft to the history item returned by storage."""
+		editor = Mock()
+		editor.GetValue.return_value = "saved"
+		reloadItems = Mock()
+		manager = SimpleNamespace(
+			_baselineText="saved",
+			_contentActiveKey=1,
+			_contentEditable=True,
+			_contentItemKey=None,
+			_contentSourceText="saved",
+			_dirtyStateNeedsCheck=False,
+			_isDirty=False,
+			_isSearchSessionActive=False,
+			_itemKeys=(42,),
+			_selectedCategory="history",
+			_getActiveItemKey=Mock(return_value=1),
+			_getSearchListState=Mock(return_value=(1, 0, (1,))),
+			_getSelectedCategory=Mock(return_value="history"),
+			_hasDirtyChanges=Mock(return_value=False),
+			_loadActiveItem=Mock(),
+			_refreshCategories=Mock(),
+			_reloadItemsFromController=reloadItems,
+			_resetSearchState=Mock(),
+			_showError=Mock(),
+			_syncEnteredSearchResult=Mock(),
+			_updateUiState=Mock(),
+			controller=SimpleNamespace(isHistoryCategory=Mock(return_value=True)),
+			editor=editor,
+		)
+
+		def loadActiveItem(*, confirmDirty: bool) -> None:
+			self.assertFalse(confirmDirty)
+			manager._contentItemKey = 42
+			manager._contentActiveKey = 42
+
+		manager._loadActiveItem.side_effect = loadActiveItem
+
+		_refreshFromController(manager, preferredHistoryItemId=42, expectedText="saved")
+
+		self.assertEqual(2, reloadItems.call_count)
+		self.assertEqual(
+			{"preferredKey": 42},
+			reloadItems.call_args.kwargs,
+		)
+		manager._loadActiveItem.assert_called_once_with(confirmDirty=False)
+		self.assertEqual(42, manager._contentItemKey)
+		self.assertEqual(42, manager._contentActiveKey)
+
 	def testRefreshPreservesEditorInsertionPointForCurrentStoredContent(self) -> None:
 		"""Keep the editor cursor where it was when a copy triggers a refresh."""
 		manager = SimpleNamespace(
