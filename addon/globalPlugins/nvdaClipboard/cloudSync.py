@@ -388,7 +388,10 @@ class CloudSyncManager:
 			return False
 		# Translators: Message shown when another cloud account action is still running.
 		self._finish(
-			False, _("Another Tiantan Cloud Clipboard account action is in progress"), onDone, announce
+			False,
+			_("Another Tiantan Cloud Clipboard account action is in progress"),
+			onDone,
+			announce,
 		)
 		return True
 
