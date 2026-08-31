@@ -35,12 +35,15 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.2.3",
+	addon_version="0.2.5",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.2.3
+	addon_changelog=_("""### 0.2.5
 
-- Improved temporary pasting of NVDA's last spoken text by retrying brief clipboard sequence races before failing."""),
+- Improved Clipboard Manager search, file-group cleanup, and save behavior for more reliable editing and responsive operation.
+- Normalized line endings when pasting NVDA's last spoken text.
+- Improved OneDrive token cache writes and synchronization reliability.
+- Removed redundant internal code and simplified maintenance tooling."""),
 	# Author(s)
 	addon_author="Cary-rowen <manchen_0528@outlook.com>",
 	# URL for the add-on documentation support
