@@ -41,6 +41,7 @@ from .clipboardMonitor import (
 	ClipboardSnapshot,
 	ClipboardWriteError,
 )
+from .configuration import getShowClipboardContentAsPlainText
 from .clipboardData import (
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,
@@ -599,6 +600,22 @@ class ClipboardController:
 			self._reportTextStatisticsSummary(calculation)
 			return
 		ui.message(self._summary)
+
+	def showClipboardContent(self) -> None:
+		"""Show the current clipboard content in the configured browseable format."""
+		from .clipboardViewer import showSnapshot
+
+		snapshot = self.monitor.readNow()
+		if snapshot.contentType == ClipboardContentType.ERROR:
+			# Translators: Error shown when the current clipboard cannot be read for the viewer.
+			raise RuntimeError(_("Could not read the clipboard content"))
+		showSnapshot(
+			snapshot,
+			# Translators: Title of the browse mode window showing clipboard content.
+			_("Clipboard content"),
+			self._formatCurrentSummary(snapshot),
+			showAsPlainText=getShowClipboardContentAsPlainText(),
+		)
 
 	def _onFileSizeCalculationComplete(self, calculation: FileSizeCalculation) -> None:
 		"""Queue the response for a pending summary request on NVDA's main thread."""

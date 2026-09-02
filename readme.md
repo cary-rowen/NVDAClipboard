@@ -19,7 +19,9 @@ Commands for paging up or down through the clipboard have no default gestures. Y
 
 Press the current line or navigation unit command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
-Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Alt+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Shift+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+
+Press `NVDA+C` once to report a clipboard summary and twice to open its content in browse mode. HTML is shown when available; otherwise Markdown and common LaTeX are rendered, while active web content is removed. To view the text as-is, enable **Show clipboard content as plain text in browse mode (do not render)** under **NVDA Clipboard** in NVDA Settings. This gesture replaces NVDA's standard clipboard report.
 
 ## Clipboard History
 
@@ -45,7 +47,7 @@ You can also browse stored entries without opening the manager. Assign the "Cycl
 
 ## Images
 
-When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. Use `NVDA+Alt+PrintScreen` to save the current clipboard image, or save an image selected in the Clipboard Manager. `NVDA+PrintScreen` copies the current navigator object as an image.
+When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. The command for saving the current clipboard image has no default gesture; you can also save an image selected in the Clipboard Manager. `NVDA+PrintScreen` copies the current navigator object as an image.
 
 ## Cloud Synchronization
 
@@ -73,28 +75,28 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 
 ## Default Gestures
 
-| Command | Desktop layout | Laptop layout |
+| Command | All layouts | Laptop-only override |
 | --- | --- | --- |
-| Report clipboard summary | `Ctrl+NumPad Delete` | `NVDA+Alt+'` |
-| First clipboard line | `Ctrl+NumPad Divide` | `NVDA+Alt+Shift+Up Arrow` |
-| Last clipboard line | `Ctrl+NumPad Multiply` | `NVDA+Alt+Shift+Down Arrow` |
-| Previous clipboard line | `Ctrl+NumPad 7` | `NVDA+Alt+Up Arrow` |
-| Current clipboard line | `Ctrl+NumPad 8` | `NVDA+Alt+L` |
-| Next clipboard line | `Ctrl+NumPad 9` | `NVDA+Alt+Down Arrow` |
-| Previous clipboard navigation unit | `Ctrl+NumPad 4` | `NVDA+Alt+Shift+Left Arrow` |
-| Current clipboard navigation unit | `Ctrl+NumPad 5` | `NVDA+Alt+Shift+.` |
-| Next clipboard navigation unit | `Ctrl+NumPad 6` | `NVDA+Alt+Shift+Right Arrow` |
-| Previous clipboard character | `Ctrl+NumPad 1` | `NVDA+Alt+Left Arrow` |
-| Current clipboard character | `Ctrl+NumPad 2` | `NVDA+Alt+.` |
-| Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Alt+Right Arrow` |
-| Open Clipboard Manager | `NVDA+E` | `NVDA+E` |
-| Append selected text | `NVDA+Alt+A` | `NVDA+Alt+A` |
-| Append last spoken text | `NVDA+Alt+X` | `NVDA+Alt+X` |
-| Temporarily paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
-| Receive and paste Tiantan Cloud Clipboard text | `NVDA+Alt+V` | `NVDA+Alt+V` |
-| Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
+| Report or view clipboard content | `NVDA+C` | — |
+| First clipboard line | `Ctrl+NumPad Divide` | `NVDA+Windows+Shift+Up Arrow` |
+| Last clipboard line | `Ctrl+NumPad Multiply` | `NVDA+Windows+Shift+Down Arrow` |
+| Previous clipboard line | `Ctrl+NumPad 7` | `NVDA+Windows+Up Arrow` |
+| Current clipboard line | `Ctrl+NumPad 8` | Unassigned |
+| Next clipboard line | `Ctrl+NumPad 9` | `NVDA+Windows+Down Arrow` |
+| Previous clipboard navigation unit | `Ctrl+NumPad 4` | `NVDA+Shift+Windows+Left Arrow` |
+| Current clipboard navigation unit | `Ctrl+NumPad 5` | `NVDA+Windows+Shift+.` |
+| Next clipboard navigation unit | `Ctrl+NumPad 6` | `NVDA+Shift+Windows+Right Arrow` |
+| Previous clipboard character | `Ctrl+NumPad 1` | `NVDA+Windows+Left Arrow` |
+| Current clipboard character | `Ctrl+NumPad 2` | `NVDA+Windows+.` |
+| Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Windows+Right Arrow` |
+| Open Clipboard Manager | `NVDA+E` | — |
+| Append selected text | `NVDA+Alt+A` | — |
+| Append last spoken text | `NVDA+Shift+X` | — |
+| Temporarily paste last spoken text | ``NVDA+` `` | — |
+| Receive and paste Tiantan Cloud Clipboard text | `NVDA+Alt+V` | — |
+| Copy navigator object as an image | `NVDA+PrintScreen` | — |
 | Cycle through categories of stored entries | Unassigned | Unassigned |
 | Next stored entry in the current category | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |
 | Previous stored entry in the current category | `Ctrl+Windows+NumPad Minus` | `Ctrl+Windows+[` |
 | Put the selected stored entry on the system clipboard | `Ctrl+Windows+NumPad Multiply` | `Ctrl+Windows+\` |
-| Save the current clipboard image | `NVDA+Alt+PrintScreen` | `NVDA+Alt+PrintScreen` |
+| Save the current clipboard image | Unassigned | Unassigned |

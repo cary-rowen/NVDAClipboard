@@ -23,6 +23,7 @@ from .configuration import (
 	getNavigationSplitSettings,
 	getPageLineCount,
 	getConfirmOnClose,
+	getShowClipboardContentAsPlainText,
 	getTiantanEnabled,
 	saveSettings,
 )
@@ -76,6 +77,14 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 		self.separatePunctuationCheckBox.SetValue(separatePunctuation)
 		self.separatePunctuationCheckBox.Enable(navigationSplitMode is NavigationSplitMode.PUNCTUATION)
 		self.navigationSplitChoice.Bind(wx.EVT_CHOICE, self._onNavigationSplitModeChange)
+		self.showClipboardContentAsPlainTextCheckBox = sizerHelper.addItem(
+			wx.CheckBox(
+				self,
+				# Translators: Checkbox to show clipboard content without rendering Markdown or HTML.
+				label=_("Show clipboard content as plain te&xt in browse mode (do not render)"),
+			),
+		)
+		self.showClipboardContentAsPlainTextCheckBox.SetValue(getShowClipboardContentAsPlainText())
 
 		self._initialTiantanEnabled = getTiantanEnabled()
 		self._tiantanSupportState = getTiantanSupportState()
@@ -138,6 +147,7 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 			separatePunctuation=self.separatePunctuationCheckBox.GetValue(),
 			tiantanEnabled=self.tiantanEnabledCheckBox.GetValue(),
 			confirmOnClose=self.confirmOnCloseCheckBox.GetValue(),
+			showClipboardContentAsPlainText=self.showClipboardContentAsPlainTextCheckBox.GetValue(),
 		)
 
 	@override

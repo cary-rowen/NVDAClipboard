@@ -798,12 +798,13 @@ class ClipboardMonitor:
 				)
 				contentType = (
 					ClipboardContentType.EMPTY
-					if formatCount == 0 or (text == "" and formatCount == policyFormatCount + 1)
+					if formatCount == 0 or (text == "" and html is None and formatCount == policyFormatCount + 1)
 					else ClipboardContentType.UNSUPPORTED
 				)
 				return ClipboardSnapshot(
 					contentType,
 					sequenceNumber=self.getSequenceNumber(),
+					html=html,
 					canIncludeInHistory=canIncludeInHistory,
 					canUpload=canUpload,
 					richFormatsDropped=htmlDropped or rtfDropped,

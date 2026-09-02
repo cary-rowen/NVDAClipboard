@@ -95,19 +95,22 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		ui.message(message)
 
 	@script(
-		# Translators: Input help description for reporting a clipboard summary.
-		description=_("Reports a summary of the current clipboard content"),
-		gestures=("kb:control+numpadDelete", "kb(laptop):NVDA+alt+'"),
+		# Translators: Input help description for reporting or viewing clipboard content.
+		description=_("Reports the clipboard summary; press twice to view its content in browse mode"),
+		gesture="kb:NVDA+c",
 		speakOnDemand=True,
 	)
 	def script_reportClipboardSummary(self, gesture: inputCore.InputGesture) -> None:
-		"""Report a clipboard content summary."""
-		self._runAction(self.controller.reportClipboardSummary)
+		"""Report a clipboard summary or show its content in browse mode."""
+		if scriptHandler.getLastScriptRepeatCount() == 0:
+			self._runAction(self.controller.reportClipboardSummary)
+		else:
+			self._runAction(self.controller.showClipboardContent)
 
 	@script(
 		# Translators: Input help description for moving to the first clipboard line.
 		description=_("Moves to and reports the first clipboard line"),
-		gestures=("kb:control+numpadDivide", "kb(laptop):NVDA+alt+shift+upArrow"),
+		gestures=("kb:control+numpadDivide", "kb(laptop):NVDA+windows+shift+upArrow"),
 		speakOnDemand=True,
 	)
 	def script_firstClipboardLine(self, gesture: inputCore.InputGesture) -> None:
@@ -117,7 +120,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the last clipboard line.
 		description=_("Moves to and reports the last clipboard line"),
-		gestures=("kb:control+numpadMultiply", "kb(laptop):NVDA+alt+shift+downArrow"),
+		gestures=("kb:control+numpadMultiply", "kb(laptop):NVDA+windows+shift+downArrow"),
 		speakOnDemand=True,
 	)
 	def script_lastClipboardLine(self, gesture: inputCore.InputGesture) -> None:
@@ -127,7 +130,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the previous clipboard line.
 		description=_("Moves to and reports the previous clipboard line"),
-		gestures=("kb:control+numpad7", "kb(laptop):NVDA+alt+upArrow"),
+		gestures=("kb:control+numpad7", "kb(laptop):NVDA+windows+upArrow"),
 		speakOnDemand=True,
 	)
 	def script_previousClipboardLine(self, gesture: inputCore.InputGesture) -> None:
@@ -137,7 +140,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the next clipboard line.
 		description=_("Moves to and reports the next clipboard line"),
-		gestures=("kb:control+numpad9", "kb(laptop):NVDA+alt+downArrow"),
+		gestures=("kb:control+numpad9", "kb(laptop):NVDA+windows+downArrow"),
 		speakOnDemand=True,
 	)
 	def script_nextClipboardLine(self, gesture: inputCore.InputGesture) -> None:
@@ -167,7 +170,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			# Translators: Input help description for reporting the current clipboard line.
 			"Reports the current clipboard line. Press twice to spell it and three times for character descriptions.",
 		),
-		gestures=("kb:control+numpad8", "kb(laptop):NVDA+alt+l"),
+		gesture="kb:control+numpad8",
 		speakOnDemand=True,
 	)
 	def script_currentClipboardLine(self, gesture: inputCore.InputGesture) -> None:
@@ -177,7 +180,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the previous clipboard navigation unit.
 		description=_("Moves to and reports the previous clipboard navigation unit"),
-		gestures=("kb:control+numpad4", "kb(laptop):NVDA+shift+alt+leftArrow"),
+		gestures=("kb:control+numpad4", "kb(laptop):NVDA+shift+windows+leftArrow"),
 		speakOnDemand=True,
 	)
 	def script_previousClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
@@ -187,7 +190,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the next clipboard navigation unit.
 		description=_("Moves to and reports the next clipboard navigation unit"),
-		gestures=("kb:control+numpad6", "kb(laptop):NVDA+shift+alt+rightArrow"),
+		gestures=("kb:control+numpad6", "kb(laptop):NVDA+shift+windows+rightArrow"),
 		speakOnDemand=True,
 	)
 	def script_nextClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
@@ -200,7 +203,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			"Reports the current clipboard navigation unit. "
 			"Press twice to spell it and three times for character descriptions.",
 		),
-		gestures=("kb:control+numpad5", "kb(laptop):NVDA+shift+alt+."),
+		gestures=("kb:control+numpad5", "kb(laptop):NVDA+shift+windows+."),
 		speakOnDemand=True,
 	)
 	def script_currentClipboardNavigationUnit(self, gesture: inputCore.InputGesture) -> None:
@@ -213,7 +216,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the previous clipboard character.
 		description=_("Moves to and reports the previous clipboard character"),
-		gestures=("kb:control+numpad1", "kb(laptop):NVDA+alt+leftArrow"),
+		gestures=("kb:control+numpad1", "kb(laptop):NVDA+windows+leftArrow"),
 		speakOnDemand=True,
 	)
 	def script_previousClipboardCharacter(self, gesture: inputCore.InputGesture) -> None:
@@ -223,7 +226,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for moving to the next clipboard character.
 		description=_("Moves to and reports the next clipboard character"),
-		gestures=("kb:control+numpad3", "kb(laptop):NVDA+alt+rightArrow"),
+		gestures=("kb:control+numpad3", "kb(laptop):NVDA+windows+rightArrow"),
 		speakOnDemand=True,
 	)
 	def script_nextClipboardCharacter(self, gesture: inputCore.InputGesture) -> None:
@@ -235,7 +238,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			# Translators: Input help description for reporting the current clipboard character.
 			"Reports the current clipboard character. Press twice for a description and three times for its numeric value.",
 		),
-		gestures=("kb:control+numpad2", "kb(laptop):NVDA+alt+."),
+		gestures=("kb:control+numpad2", "kb(laptop):NVDA+windows+."),
 		speakOnDemand=True,
 	)
 	def script_currentClipboardCharacter(self, gesture: inputCore.InputGesture) -> None:
@@ -267,7 +270,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for appending the last spoken text.
 		description=_("Appends the last spoken text to the clipboard"),
-		gesture="kb:NVDA+alt+x",
+		gesture="kb:NVDA+shift+x",
 		speakOnDemand=True,
 	)
 	def script_appendLastSpokenText(self, gesture: inputCore.InputGesture) -> None:
@@ -346,7 +349,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for saving a clipboard image.
 		description=_("Saves the clipboard image to a file"),
-		gesture="kb:NVDA+alt+printScreen",
 		speakOnDemand=True,
 	)
 	@gui.blockAction.when(gui.blockAction.Context.MODAL_DIALOG_OPEN)
