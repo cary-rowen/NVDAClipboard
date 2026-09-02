@@ -1900,8 +1900,13 @@ msgstr "根据大小写拆分连写单词(&C)"
 msgid "Treat &punctuation as separate navigation units"
 msgstr "将标点符号作为单独的导航单位(&P)"
 
+#. Translators: Checkbox to show clipboard content without rendering Markdown or HTML.
+#: addon\globalPlugins\nvdaClipboard\settings.py:84
+msgid "Show clipboard content as plain te&xt in browse mode (do not render)"
+msgstr "在浏览模式下原样显示剪贴板内容（不渲染）(&X)"
+
 #. Translators: Checkbox to enable Tiantan Cloud Clipboard after NVDA restarts.
-#: addon\globalPlugins\nvdaClipboard\settings.py:86
+#: addon\globalPlugins\nvdaClipboard\settings.py:95
 msgid "Enable &Tiantan Cloud Clipboard (requires restart)"
 msgstr "启用天坦云剪贴板(&T)（需要重启）"
 
@@ -1940,10 +1945,20 @@ msgstr "天坦云剪贴板需要 64 位 NVDA。"
 msgid "The NVDA Clipboard command failed"
 msgstr "剪贴板命令执行失败"
 
-#. Translators: Input help description for reporting a clipboard summary.
+#. Translators: Input help description for reporting or viewing clipboard content.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:99
-msgid "Reports a summary of the current clipboard content"
-msgstr "读出当前剪贴板内容摘要"
+msgid "Reports the clipboard summary; press twice to view its content in browse mode"
+msgstr "读出剪贴板摘要；按两次在浏览模式下查看其内容"
+
+#. Translators: Error shown when the current clipboard cannot be read for the viewer.
+#: addon\globalPlugins\nvdaClipboard\controller.py:611
+msgid "Could not read the clipboard content"
+msgstr "无法读取剪贴板内容"
+
+#. Translators: Title of the browse mode window showing clipboard content.
+#: addon\globalPlugins\nvdaClipboard\controller.py:615
+msgid "Clipboard content"
+msgstr "剪贴板内容"
 
 #. Translators: Input help description for moving to the first clipboard line.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:109

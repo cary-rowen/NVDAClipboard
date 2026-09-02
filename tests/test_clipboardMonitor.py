@@ -335,6 +335,35 @@ class ClipboardMonitorTests(unittest.TestCase):
 			clipboardMonitor._buildDropFilesData((privatePath,))
 		self.assertNotIn("private", str(context.exception))
 
+	def testSnapshotRetainsHtmlWhenClipboardHasNoPlainText(self) -> None:
+		"""Retain HTML-only clipboard data for the browseable viewer."""
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._formats = SimpleNamespace(
+			html=101,
+			rtf=102,
+			excludeMonitor=103,
+			canIncludeHistory=104,
+			canUpload=105,
+		)
+		monitor._openClipboardWithRetry = Mock(return_value=True)
+		monitor._isFormatAvailable = Mock(side_effect=lambda formatId: formatId == monitor._formats.html)
+		monitor._readPolicy = Mock(return_value=True)
+		monitor._readTextIfAvailable = Mock(return_value=None)
+		monitor._readOptionalFormat = Mock(
+			side_effect=lambda formatId, _maximumBytes: (
+				(b"<p>html</p>", False) if formatId == monitor._formats.html else (None, False)
+			),
+		)
+		monitor._readImageFromOpenClipboard = Mock(return_value=(None, None, None, False))
+		monitor.getSequenceNumber = Mock(return_value=1)
+		with (
+			patch.object(clipboardMonitor, "_countClipboardFormats", return_value=1),
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+		):
+			snapshot = monitor._readSnapshot(decodePng=False, analyzeImage=False)
+		self.assertEqual(clipboardMonitor.ClipboardContentType.UNSUPPORTED, snapshot.contentType)
+		self.assertEqual(b"<p>html</p>", snapshot.html)
+
 	def testControllerTranslatesOversizedTextAndResynchronizesMonitor(self) -> None:
 		"""Translate a rejected text write and resume clipboard monitoring."""
 		controllerPath = _MODULE_DIRECTORY / "controller.py"

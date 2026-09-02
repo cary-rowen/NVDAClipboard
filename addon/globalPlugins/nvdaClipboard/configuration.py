@@ -27,6 +27,7 @@ _CONFIG_SPLIT_CAMEL_CASE = "splitCamelCase"
 _CONFIG_SEPARATE_PUNCTUATION = "separatePunctuation"
 _CONFIG_TIANTAN_ENABLED = "tiantanEnabled"
 _CONFIG_CONFIRM_ON_CLOSE = "confirmOnClose"
+_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT = "showClipboardContentAsPlainText"
 _DEFAULT_PAGE_LINE_COUNT = 10
 
 _sectionSpec = config.conf.spec.setdefault(_CONFIG_SECTION, {})
@@ -43,6 +44,7 @@ _sectionSpec.update(
 		_CONFIG_SEPARATE_PUNCTUATION: "boolean(default=false)",
 		_CONFIG_TIANTAN_ENABLED: "boolean(default=false)",
 		_CONFIG_CONFIRM_ON_CLOSE: "boolean(default=true)",
+		_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT: "boolean(default=false)",
 	},
 )
 
@@ -72,6 +74,11 @@ def getConfirmOnClose() -> bool:
 	return bool(config.conf[_CONFIG_SECTION][_CONFIG_CONFIRM_ON_CLOSE])
 
 
+def getShowClipboardContentAsPlainText() -> bool:
+	"""Return whether browse mode should show clipboard content without rendering."""
+	return bool(config.conf[_CONFIG_SECTION][_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT])
+
+
 def saveSettings(
 	*,
 	pageLineCount: int,
@@ -80,6 +87,7 @@ def saveSettings(
 	separatePunctuation: bool,
 	tiantanEnabled: bool,
 	confirmOnClose: bool,
+	showClipboardContentAsPlainText: bool,
 ) -> None:
 	"""Save settings from the NVDA Clipboard settings panel."""
 	section = config.conf[_CONFIG_SECTION]
@@ -89,3 +97,4 @@ def saveSettings(
 	section[_CONFIG_SEPARATE_PUNCTUATION] = separatePunctuation
 	section[_CONFIG_TIANTAN_ENABLED] = tiantanEnabled
 	section[_CONFIG_CONFIRM_ON_CLOSE] = confirmOnClose
+	section[_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT] = showClipboardContentAsPlainText
