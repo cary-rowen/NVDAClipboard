@@ -19,6 +19,8 @@ Commands for paging up or down through the clipboard have no default gestures. Y
 
 Press the current line or navigation unit command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
+Press `NVDA+Windows+[` to mark the current clipboard navigation position as the selection start, move in either direction, then press `NVDA+Windows+]` to mark the end. Both endpoint characters are included and NVDA reports the selected text. Press `NVDA+Windows+V` to paste it temporarily; the full clipboard and navigation position are restored afterward when possible. Pasting it, changing the clipboard, or marking a new start clears the selection.
+
 Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Shift+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 Press `NVDA+C` once to report a clipboard summary and twice to open its content in browse mode. HTML is shown when available; otherwise Markdown and common LaTeX are rendered, while active web content is removed. To view the text as-is, enable **Show clipboard content as plain text in browse mode (do not render)** under **NVDA Clipboard** in NVDA Settings. This gesture replaces NVDA's standard clipboard report.
@@ -89,6 +91,9 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Previous clipboard character | `Ctrl+NumPad 1` | `NVDA+Windows+Left Arrow` |
 | Current clipboard character | `Ctrl+NumPad 2` | `NVDA+Windows+.` |
 | Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Windows+Right Arrow` |
+| Mark clipboard selection start | `NVDA+Windows+[` | — |
+| Mark clipboard selection end | `NVDA+Windows+]` | — |
+| Paste selected clipboard text | `NVDA+Windows+V` | — |
 | Open Clipboard Manager | `NVDA+E` | — |
 | Append selected text | `NVDA+Alt+A` | — |
 | Append last spoken text | `NVDA+Shift+X` | — |

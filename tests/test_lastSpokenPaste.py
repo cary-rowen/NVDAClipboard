@@ -3,7 +3,7 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Tests for last-spoken temporary paste helpers without loading NVDA."""
+"""Tests for temporary text paste helpers without loading NVDA."""
 
 from __future__ import annotations
 
@@ -19,37 +19,58 @@ from tests.test_clipboardMonitor import clipboardMonitor
 _CONTROLLER_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
 
 
-def _loadLastSpokenPasteHelpers() -> tuple[type, object]:
-	"""Load last-spoken paste helpers without importing controller dependencies."""
+def _loadTemporaryPasteHelpers() -> tuple[type, object, object]:
+	"""Load temporary paste helpers without importing controller dependencies."""
 	tree = ast.parse(_CONTROLLER_PATH.read_text(encoding="utf-8"))
 	nodes = [
 		node
 		for node in tree.body
 		if (
 			isinstance(node, ast.ClassDef)
-			and node.name == "_LastSpokenPasteState"
+			and node.name == "_TemporaryTextPasteState"
 			or isinstance(node, ast.FunctionDef)
-			and node.name in {"_normalizeClipboardLineEndings", "_isLastSpokenTemporarySnapshot"}
+			and node.name
+			in {
+				"_getTextOrCharacterCount",
+				"_normalizeClipboardLineEndings",
+				"_isTemporaryTextSnapshot",
+			}
 		)
 	]
 	namespace = {
 		"dataclass": dataclass,
 		"ClipboardContentType": clipboardMonitor.ClipboardContentType,
 		"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
+		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
 	}
 	exec(compile(ast.Module(body=nodes, type_ignores=[]), _CONTROLLER_PATH, "exec"), namespace)
-	return namespace["_LastSpokenPasteState"], namespace["_isLastSpokenTemporarySnapshot"]
+	return (
+		namespace["_TemporaryTextPasteState"],
+		namespace["_isTemporaryTextSnapshot"],
+		namespace["_getTextOrCharacterCount"],
+	)
 
 
-_LastSpokenPasteState, _isLastSpokenTemporarySnapshot = _loadLastSpokenPasteHelpers()
+_TemporaryTextPasteState, _isTemporaryTextSnapshot, _getTextOrCharacterCount = _loadTemporaryPasteHelpers()
 
 
-class LastSpokenPasteTests(unittest.TestCase):
-	"""Verify temporary last-spoken paste matching."""
+class TemporaryTextPasteTests(unittest.TestCase):
+	"""Verify temporary text paste matching."""
+
+	def testTextFeedbackUsesConfiguredCharacterLimit(self) -> None:
+		"""Replace lengthy selection and paste feedback with a character count."""
+		for maxLength in (512, 1024):
+			with self.subTest(maxLength=maxLength):
+				shortText = "x" * (maxLength - 1)
+				self.assertEqual(shortText, _getTextOrCharacterCount(shortText, maxLength))
+				self.assertEqual(
+					f"{maxLength} characters",
+					_getTextOrCharacterCount("x" * maxLength, maxLength),
+				)
 
 	def testTemporaryTextMatchesWin32ClipboardLineEndings(self) -> None:
 		"""Accept text after CF_UNICODETEXT normalizes line endings to CRLF."""
-		state = _LastSpokenPasteState(
+		state = _TemporaryTextPasteState(
 			SimpleNamespace(),
 			1,
 			"first\nsecond",
@@ -62,7 +83,7 @@ class LastSpokenPasteTests(unittest.TestCase):
 			canUpload=False,
 		)
 
-		self.assertTrue(_isLastSpokenTemporarySnapshot(snapshot, state))
+		self.assertTrue(_isTemporaryTextSnapshot(snapshot, state))
 
 
 if __name__ == "__main__":

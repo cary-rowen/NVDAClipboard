@@ -246,6 +246,36 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.reportCurrentCharacter, scriptHandler.getLastScriptRepeatCount())
 
 	@script(
+		# Translators: Input help description for marking the start of clipboard text to paste.
+		description=_("Marks the current clipboard navigation position as the selection start"),
+		gesture="kb:NVDA+windows+[",
+		speakOnDemand=True,
+	)
+	def script_markClipboardSelectionStart(self, gesture: inputCore.InputGesture) -> None:
+		"""Mark the current clipboard navigation position as the selection start."""
+		self._runAction(self.controller.markClipboardSelectionStart)
+
+	@script(
+		# Translators: Input help description for marking the end of clipboard text to paste.
+		description=_("Marks the selection end and selects the clipboard text between both markers"),
+		gesture="kb:NVDA+windows+]",
+		speakOnDemand=True,
+	)
+	def script_markClipboardSelectionEnd(self, gesture: inputCore.InputGesture) -> None:
+		"""Mark the clipboard selection end and report the selected text."""
+		self._runAction(self.controller.markClipboardSelectionEnd)
+
+	@script(
+		# Translators: Input help description for pasting text selected in clipboard navigation.
+		description=_("Temporarily pastes the selected clipboard text"),
+		gesture="kb:NVDA+windows+v",
+		speakOnDemand=True,
+	)
+	def script_pasteClipboardSelection(self, gesture: inputCore.InputGesture) -> None:
+		"""Paste the selected clipboard text through a temporary clipboard transaction."""
+		self._runAction(self.controller.pasteClipboardSelection, _getKeyboardGestureVkCodes(gesture))
+
+	@script(
 		# Translators: Input help description for opening the clipboard manager.
 		description=_("Opens the Clipboard Manager"),
 		gesture="kb:NVDA+e",

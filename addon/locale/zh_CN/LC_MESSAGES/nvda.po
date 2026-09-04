@@ -2521,5 +2521,50 @@ msgstr ""
 #~ msgid "OneDrive data kept changing on another device; try again"
 #~ msgstr "另一台设备上的 OneDrive 数据不断发生变化；请重试"
 
+#. Translators: Input help description for marking the start of clipboard text to paste.
+msgid "Marks the current clipboard navigation position as the selection start"
+msgstr "将当前剪贴板导航位置标记为选区开始点"
+
+#. Translators: Input help description for marking the end of clipboard text to paste.
+msgid "Marks the selection end and selects the clipboard text between both markers"
+msgstr "标记选区结束点并选中两个标记之间的剪贴板文本"
+
+#. Translators: Input help description for pasting text selected in clipboard navigation.
+msgid "Temporarily pastes the selected clipboard text"
+msgstr "临时粘贴选中的剪贴板文本"
+
+#. Translators: Indicates the start of clipboard text selected for pasting.
+msgid "Start marked"
+msgstr "开始点已标记"
+
+#. Translators: Presented when clipboard selection has no start marker.
+msgid "No start marker set"
+msgstr "未设置开始点"
+
+#. Translators: Braille message showing text selected in clipboard navigation.
+#, python-format
+msgid "%s selected"
+msgstr "%s 已选择"
+
+#. Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
+msgid "The clipboard changed, so the selected text was not pasted"
+msgstr "剪贴板已改变，因此未粘贴所选文本"
+
+#. Translators: Message shown when another temporary text paste is still running.
+msgid "A temporary text paste is already in progress"
+msgstr "已有一个临时文本粘贴操作正在进行"
+
+#. Translators: Error shown when temporary text cannot be pasted.
+msgid "Could not paste the text"
+msgstr "无法粘贴文本"
+
+#. Translators: Error shown when the clipboard keeps changing before a temporary text paste.
+msgid "The clipboard kept changing, so the text could not be pasted"
+msgstr "剪贴板持续发生变化，因此无法粘贴文本"
+
+#. Translators: Presented when a clipboard text command is used without clipboard text.
+msgid "There is no text on the clipboard"
+msgstr "剪贴板内没有文本"
+
 #~ msgid "Edit a Plain Text &Copy"
 #~ msgstr "编辑纯文本副本(&C)"
