@@ -82,16 +82,20 @@ class _ClipboardTextInfo(OffsetsTextInfo):
 
 
 class ClipboardNavigator:
-	"""Maintain an independent read-only position in clipboard text."""
+	"""Maintain an independent read-only position and marked range in clipboard text."""
 
 	def __init__(self, text: str = "") -> None:
 		self._owner = _ClipboardTextOwner(text)
 		self._position: _ClipboardTextInfo
+		self._selectionStartOffset: int | None = None
+		self._selectionEndOffset: int | None = None
 		self.reset()
 
 	def setText(self, text: str) -> None:
-		"""Replace the clipboard snapshot and reset navigation to its first position."""
+		"""Replace the clipboard snapshot and reset its navigation and marked range."""
 		self._owner = _ClipboardTextOwner(text)
+		self._selectionStartOffset = None
+		self._selectionEndOffset = None
 		self.reset()
 
 	def reset(self) -> None:
@@ -122,6 +126,40 @@ class ClipboardNavigator:
 		maxOffset = max(len(self._owner.text) - 1, 0)
 		offset = min(max(offset, 0), maxOffset)
 		self._position = _ClipboardTextInfo(self._owner, Offsets(offset, offset))
+
+	def markSelectionStart(self) -> None:
+		"""Mark the current position as the start and discard any completed range."""
+		self._selectionStartOffset = self.getPosition()
+		self._selectionEndOffset = None
+
+	def markSelectionEnd(self) -> str | None:
+		"""Mark the current position as the end and return the inclusive selected text."""
+		if self._selectionStartOffset is None:
+			return None
+		self._selectionEndOffset = self.getPosition()
+		return self.getSelectedText()
+
+	def getSelectedText(self) -> str | None:
+		"""Return text between both inclusive markers, or ``None`` until both are set."""
+		if self._selectionStartOffset is None or self._selectionEndOffset is None:
+			return None
+		startInfo = self._getExpanded(
+			_ClipboardTextInfo(
+				self._owner,
+				Offsets(self._selectionStartOffset, self._selectionStartOffset),
+			),
+			textInfos.UNIT_CHARACTER,
+		)
+		endInfo = self._getExpanded(
+			_ClipboardTextInfo(
+				self._owner,
+				Offsets(self._selectionEndOffset, self._selectionEndOffset),
+			),
+			textInfos.UNIT_CHARACTER,
+		)
+		startOffset = min(startInfo.bookmark.startOffset, endInfo.bookmark.startOffset)
+		endOffset = max(startInfo.bookmark.endOffset, endInfo.bookmark.endOffset)
+		return self._owner.text[startOffset:endOffset]
 
 	def moveToFirstLine(self) -> textInfos.TextInfo:
 		"""Move to and return the first line in the clipboard snapshot."""
