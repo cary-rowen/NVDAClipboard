@@ -200,8 +200,8 @@ class _ClipboardChangeSource(Enum):
 	TEMPORARY_PASTE_RESTORE = auto()
 	LOCAL_WRITE_FAILURE = auto()
 	MANAGER_TEXT_REPLACEMENT = auto()
-	HISTORY_RESTORE = auto()
-	CATEGORY_RESTORE = auto()
+	HISTORY_ITEM_WRITE = auto()
+	CATEGORY_ITEM_WRITE = auto()
 	CLOUD_FETCH = auto()
 	NAVIGATOR_SCREENSHOT = auto()
 	CLEAR = auto()
@@ -237,8 +237,8 @@ class _HistoryWriteResult:
 
 
 @dataclass(frozen=True, slots=True)
-class _PreparedPngRestore:
-	"""Retain one worker-prepared PNG restore until its main-thread commit."""
+class _PreparedPngClipboardWrite:
+	"""Retain one worker-prepared PNG clipboard write until its main-thread commit."""
 
 	snapshot: ClipboardSnapshot
 	source: _ClipboardChangeSource
@@ -351,7 +351,7 @@ def _isMissingFilePath(filePath: str) -> bool:
 
 class _ClipboardWriteFailedError(RuntimeError):
 	def __init__(self, sequenceNumber: int) -> None:
-		# Translators: Error shown when supported clipboard formats cannot be restored.
+		# Translators: Error shown when supported formats cannot be written to the clipboard.
 		super().__init__(_("Could not write to the system clipboard"))
 		self.sequenceNumber = sequenceNumber
 
@@ -420,7 +420,7 @@ class ClipboardController:
 		self._storedItemCategory: CategoryId = _HISTORY_CATEGORY_ID
 		self._storedItemIndex = 0
 		self._pendingWrites: set[int] = set()
-		self._pendingPngRestore: Future[_PreparedPngRestore] | None = None
+		self._pendingPngClipboardWrite: Future[_PreparedPngClipboardWrite] | None = None
 		self._awaitingInitialSnapshot = False
 		self._lastAppliedSequenceNumber = 0
 		self._historySaveFailureReported = False
@@ -457,7 +457,7 @@ class ClipboardController:
 		self._isStarted = False
 		self._awaitingInitialSnapshot = False
 		self._pendingWrites.clear()
-		self._cancelPendingPngRestore()
+		self._cancelPendingPngClipboardWrite()
 		self._cancelPendingTemporaryPngPaste()
 		self._cloudFetchInProgress = False
 		self._temporaryPasteInProgress = False
@@ -1037,14 +1037,14 @@ class ClipboardController:
 		"""Move to and report the previous stored item in the current category."""
 		self._moveStoredItem(-1)
 
-	def restoreCurrentStoredItem(self) -> None:
+	def putCurrentStoredItemOnClipboard(self) -> None:
 		"""Put the globally selected stored item on the system clipboard."""
 		category = self._resolveStoredItemCategory()
 		item, self._storedItemIndex, _itemCount = self._getStoredItemSummaryAt(category)
 		if item is None:
 			self._reportEmptyStoredItemCategory(category)
 			return
-		self.restoreItemToClipboard(category, item.itemId)
+		self.putItemOnClipboard(category, item.itemId)
 
 	def pasteCurrentStoredItem(self, triggerKeyCodes: frozenset[int]) -> None:
 		"""Temporarily paste the globally selected stored item without moving from it."""
@@ -1225,18 +1225,18 @@ class ClipboardController:
 		if notifyManager:
 			self._refreshManager()
 
-	def restoreItemToClipboard(self, category: CategoryId, itemId: int) -> None:
-		"""Restore every supported format of one stored item."""
+	def putItemOnClipboard(self, category: CategoryId, itemId: int) -> None:
+		"""Put every supported format of one stored item on the clipboard."""
 		expectedSequenceNumber = self.monitor.getSequenceNumber()
-		self._cancelPendingPngRestore()
+		self._cancelPendingPngClipboardWrite()
 		item = self._getStoredItemById(category, itemId)
 		snapshot = self._snapshotFromItem(item)
 		source = (
-			_ClipboardChangeSource.HISTORY_RESTORE
+			_ClipboardChangeSource.HISTORY_ITEM_WRITE
 			if self.isHistoryCategory(category)
-			else _ClipboardChangeSource.CATEGORY_RESTORE
+			else _ClipboardChangeSource.CATEGORY_ITEM_WRITE
 		)
-		confirmation = self._formatRestoreConfirmation(item)
+		confirmation = self._formatPutOnClipboardConfirmation(item)
 		if snapshot.imageFormat != "PNG":
 			try:
 				self._writeSnapshot(
@@ -1245,37 +1245,37 @@ class ClipboardController:
 					expectedSequenceNumber=expectedSequenceNumber,
 				)
 			except ClipboardSequenceChangedError:
-				# Translators: Error shown when another application changes the clipboard during a restore.
+				# Translators: Error shown when another application changes the clipboard before an entry is written.
 				ui.message(_("The clipboard changed before it could be updated. Try again."))
 				return
 			ui.message(confirmation)
 			return
 		future = self._historyExecutor.submit(
-			self._preparePngRestore,
+			self._preparePngClipboardWrite,
 			snapshot,
 			source,
 			expectedSequenceNumber,
 			confirmation,
 		)
-		self._pendingPngRestore = future
-		future.add_done_callback(self._queuePngRestoreCompletion)
+		self._pendingPngClipboardWrite = future
+		future.add_done_callback(self._queuePngClipboardWriteCompletion)
 
-	def _cancelPendingPngRestore(self) -> None:
-		"""Cancel a queued PNG restore and make any running result stale."""
-		future = self._pendingPngRestore
-		self._pendingPngRestore = None
+	def _cancelPendingPngClipboardWrite(self) -> None:
+		"""Cancel a queued PNG clipboard write and make any running result stale."""
+		future = self._pendingPngClipboardWrite
+		self._pendingPngClipboardWrite = None
 		if future is not None:
 			future.cancel()
 
 	@staticmethod
-	def _preparePngRestore(
+	def _preparePngClipboardWrite(
 		snapshot: ClipboardSnapshot,
 		source: _ClipboardChangeSource,
 		expectedSequenceNumber: int,
 		confirmation: str,
-	) -> _PreparedPngRestore:
+	) -> _PreparedPngClipboardWrite:
 		"""Decode a stored PNG into its DIB fallback on the serial worker."""
-		return _PreparedPngRestore(
+		return _PreparedPngClipboardWrite(
 			snapshot=snapshot,
 			source=source,
 			expectedSequenceNumber=expectedSequenceNumber,
@@ -1283,37 +1283,39 @@ class ClipboardController:
 			dibData=_preparePngDib(snapshot),
 		)
 
-	def _queuePngRestoreCompletion(self, future: Future[_PreparedPngRestore]) -> None:
-		"""Queue one prepared PNG restore for main-thread validation and commit."""
+	def _queuePngClipboardWriteCompletion(self, future: Future[_PreparedPngClipboardWrite]) -> None:
+		"""Queue one prepared PNG clipboard write for main-thread validation and commit."""
 		try:
-			wx.CallAfter(self._finishPngRestore, future)
+			wx.CallAfter(self._finishPngClipboardWrite, future)
 		except RuntimeError:
-			if future is self._pendingPngRestore:
-				self._pendingPngRestore = None
+			if future is self._pendingPngClipboardWrite:
+				self._pendingPngClipboardWrite = None
 			if self._isStarted:
-				log.debugWarning("Could not schedule a prepared PNG clipboard restore.", exc_info=True)
+				log.debugWarning("Could not schedule a prepared PNG clipboard write.", exc_info=True)
 
-	def _finishPngRestore(self, future: Future[_PreparedPngRestore]) -> None:
-		"""Commit the latest prepared PNG restore without replacing newer clipboard data."""
-		if future is not self._pendingPngRestore:
+	def _finishPngClipboardWrite(self, future: Future[_PreparedPngClipboardWrite]) -> None:
+		"""Commit the latest prepared PNG clipboard write without replacing newer clipboard data."""
+		if future is not self._pendingPngClipboardWrite:
 			return
-		self._pendingPngRestore = None
+		self._pendingPngClipboardWrite = None
 		if not self._isStarted:
 			return
 		try:
 			prepared = future.result()
 		except ValueError as error:
-			log.debugWarning("Stored PNG data could not be prepared for clipboard restore.", exc_info=error)
-			# Translators: Error shown when supported clipboard formats cannot be restored.
+			log.debugWarning(
+				"Stored PNG data could not be prepared for writing to the clipboard.", exc_info=error
+			)
+			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			ui.message(_("Could not write to the system clipboard"))
 			return
 		except Exception as error:
-			log.exception("Failed to prepare stored PNG data for clipboard restore.", exc_info=error)
-			# Translators: Error shown when supported clipboard formats cannot be restored.
+			log.exception("Failed to prepare stored PNG data for writing to the clipboard.", exc_info=error)
+			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			ui.message(_("Could not write to the system clipboard"))
 			return
 		if self.monitor.getSequenceNumber() != prepared.expectedSequenceNumber:
-			# Translators: Error shown when another application changes the clipboard during a restore.
+			# Translators: Error shown when another application changes the clipboard before an entry is written.
 			ui.message(_("The clipboard changed before it could be updated. Try again."))
 			return
 		try:
@@ -1324,7 +1326,7 @@ class ClipboardController:
 				preparedPngDib=prepared.dibData,
 			)
 		except ClipboardSequenceChangedError:
-			# Translators: Error shown when another application changes the clipboard during a restore.
+			# Translators: Error shown when another application changes the clipboard before an entry is written.
 			ui.message(_("The clipboard changed before it could be updated. Try again."))
 			return
 		except RuntimeError as error:
@@ -1333,7 +1335,7 @@ class ClipboardController:
 			return
 		except Exception as error:
 			log.exception("Failed to commit prepared PNG clipboard data.", exc_info=error)
-			# Translators: Error shown when supported clipboard formats cannot be restored.
+			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			ui.message(_("Could not write to the system clipboard"))
 			return
 		ui.message(prepared.confirmation)
@@ -1586,8 +1588,8 @@ class ClipboardController:
 			_ClipboardChangeSource.EXTERNAL,
 			_ClipboardChangeSource.APPEND_TEXT,
 			_ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
-			_ClipboardChangeSource.HISTORY_RESTORE,
-			_ClipboardChangeSource.CATEGORY_RESTORE,
+			_ClipboardChangeSource.HISTORY_ITEM_WRITE,
+			_ClipboardChangeSource.CATEGORY_ITEM_WRITE,
 			_ClipboardChangeSource.NAVIGATOR_SCREENSHOT,
 		}
 		if snapshot.sequenceNumber:
@@ -2516,7 +2518,7 @@ class ClipboardController:
 			raise _ClipboardWriteFailedError(error.sequenceNumber) from error
 		except (OSError, ValueError) as error:
 			self.monitor.handleClipboardUpdate()
-			# Translators: Error shown when supported clipboard formats cannot be restored.
+			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			raise RuntimeError(_("Could not write to the system clipboard")) from error
 		self._awaitingInitialSnapshot = False
 		appliedSnapshot = replace(snapshot, sequenceNumber=sequenceNumber)
@@ -3003,23 +3005,23 @@ class ClipboardController:
 			)
 		return summary
 
-	def _formatRestoreConfirmation(self, item: ClipboardItem) -> str:
-		"""Return a type-specific confirmation after restoring a stored entry."""
+	def _formatPutOnClipboardConfirmation(self, item: ClipboardItem) -> str:
+		"""Return a type-specific confirmation after putting a stored entry on the clipboard."""
 		if item.contentType == ClipboardItemType.FILES:
 			return ngettext(
-				# Translators: Confirmation after restoring one or multiple files to the clipboard.
-				"{count} file restored to the clipboard",
-				"{count} files restored to the clipboard",
+				# Translators: Confirmation after putting one or multiple files on the clipboard.
+				"{count} file put on the clipboard",
+				"{count} files put on the clipboard",
 				len(item.files),
 			).format(count=len(item.files))
 		if item.contentType == ClipboardItemType.IMAGE:
-			# Translators: Confirmation after restoring an image to the clipboard.
-			return _("Image restored to the clipboard")
+			# Translators: Confirmation after putting an image on the clipboard.
+			return _("Image put on the clipboard")
 		if item.contentType == ClipboardItemType.TEXT_AND_IMAGE:
-			# Translators: Confirmation after restoring mixed text and image content.
-			return _("Text and image restored to the clipboard")
-		# Translators: Confirmation after restoring plain or formatted text.
-		return _("Text restored to the clipboard")
+			# Translators: Confirmation after putting mixed text and image content on the clipboard.
+			return _("Text and image put on the clipboard")
+		# Translators: Confirmation after putting plain or formatted text on the clipboard.
+		return _("Text put on the clipboard")
 
 	def _formatFileNavigationText(self, files: tuple[str, ...]) -> str:
 		"""Return one navigable line for each file path on the clipboard."""

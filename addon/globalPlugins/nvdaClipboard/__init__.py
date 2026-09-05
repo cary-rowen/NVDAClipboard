@@ -257,7 +257,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	@script(
 		# Translators: Input help description for marking the end of clipboard text to paste.
-		description=_("Marks the selection end and selects the clipboard text between both markers"),
+		description=_(
+			"Marks the current clipboard navigation position as the selection end "
+			"and selects the text between the two markers",
+		),
 		gesture="kb:NVDA+windows+]",
 		speakOnDemand=True,
 	)
@@ -305,7 +308,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for appending the last spoken text.
 		description=_("Appends the last spoken text to the clipboard"),
-		gesture="kb:NVDA+shift+x",
+		gesture="kb:NVDA+windows+a",
 		speakOnDemand=True,
 	)
 	def script_appendLastSpokenText(self, gesture: inputCore.InputGesture) -> None:
@@ -314,7 +317,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	@script(
 		# Translators: Input help description for temporarily pasting the last spoken text.
-		description=_("Pastes the last spoken text without keeping it in clipboard history"),
+		description=_("Pastes the last spoken text"),
 		gesture="kb:NVDA+`",
 		speakOnDemand=True,
 	)
@@ -325,7 +328,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
 		description=_("Receives and pastes from Tiantan Cloud Clipboard"),
-		gesture="kb:NVDA+alt+v",
 		speakOnDemand=True,
 	)
 	def script_pasteCloudClipboard(self, gesture: inputCore.InputGesture) -> None:
@@ -345,6 +347,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for cycling through categories of stored entries.
 		description=_("Cycles through categories of stored entries"),
+		gesture="kb:control+windows+=",
 		speakOnDemand=True,
 	)
 	def script_cycleStoredItemCategory(self, gesture: inputCore.InputGesture) -> None:
@@ -372,14 +375,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.moveToPreviousStoredItem)
 
 	@script(
-		# Translators: Input help description for putting the selected stored entry on the system clipboard.
-		description=_("Puts the selected stored entry on the system clipboard"),
+		# Translators: Input help description for putting the current stored entry on the system clipboard.
+		description=_("Puts the current stored entry on the system clipboard"),
 		gestures=("kb:control+windows+numpadMultiply", "kb(laptop):control+windows+\\"),
 		speakOnDemand=True,
 	)
-	def script_restoreStoredItem(self, gesture: inputCore.InputGesture) -> None:
+	def script_putStoredItemOnClipboard(self, gesture: inputCore.InputGesture) -> None:
 		"""Put the selected stored item on the system clipboard."""
-		self._runAction(self.controller.restoreCurrentStoredItem)
+		self._runAction(self.controller.putCurrentStoredItemOnClipboard)
 
 	@script(
 		# Translators: Input help description for saving a clipboard image.
