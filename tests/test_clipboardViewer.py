@@ -76,7 +76,10 @@ class ClipboardViewerTests(unittest.TestCase):
 			"</section>"
 		)
 		rendered = clipboardViewer.sanitizeHtml(html)
-		self.assertIn('<section id="copy" class="document" aria-label="Copied content" data-source="test">', rendered)
+		self.assertIn(
+			'<section id="copy" class="document" aria-label="Copied content" data-source="test">',
+			rendered,
+		)
 		self.assertIn('<a href="/docs"', rendered)
 		self.assertIn('<table border="1" style="border-collapse:collapse">', rendered)
 		self.assertIn('<th colspan="2">A</th>', rendered)
@@ -101,8 +104,8 @@ class ClipboardViewerTests(unittest.TestCase):
 		self.assertNotIn("<form", rendered)
 		self.assertNotIn("onclick", rendered)
 		self.assertNotIn("javascript:", rendered)
-		self.assertNotIn("href=\"//example.test\"", rendered)
-		self.assertIn('<p>text</p>', rendered)
+		self.assertNotIn('href="//example.test"', rendered)
+		self.assertIn("<p>text</p>", rendered)
 		self.assertIn('<img alt="remote image">', rendered)
 		self.assertIn("good", rendered)
 
@@ -150,7 +153,10 @@ class ClipboardViewerTests(unittest.TestCase):
 			lambda formula, _display: f"<math>{formula}</math>",
 		)
 		self.assertEqual("The price is $5.00 and $x^2$", rendered)
-		self.assertIn("The price is $5.00 and $x^2$", clipboardViewer.renderText("The price is $5.00 and $x^2$"))
+		self.assertIn(
+			"The price is $5.00 and $x^2$",
+			clipboardViewer.renderText("The price is $5.00 and $x^2$"),
+		)
 
 	def testRenderHtmlConvertsVisibleLatexButNotCode(self) -> None:
 		"""Convert formulas in rich text while preserving literal code samples."""
@@ -191,8 +197,7 @@ class ClipboardViewerTests(unittest.TestCase):
 		"""Fall back to plain text when the sanitized fragment only contains hidden nodes."""
 		snapshot = SimpleNamespace(
 			html=(
-				b"<section><p style='display:none'>hidden</p>"
-				b"<p aria-hidden='true'>also hidden</p></section>"
+				b"<section><p style='display:none'>hidden</p><p aria-hidden='true'>also hidden</p></section>"
 			),
 			text="plain",
 			files=(),

@@ -89,12 +89,17 @@ class TemporaryPasteTests(unittest.TestCase):
 					canUpload=False,
 				)
 				request = _TemporaryPasteRequest(
-					snapshot, "image summary", frozenset({1}), 3.0, expectedFocus=object()
+					snapshot,
+					"image summary",
+					frozenset({1}),
+					3.0,
+					expectedFocus=object(),
 				)
 				with patch.dict(
 					_prepareTemporaryPngPaste.__globals__,
 					pngToPackedDib=Mock(
-						return_value=b"dib", side_effect=ValueError("decode failed") if fails else None
+						return_value=b"dib",
+						side_effect=ValueError("decode failed") if fails else None,
 					),
 				):
 					if not text:
