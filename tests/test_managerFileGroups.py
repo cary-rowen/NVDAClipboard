@@ -64,11 +64,11 @@ class ManagerFileGroupTests(unittest.TestCase):
 	def testFileGroupSelectionShowsRemoveMissingFiles(self) -> None:
 		"""Show missing-file cleanup when selected entries include a file group."""
 		menu = Mock()
-		restoreItem = Mock()
+		putItem = Mock()
 		transferItem = Mock()
 		removeMissingFilesItem = Mock()
 		deleteItem = Mock()
-		menu.Append.side_effect = [restoreItem, transferItem, removeMissingFilesItem, deleteItem]
+		menu.Append.side_effect = [putItem, transferItem, removeMissingFilesItem, deleteItem]
 		fakeWx = SimpleNamespace(
 			DefaultPosition=object(),
 			EVT_MENU=object(),
@@ -86,7 +86,7 @@ class ManagerFileGroupTests(unittest.TestCase):
 			_itemKinds=("files",),
 			_onDeleteItems=Mock(),
 			_onRemoveMissingFiles=Mock(),
-			_onRestoreItemToClipboard=Mock(),
+			_onPutItemOnClipboard=Mock(),
 			_onTransferItemsToCategory=Mock(),
 			controller=SimpleNamespace(),
 			itemList=itemList,
@@ -119,7 +119,7 @@ class ManagerFileGroupTests(unittest.TestCase):
 			_itemKeys=(7,),
 			_itemKinds=("plainText",),
 			_onDeleteItems=Mock(),
-			_onRestoreItemToClipboard=Mock(),
+			_onPutItemOnClipboard=Mock(),
 			_onTransferItemsToCategory=Mock(),
 			itemList=itemList,
 		)

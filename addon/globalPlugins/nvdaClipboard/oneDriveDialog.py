@@ -79,8 +79,8 @@ class OneDriveSyncDialog(wx.Dialog):
 			# Translators: Label for a short description of OneDrive synchronization.
 			_("A&bout:"),
 			value=_(
-				# Translators: Short description of OneDrive backup and synchronization.
-				"Backs up and synchronizes eligible history and categories. Deletions are also synchronized.",
+				# Translators: Short description of OneDrive synchronization.
+				"Synchronizes eligible clipboard history and user categories. Deletions are also synchronized.",
 			),
 			size=(-1, 58),
 		)

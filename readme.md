@@ -31,7 +31,7 @@ Press `NVDA+Windows+V` to paste the selected text. If there is no complete selec
 
 You can paste repeatedly while the selection remains marked. Marking a new start, browsing stored entries, switching categories, or replacing the clipboard content clears the selection.
 
-Use `NVDA+Alt+A` to append text selected in the current application to the clipboard. Press `NVDA+Shift+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Use `NVDA+Alt+A` to append text selected in the current application to the clipboard. Press `NVDA+Windows+A` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 ## Clipboard History
 
@@ -55,11 +55,11 @@ Older history entries are removed automatically, while entries in your own categ
 
 ### Browsing and Pasting Stored Entries
 
-You can also browse stored entries without opening the manager. Assign the "Cycles through categories of stored entries" command in NVDA's Input Gestures dialog to cycle through clipboard history and user categories. The previous and next commands move within the selected category; see the default gestures below. Opening the manager starts at the same category and entry.
+You can also browse stored entries without opening the manager. Press `Ctrl+Windows+=` to cycle through clipboard history and user categories. The previous and next commands move within the selected category; see the default gestures below. Opening the manager starts at the same category and entry.
 
 After browsing to an entry, press `NVDA+Windows+V` to paste it. The current entry remains selected, so you can paste it again. The add-on preserves the original formatting when possible, using plain text when necessary.
 
-To put the entry on the clipboard without pasting, use the "Puts the selected stored entry on the system clipboard" command.
+To put the entry on the clipboard without pasting, use the "Puts the current stored entry on the system clipboard" command.
 
 ## Images
 
@@ -81,7 +81,7 @@ Deleting a synchronized entry or category also deletes it from the other synchro
 
 Tiantan Cloud Clipboard can send text between this computer and the Tiantan cloud clipboard. Formatting, images, and copied files stay local. Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
 
-`NVDA+Alt+V` receives Tiantan Cloud Clipboard text and immediately pastes it into the focused application. A manual receive leaves the text on the clipboard without pasting it.
+The "Receives and pastes from Tiantan Cloud Clipboard" command receives Tiantan text and immediately pastes it into the focused application. It has no default gesture; you can assign one in NVDA's Input Gestures dialog. A manual receive leaves the text on the clipboard without pasting it.
 
 ## Privacy
 
@@ -91,31 +91,35 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 
 ## Default Gestures
 
-| Command | All layouts | Laptop-only override |
+Laptop and Desktop refer to NVDA's keyboard layouts. Assign or change gestures under **NVDA Clipboard** in the Input Gestures dialog.
+
+| Function | Laptop | Desktop |
 | --- | --- | --- |
-| Report or view clipboard content | `NVDA+C` | — |
-| First clipboard line | `Ctrl+NumPad Divide` | `NVDA+Windows+Shift+Up Arrow` |
-| Last clipboard line | `Ctrl+NumPad Multiply` | `NVDA+Windows+Shift+Down Arrow` |
-| Previous clipboard line | `Ctrl+NumPad 7` | `NVDA+Windows+Up Arrow` |
-| Current clipboard line | `Ctrl+NumPad 8` | Unassigned |
-| Next clipboard line | `Ctrl+NumPad 9` | `NVDA+Windows+Down Arrow` |
-| Previous clipboard navigation unit | `Ctrl+NumPad 4` | `NVDA+Shift+Windows+Left Arrow` |
-| Current clipboard navigation unit | `Ctrl+NumPad 5` | `NVDA+Windows+Shift+.` |
-| Next clipboard navigation unit | `Ctrl+NumPad 6` | `NVDA+Shift+Windows+Right Arrow` |
-| Previous clipboard character | `Ctrl+NumPad 1` | `NVDA+Windows+Left Arrow` |
-| Current clipboard character | `Ctrl+NumPad 2` | `NVDA+Windows+.` |
-| Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Windows+Right Arrow` |
-| Mark clipboard selection start | `NVDA+Windows+[` | — |
-| Mark clipboard selection end | `NVDA+Windows+]` | — |
-| Paste clipboard selection or current stored entry | `NVDA+Windows+V` | — |
-| Open Clipboard Manager | `NVDA+E` | — |
-| Append selected text | `NVDA+Alt+A` | — |
-| Append last spoken text | `NVDA+Shift+X` | — |
-| Paste last spoken text | ``NVDA+` `` | — |
-| Receive and paste Tiantan Cloud Clipboard text | `NVDA+Alt+V` | — |
-| Copy navigator object as an image | `NVDA+PrintScreen` | — |
-| Cycle through categories of stored entries | Unassigned | Unassigned |
-| Next stored entry in the current category | `Ctrl+Windows+NumPad Plus` | `Ctrl+Windows+]` |
-| Previous stored entry in the current category | `Ctrl+Windows+NumPad Minus` | `Ctrl+Windows+[` |
-| Put the selected stored entry on the system clipboard | `Ctrl+Windows+NumPad Multiply` | `Ctrl+Windows+\` |
-| Save the current clipboard image | Unassigned | Unassigned |
+| Report or view clipboard content | `NVDA+C` | `NVDA+C` |
+| First clipboard line | `NVDA+Windows+Shift+Up Arrow` | `Ctrl+NumPad Divide` |
+| Last clipboard line | `NVDA+Windows+Shift+Down Arrow` | `Ctrl+NumPad Multiply` |
+| Previous clipboard line | `NVDA+Windows+Up Arrow` | `Ctrl+NumPad 7` |
+| Current clipboard line | `Ctrl+NumPad 8` | `Ctrl+NumPad 8` |
+| Next clipboard line | `NVDA+Windows+Down Arrow` | `Ctrl+NumPad 9` |
+| Page up through the clipboard | Unassigned by default | Unassigned by default |
+| Page down through the clipboard | Unassigned by default | Unassigned by default |
+| Previous clipboard navigation unit | `NVDA+Windows+Shift+Left Arrow` | `Ctrl+NumPad 4` |
+| Current clipboard navigation unit | `NVDA+Windows+Shift+.` | `Ctrl+NumPad 5` |
+| Next clipboard navigation unit | `NVDA+Windows+Shift+Right Arrow` | `Ctrl+NumPad 6` |
+| Previous clipboard character | `NVDA+Windows+Left Arrow` | `Ctrl+NumPad 1` |
+| Current clipboard character | `NVDA+Windows+.` | `Ctrl+NumPad 2` |
+| Next clipboard character | `NVDA+Windows+Right Arrow` | `Ctrl+NumPad 3` |
+| Mark clipboard selection start | `NVDA+Windows+[` | `NVDA+Windows+[` |
+| Mark clipboard selection end | `NVDA+Windows+]` | `NVDA+Windows+]` |
+| Paste clipboard selection or current stored entry | `NVDA+Windows+V` | `NVDA+Windows+V` |
+| Open Clipboard Manager | `NVDA+E` | `NVDA+E` |
+| Append selected text | `NVDA+Alt+A` | `NVDA+Alt+A` |
+| Append last spoken text | `NVDA+Windows+A` | `NVDA+Windows+A` |
+| Paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
+| Receive and paste Tiantan Cloud Clipboard text | Unassigned by default | Unassigned by default |
+| Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
+| Cycle through categories of stored entries | `Ctrl+Windows+=` | `Ctrl+Windows+=` |
+| Next stored entry in the current category | `Ctrl+Windows+]` | `Ctrl+Windows+NumPad Plus` |
+| Previous stored entry in the current category | `Ctrl+Windows+[` | `Ctrl+Windows+NumPad Minus` |
+| Put the current stored entry on the system clipboard | `Ctrl+Windows+\` | `Ctrl+Windows+NumPad Multiply` |
+| Save the current clipboard image | Unassigned by default | Unassigned by default |

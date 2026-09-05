@@ -312,7 +312,7 @@ msgstr "青色"
 msgid "magenta"
 msgstr "品红色"
 
-#. Translators: Error shown when supported clipboard formats cannot be restored.
+#. Translators: Error shown when supported formats cannot be written to the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:255
 #: addon\globalPlugins\nvdaClipboard\controller.py:1164
 #: addon\globalPlugins\nvdaClipboard\controller.py:1169
@@ -457,17 +457,17 @@ msgstr "请先关闭黑屏再进行截屏"
 #: addon\globalPlugins\nvdaClipboard\controller.py:842
 #: addon\globalPlugins\nvdaClipboard\controller.py:846
 msgid "Could not copy the navigator object image"
-msgstr "无法复制导航对象图像"
+msgstr "无法复制导航对象图片"
 
 #. Translators: Error shown when a navigator object screenshot cannot be encoded for history.
 #: addon\globalPlugins\nvdaClipboard\controller.py:851
 msgid "Could not prepare the navigator object image"
-msgstr "无法处理导航对象图像"
+msgstr "无法处理导航对象图片"
 
 #. Translators: Confirmation after a navigator object screenshot is copied.
 #: addon\globalPlugins\nvdaClipboard\controller.py:865
 msgid "Navigator object image copied to the clipboard"
-msgstr "导航对象图像已复制到剪贴板"
+msgstr "导航对象图片已复制到剪贴板"
 
 #. Translators: Disambiguates a synchronized user category from the built-in history view.
 #: addon\globalPlugins\nvdaClipboard\controller.py:923
@@ -485,7 +485,7 @@ msgstr "只能通过系统剪贴板更改剪贴板历史"
 msgid "An empty entry cannot be saved"
 msgstr "无法保存空条目"
 
-#. Translators: Error shown when another application changes the clipboard during a restore.
+#. Translators: Error shown when another application changes the clipboard before an entry is written.
 #. Translators: Error shown when another application changes the clipboard during an append action.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1096
 #: addon\globalPlugins\nvdaClipboard\controller.py:1173
@@ -507,52 +507,52 @@ msgstr "无法将条目移动到剪贴板历史"
 #: addon\globalPlugins\nvdaClipboard\controller.py:1362
 #: addon\globalPlugins\nvdaClipboard\controller.py:1371
 msgid "Could not read the clipboard image"
-msgstr "无法读取剪贴板图像"
+msgstr "无法读取剪贴板图片"
 
 #. Translators: Message shown when no clipboard image is available to save.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1354
 msgid "There is no clipboard image to save"
-msgstr "剪贴板中没有可保存的图像"
+msgstr "剪贴板中没有可保存的图片"
 
 #. Translators: Title of the dialog used to save the current clipboard image.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1365
 msgid "Save clipboard image"
-msgstr "保存剪贴板图像"
+msgstr "保存剪贴板图片"
 
 #. Translators: Error shown when the clipboard image cannot be saved.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1368
 msgid "Could not save the clipboard image"
-msgstr "无法保存剪贴板图像"
+msgstr "无法保存剪贴板图片"
 
 #. Translators: Confirmation after saving a clipboard image.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1375
 msgid "Clipboard image saved"
-msgstr "剪贴板图像已保存"
+msgstr "剪贴板图片已保存"
 
 #. Translators: Error shown when a selected history entry has no exportable image.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1382
 msgid "The selected entry does not contain a saved image"
-msgstr "所选条目不包含已保存的图像"
+msgstr "所选条目不包含已保存的图片"
 
 #. Translators: Title of the dialog used to save an image selected in clipboard history.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1385
 msgid "Save selected image"
-msgstr "保存所选图像"
+msgstr "保存所选图片"
 
 #. Translators: Error shown when a stored clipboard image cannot be saved.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1388
 msgid "Could not save the selected image"
-msgstr "无法保存所选图像"
+msgstr "无法保存所选图片"
 
 #. Translators: Error shown when stored PNG image data is invalid.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1391
 msgid "The saved image data is invalid"
-msgstr "保存的图像数据无效"
+msgstr "保存的图片数据无效"
 
 #. Translators: Confirmation after saving an image selected from clipboard history.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1394
 msgid "Selected image saved"
-msgstr "所选图像已保存"
+msgstr "所选图片已保存"
 
 #. Translators: Message shown when oversized rich formats are omitted from a history entry.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1470
@@ -563,7 +563,7 @@ msgstr "部分文本格式数据过大，未保存到历史记录"
 #: addon\globalPlugins\nvdaClipboard\controller.py:1541
 #: addon\globalPlugins\nvdaClipboard\controller.py:1658
 msgid "The image could not be added to clipboard history"
-msgstr "无法将图像添加到剪贴板历史"
+msgstr "无法将图片添加到剪贴板历史"
 
 #. Translators: Error shown when clipboard content changed but history could not be saved.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1645
@@ -573,17 +573,17 @@ msgstr "剪贴板已更新，但无法保存历史记录"
 #: addon\globalPlugins\nvdaClipboard\controller.py:1652
 #, python-brace-format
 msgid "The image was not added because it exceeds the {limit} MB history limit"
-msgstr "图像超过 {limit} MB 的历史记录大小上限，未能添加"
+msgstr "图片超过 {limit} MB 的历史记录大小上限，未能添加"
 
 #. Translators: Message shown when an image exceeds the total history storage limit.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1661
 msgid "The image was not added because image history storage is full"
-msgstr "图像历史存储空间已满，未能添加图像"
+msgstr "图片历史存储空间已满，未能添加图片"
 
 #. Translators: Message shown when mixed clipboard content is retained as text only.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1667
 msgid "The text was saved in history, but its image could not be stored"
-msgstr "文本已保存到历史记录，但无法保存其中的图像"
+msgstr "文本已保存到历史记录，但无法保存其中的图片"
 
 #. Translators: Error shown when a last-spoken command has no captured speech text.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1794
@@ -630,7 +630,7 @@ msgstr "清空剪贴板"
 #. Translators: Message shown when text navigation is attempted on an image.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2339
 msgid "Image content cannot be browsed as text"
-msgstr "无法以文本方式浏览图像内容"
+msgstr "无法以文本方式浏览图片内容"
 
 #: addon\globalPlugins\nvdaClipboard\controller.py:2384
 #, python-brace-format
@@ -669,7 +669,7 @@ msgid ""
 "Color depth: {depth} bits\n"
 "Stored size: {size}"
 msgstr ""
-"图像\n"
+"图片\n"
 "尺寸：{width} × {height} 像素\n"
 "色深：{depth} 位\n"
 "存储大小：{size}"
@@ -772,7 +772,7 @@ msgstr "格式化文本"
 #: addon\globalPlugins\nvdaClipboard\controller.py:2591
 #: addon\globalPlugins\nvdaClipboard\manager.py:1291
 msgid "Text and image"
-msgstr "文本和图像"
+msgstr "文本和图片"
 
 #. Translators: Number of top-level file system items cut to the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2597
@@ -798,7 +798,7 @@ msgstr[0] "已复制文件：共 {count} 项"
 #. Translators: Type of image-only clipboard content.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2616
 msgid "Image"
-msgstr "图像"
+msgstr "图片"
 
 #. Translators: Summary for clipboard content excluded from monitoring by its source application.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2619
@@ -855,27 +855,27 @@ msgstr "{summary}；全透明像素占 {percentage}%"
 msgid "{summary}; {color} pixels: {percentage}%"
 msgstr "{summary}；{color}像素占 {percentage}%"
 
-#. Translators: Confirmation after restoring one or multiple files to the clipboard.
+#. Translators: Confirmation after putting one or multiple files on the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2677
 #, python-brace-format
-msgid "{count} file restored to the clipboard"
-msgid_plural "{count} files restored to the clipboard"
-msgstr[0] "已将 {count} 个文件恢复到剪贴板"
+msgid "{count} file put on the clipboard"
+msgid_plural "{count} files put on the clipboard"
+msgstr[0] "已将 {count} 个文件放入剪贴板"
 
-#. Translators: Confirmation after restoring an image to the clipboard.
+#. Translators: Confirmation after putting an image on the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2683
-msgid "Image restored to the clipboard"
-msgstr "图像已恢复到剪贴板"
+msgid "Image put on the clipboard"
+msgstr "图片已放入剪贴板"
 
-#. Translators: Confirmation after restoring mixed text and image content.
+#. Translators: Confirmation after putting mixed text and image content on the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2686
-msgid "Text and image restored to the clipboard"
-msgstr "文本和图像已恢复到剪贴板"
+msgid "Text and image put on the clipboard"
+msgstr "文本和图片已放入剪贴板"
 
-#. Translators: Confirmation after restoring plain or formatted text.
+#. Translators: Confirmation after putting plain or formatted text on the clipboard.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2688
-msgid "Text restored to the clipboard"
-msgstr "文本已恢复到剪贴板"
+msgid "Text put on the clipboard"
+msgstr "文本已放入剪贴板"
 
 #. Translators: Navigable clipboard file entry with name, position, and full path.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2696
@@ -916,7 +916,7 @@ msgstr "请先删除该类别中的所有条目"
 #. Translators: Error shown when a collected image cannot fit in clipboard storage.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2725
 msgid "The image cannot fit in clipboard history storage"
-msgstr "剪贴板历史存储空间不足，无法保存该图像"
+msgstr "剪贴板历史存储空间不足，无法保存该图片"
 
 #. Translators: Error shown when stored clipboard entry data is invalid or missing.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2728
@@ -968,7 +968,7 @@ msgstr "云剪贴板粘贴失败"
 #. Translators: File type filter in the save clipboard image dialog.
 #: addon\globalPlugins\nvdaClipboard\images.py:103
 msgid "PNG images (*.png)|*.png"
-msgstr "PNG 图像 (*.png)|*.png"
+msgstr "PNG 图片 (*.png)|*.png"
 
 #. Translators: Accessible description for the clipboard manager entry list.
 #: addon\globalPlugins\nvdaClipboard\manager.py:78
@@ -1154,12 +1154,12 @@ msgstr "格式化文本(&F)"
 #. Translators: View filter showing image-only clipboard entries.
 #: addon\globalPlugins\nvdaClipboard\manager.py:434
 msgid "&Image"
-msgstr "图像(&I)"
+msgstr "图片(&I)"
 
 #. Translators: View filter showing text-and-image clipboard entries.
 #: addon\globalPlugins\nvdaClipboard\manager.py:436
 msgid "Text and I&mage"
-msgstr "文本和图像(&M)"
+msgstr "文本和图片(&M)"
 
 #. Translators: View filter showing file-group clipboard entries.
 #: addon\globalPlugins\nvdaClipboard\manager.py:438
@@ -1242,7 +1242,7 @@ msgstr "纯文本草稿"
 #. Translators: Kind of a stored image summary in the manager.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1294
 msgid "Image summary"
-msgstr "图像摘要"
+msgstr "图片摘要"
 
 #. Translators: Kind of a stored file group in the manager.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1297
@@ -1271,8 +1271,8 @@ msgstr "保存到{target}并关闭窗口\tCtrl+Shift+X"
 
 #. Translators: Button that puts modified text on the system clipboard.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1449
-msgid "Restore to Clipboard"
-msgstr "恢复到剪贴板"
+msgid "Put on Clipboard"
+msgstr "放入剪贴板"
 
 #. Translators: Button that saves modified text in the selected user category.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1452
@@ -1315,10 +1315,10 @@ msgstr "重命名(&R)..."
 msgid "&Delete"
 msgstr "删除(&D)"
 
-#. Translators: Context menu command to restore an entry to the clipboard.
+#. Translators: Context menu command to put an entry on the clipboard.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1745
-msgid "&Restore to Clipboard"
-msgstr "恢复到剪贴板(&R)"
+msgid "Put on Clipboa&rd"
+msgstr "放入剪贴板(&R)"
 
 #. Translators: Context menu command to move or collect selected entries.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1751
@@ -1340,7 +1340,7 @@ msgstr[0] "删除 {count} 个条目(&L)"
 #. Translators: Context command to save the image from the selected entry.
 #: addon\globalPlugins\nvdaClipboard\manager.py:1776
 msgid "Save Selected &Image..."
-msgstr "保存所选图像(&I)..."
+msgstr "保存所选图片(&I)..."
 
 #. Translators: Prompt for the name of a new clipboard category.
 #. Translators: Prompt for a new name for a clipboard category.
@@ -1530,12 +1530,12 @@ msgstr "状态(&S)："
 msgid "A&bout:"
 msgstr "说明(&B)："
 
-#. Translators: Short description of OneDrive backup and synchronization.
+#. Translators: Short description of OneDrive synchronization.
 #: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:83
 msgid ""
-"Backs up and synchronizes eligible history and categories. Deletions are "
+"Synchronizes eligible clipboard history and user categories. Deletions are "
 "also synchronized."
-msgstr "备份并同步符合条件的历史记录和类别，删除也会同步。"
+msgstr "同步符合条件的剪贴板历史和用户类别，删除也会同步。"
 
 #. Translators: Button to use Microsoft's device-code sign-in fallback.
 #: addon\globalPlugins\nvdaClipboard\oneDriveDialog.py:98
@@ -1620,12 +1620,12 @@ msgstr "不允许将剪贴板历史记录条目同步到 OneDrive"
 #. Translators: Error shown when a cloud image fails PNG validation.
 #: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:385
 msgid "A OneDrive clipboard image is invalid"
-msgstr "OneDrive 剪贴板图像无效"
+msgstr "OneDrive 剪贴板图片无效"
 
 #. Translators: Error shown when merged OneDrive category images exceed the local limit.
 #: addon\globalPlugins\nvdaClipboard\oneDriveProtocol.py:623
 msgid "OneDrive image data exceeds the 256 MB storage limit"
-msgstr "OneDrive 图像数据超出 256 MB 存储限制"
+msgstr "OneDrive 图片数据超出 256 MB 存储限制"
 
 #. Translators: Error shown when bundled Microsoft sign-in support cannot load.
 #: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:102
@@ -1844,7 +1844,7 @@ msgstr "此剪贴板数据库已关联到另一个 Microsoft 账户"
 #. Translators: Error when downloaded OneDrive images cannot fit in local storage.
 #: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1734
 msgid "OneDrive image data cannot fit in the 256 MB local storage limit"
-msgstr "OneDrive 图像数据无法存入限额为 256 MB 的本地存储"
+msgstr "OneDrive 图片数据无法存入限额为 256 MB 的本地存储"
 
 #. Translators: Error when synchronized data cannot be saved locally.
 #: addon\globalPlugins\nvdaClipboard\oneDriveSync.py:1739
@@ -1973,7 +1973,7 @@ msgstr "在剪贴板中向下翻一页并读出所在行"
 msgid ""
 "Reports the current clipboard line. Press twice to spell it and three times "
 "for character descriptions."
-msgstr "读出当前剪贴板行。连按两次拼读，连按三次读出字符描述。"
+msgstr "读出剪贴板当前行。连按两次拼读，连按三次读出字符描述。"
 
 #. Translators: Input help description for moving to the previous clipboard navigation unit.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:182
@@ -1990,7 +1990,7 @@ msgstr "移动到剪贴板的下一个导航单位并读出"
 msgid ""
 "Reports the current clipboard navigation unit. Press twice to spell it and "
 "three times for character descriptions."
-msgstr "读出当前剪贴板导航单位。连按两次拼读，连按三次读出字符描述。"
+msgstr "读出剪贴板当前导航单位。连按两次拼读，连按三次读出字符描述。"
 
 #. Translators: Input help description for moving to the previous clipboard character.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:218
@@ -2007,7 +2007,7 @@ msgstr "移动到剪贴板下一个字符并读出"
 msgid ""
 "Reports the current clipboard character. Press twice for a description and "
 "three times for its numeric value."
-msgstr "读出当前剪贴板字符。连按两次读出字符描述，连按三次读出字符的数值。"
+msgstr "读出剪贴板当前字符。连按两次读出字符描述，连按三次读出字符的数值。"
 
 #. Translators: Input help description for opening the clipboard manager.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:250
@@ -2026,7 +2026,7 @@ msgstr "将最后朗读的文本追加到剪贴板"
 
 #. Translators: Input help description for temporarily pasting the last spoken text.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:282
-msgid "Pastes the last spoken text without keeping it in clipboard history"
+msgid "Pastes the last spoken text"
 msgstr "粘贴最后朗读的文本"
 
 #. Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
@@ -2037,7 +2037,7 @@ msgstr "从天坦云剪贴板接收并粘贴"
 #. Translators: Input help description for copying a navigator object screenshot.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:302
 msgid "Copies an image of the current navigator object to the clipboard"
-msgstr "将当前导航对象的图像复制到剪贴板"
+msgstr "将当前导航对象的图片复制到剪贴板"
 
 #. Translators: Input help description for cycling through categories of stored entries.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:312
@@ -2054,15 +2054,15 @@ msgstr "移动到当前类别中的下一个已存条目"
 msgid "Moves to the previous stored entry in the current category"
 msgstr "移动到当前类别中的上一个已存条目"
 
-#. Translators: Input help description for putting the selected stored entry on the system clipboard.
+#. Translators: Input help description for putting the current stored entry on the system clipboard.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:341
-msgid "Puts the selected stored entry on the system clipboard"
-msgstr "将选中的已存条目放入系统剪贴板"
+msgid "Puts the current stored entry on the system clipboard"
+msgstr "将当前已存条目放入系统剪贴板"
 
 #. Translators: Input help description for saving a clipboard image.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:351
 msgid "Saves the clipboard image to a file"
-msgstr "将剪贴板图像保存到文件"
+msgstr "将剪贴板图片保存到文件"
 
 #. Add-on description
 #. Translators: Long description to be shown for this add-on on add-on information from add-on store
@@ -2078,8 +2078,8 @@ msgid ""
 "text."
 msgstr ""
 "剪贴板为 Windows 剪贴板提供无障碍浏览和容量受限的 SQLite 历史记录。\n"
-"历史记录支持 Unicode 文本及可选的 HTML 或 RTF 格式、PNG 或 DIB 图像、文本与图"
-"像混合内容和原生文件组，并提供用户类别及可识别内容类型的管理器。\n"
+"历史记录支持 Unicode 文本及可选的 HTML 或 RTF 格式、PNG 或 DIB 图片、文本与图片"
+"混合内容和原生文件组，并提供用户类别及可识别内容类型的管理器。\n"
 "相关命令可以追加或临时粘贴 NVDA 最后朗读的文本。\n"
 "可选的天坦剪贴板同步仅上传符合要求的 Unicode 文本。"
 
@@ -2091,22 +2091,22 @@ msgid ""
 "\n"
 "- Press `NVDA+C` once to report a clipboard summary and twice in quick succession to view its content in browse mode. This replaces the add-on's previous summary shortcuts and NVDA's standard clipboard report.\n"
 "- View HTML, Markdown, and common LaTeX content with scripts and external resource loading removed. An option in settings lets you show the text as-is instead.\n"
-"- Browse stored entries across clipboard history and user categories without opening the manager. Assign the category cycling command in Input Gestures; opening the manager starts at the current category and entry.\n"
+"- Browse stored entries across clipboard history and user categories without opening the manager. Press `Ctrl+Windows+=` to cycle through categories; opening the manager starts at the current category and entry.\n"
 "- Use `NVDA+Windows+[` and `NVDA+Windows+]` to mark a clipboard text selection in either direction.\n"
 "- Use `NVDA+Windows+V` to paste the selection, or the current stored entry if there is no complete selection. The current entry remains selected after pasting, so you can paste it again.\n"
 "- Pasting stored entries preserves the original formatting when possible, using plain text when necessary.\n"
-"- Updated default gestures: laptop clipboard text navigation uses `NVDA+Windows` instead of `NVDA+Alt` combinations; the laptop-specific current-line gesture and the save clipboard image gesture are no longer assigned; appending the last spoken text uses `NVDA+Shift+X`.\n"
+"- Updated default gestures: laptop clipboard text navigation uses `NVDA+Windows` instead of `NVDA+Alt` combinations; the laptop-specific current-line, save clipboard image, and receive and paste Tiantan Cloud Clipboard gestures are no longer assigned; appending the last spoken text uses `NVDA+Windows+A`.\n"
 "- Clarified English and Chinese documentation and messages for text selection, stored-entry navigation, and pasting."
 msgstr ""
 "### 0.3.0\n"
 "\n"
 "- 按一次 `NVDA+C` 读出剪贴板摘要，连按两次在浏览模式下查看内容。此手势替代插件原有的摘要手势，并接管 NVDA 原有的读出剪贴板命令。\n"
 "- 支持显示 HTML、Markdown 和常见 LaTeX 内容，并移除可能执行脚本或加载外部资源的内容。可在设置中改为原样显示文本。\n"
-"- 无需打开管理器，即可在剪贴板历史和用户类别之间切换并浏览已存条目。类别切换命令需在“输入手势”中分配手势；打开管理器时会定位到当前类别和条目。\n"
+"- 无需打开管理器，即可在剪贴板历史和用户类别之间切换并浏览已存条目。按 `Ctrl+Windows+=` 循环切换类别；打开管理器时会定位到当前类别和条目。\n"
 "- 使用 `NVDA+Windows+[` 和 `NVDA+Windows+]` 标记剪贴板文本选区，支持向前或向后选择。\n"
 "- 使用 `NVDA+Windows+V` 粘贴选区；没有完整选区时，粘贴当前已存条目。粘贴条目后仍停留在该条目，可再次粘贴。\n"
 "- 粘贴已存条目时尽可能保留原有格式，必要时使用纯文本。\n"
-"- 调整默认手势：笔记本布局的剪贴板文本导航由 `NVDA+Alt` 系列改为 `NVDA+Windows` 系列；取消当前行的笔记本专用手势和保存剪贴板图片的默认手势；追加最后朗读文本改用 `NVDA+Shift+X`。\n"
+"- 调整默认手势：笔记本布局的剪贴板文本导航由 `NVDA+Alt` 系列改为 `NVDA+Windows` 系列；取消当前行的笔记本专用手势，以及保存剪贴板图片、从天坦云剪贴板接收并粘贴的默认手势；追加最后朗读文本改用 `NVDA+Windows+A`。\n"
 "- 统一中英文使用说明和提示用语，使文本选择、已存条目导航及粘贴操作的说明更清晰。"
 
 #~ msgid "Tiantan Clipboard"
@@ -2207,9 +2207,6 @@ msgstr ""
 
 #~ msgid "S&ync OneDrive"
 #~ msgstr "同步 OneDrive(&Y)"
-
-#~ msgid "Put on Clipboard"
-#~ msgstr "放入剪贴板"
 
 #~ msgid "&Put on Clipboard"
 #~ msgstr "放入剪贴板(&P)"
@@ -2487,8 +2484,8 @@ msgid "Marks the current clipboard navigation position as the selection start"
 msgstr "将当前剪贴板导航位置标记为选区开始点"
 
 #. Translators: Input help description for marking the end of clipboard text to paste.
-msgid "Marks the selection end and selects the clipboard text between both markers"
-msgstr "标记选区结束点并选中两个标记之间的剪贴板文本"
+msgid "Marks the current clipboard navigation position as the selection end and selects the text between the two markers"
+msgstr "将当前剪贴板导航位置标记为选区结束点，并选中两个标记之间的文本"
 
 #. Translators: Input help description for pasting the current clipboard-navigation target.
 msgid "Pastes the clipboard selection, or the current stored entry if there is no complete selection"

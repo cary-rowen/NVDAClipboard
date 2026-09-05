@@ -223,7 +223,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self.clearSearchButton.Bind(wx.EVT_BUTTON, self._onClearSearch)
 		self.itemList.Bind(wx.EVT_SET_FOCUS, self._onItemListSetFocus)
 		self.itemList.Bind(wx.EVT_LIST_ITEM_FOCUSED, self._onItemFocused)
-		self.itemList.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._onRestoreItemToClipboard)
+		self.itemList.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._onPutItemOnClipboard)
 		self.itemList.Bind(wx.EVT_CONTEXT_MENU, self._onItemContextMenu)
 		self.editor.Bind(wx.EVT_TEXT, self._onContentChanged)
 
@@ -1446,7 +1446,7 @@ class ClipboardManagerFrame(wx.Frame):
 		isHistory = category is None or self.controller.isHistoryCategory(category)
 		if isHistory:
 			# Translators: Button that puts modified text on the system clipboard.
-			saveLabel = _("Restore to Clipboard")
+			saveLabel = _("Put on Clipboard")
 		else:
 			# Translators: Button that saves modified text in the selected user category.
 			saveLabel = _("Save to Current Category")
@@ -1739,12 +1739,12 @@ class ClipboardManagerFrame(wx.Frame):
 		fileGroupKeys = self._getSelectedFileGroupKeys()
 		menu = wx.Menu()
 		if itemCount == 1:
-			restoreItem = menu.Append(
+			putItem = menu.Append(
 				wx.ID_ANY,
-				# Translators: Context menu command to restore an entry to the clipboard.
-				_("&Restore to Clipboard"),
+				# Translators: Context menu command to put an entry on the clipboard.
+				_("Put on Clipboa&rd"),
 			)
-			menu.Bind(wx.EVT_MENU, self._onRestoreItemToClipboard, restoreItem)
+			menu.Bind(wx.EVT_MENU, self._onPutItemOnClipboard, putItem)
 		transferItem = menu.Append(
 			wx.ID_ANY,
 			# Translators: Context menu command to move or collect selected entries.
@@ -1972,7 +1972,8 @@ class ClipboardManagerFrame(wx.Frame):
 		except Exception as error:
 			self._showError(error)
 
-	def _onRestoreItemToClipboard(self, event: wx.Event) -> None:
+	def _onPutItemOnClipboard(self, event: wx.Event) -> None:
+		"""Put the active stored entry on the clipboard without pasting it."""
 		if self._isSearchSessionActive and not self._prepareSearchListInteraction():
 			return
 		category = self._getSelectedCategory()
@@ -1981,7 +1982,7 @@ class ClipboardManagerFrame(wx.Frame):
 		if category is None or index is None or key is None:
 			return
 		try:
-			self.controller.restoreItemToClipboard(category, key)
+			self.controller.putItemOnClipboard(category, key)
 		except Exception as error:
 			self._showError(error)
 
@@ -2391,7 +2392,7 @@ class ClipboardManagerFrame(wx.Frame):
 			and keyCode in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER)
 			and modifiers == wx.MOD_NONE
 		):
-			self._onRestoreItemToClipboard(event)
+			self._onPutItemOnClipboard(event)
 			return
 		event.Skip()
 
