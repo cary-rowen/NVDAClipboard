@@ -139,6 +139,25 @@ class ClipboardNavigator:
 		self._selectionEndOffset = self.getPosition()
 		return self.getSelectedText()
 
+	def getSelectionOffsets(self) -> tuple[int, int] | None:
+		"""Return both marked offsets, or ``None`` until the range is complete."""
+		if self._selectionStartOffset is None or self._selectionEndOffset is None:
+			return None
+		return self._selectionStartOffset, self._selectionEndOffset
+
+	def setSelectionOffsets(self, offsets: tuple[int, int] | None) -> None:
+		"""Restore a completed marked range, or clear all selection markers."""
+		if offsets is None:
+			self._selectionStartOffset = None
+			self._selectionEndOffset = None
+			return
+		startOffset, endOffset = offsets
+		maxOffset = len(self._owner.text) - 1
+		if maxOffset < 0 or not 0 <= startOffset <= maxOffset or not 0 <= endOffset <= maxOffset:
+			raise ValueError(offsets)
+		self._selectionStartOffset = startOffset
+		self._selectionEndOffset = endOffset
+
 	def getSelectedText(self) -> str | None:
 		"""Return text between both inclusive markers, or ``None`` until both are set."""
 		if self._selectionStartOffset is None or self._selectionEndOffset is None:

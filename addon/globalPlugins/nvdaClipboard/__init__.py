@@ -266,14 +266,19 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.markClipboardSelectionEnd)
 
 	@script(
-		# Translators: Input help description for pasting text selected in clipboard navigation.
-		description=_("Temporarily pastes the selected clipboard text"),
+		# Translators: Input help description for pasting the current clipboard-navigation target.
+		description=_(
+			"Pastes the clipboard selection, or the current stored entry if no selection is marked",
+		),
 		gesture="kb:NVDA+windows+v",
 		speakOnDemand=True,
 	)
-	def script_pasteClipboardSelection(self, gesture: inputCore.InputGesture) -> None:
-		"""Paste the selected clipboard text through a temporary clipboard transaction."""
-		self._runAction(self.controller.pasteClipboardSelection, _getKeyboardGestureVkCodes(gesture))
+	def script_pasteCurrentNavigationTarget(self, gesture: inputCore.InputGesture) -> None:
+		"""Paste the complete clipboard selection or current stored entry temporarily."""
+		self._runAction(
+			self.controller.pasteCurrentNavigationTarget,
+			_getKeyboardGestureVkCodes(gesture),
+		)
 
 	@script(
 		# Translators: Input help description for opening the clipboard manager.
