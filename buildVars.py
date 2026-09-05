@@ -35,29 +35,19 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.2.8",
+	addon_version="0.3.0",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.2.8
+	addon_changelog=_("""### 0.3.0
 
-- Added a browse mode clipboard viewer: press `NVDA+C` once for a summary and twice to open the current content.
-- Added rendering for clipboard HTML, Markdown, and common LaTeX, with readable fallbacks when rich content cannot be displayed and active web content removed.
-- Added an option to show clipboard content as plain text in browse mode; rendering remains enabled by default.
-- Updated default gestures: laptop clipboard navigation now uses `NVDA+Windows` combinations, the current-line laptop gesture and clipboard image save gesture are unassigned, and appending the last spoken text now uses `NVDA+Shift+X`.
-
-### 0.2.6
-
-- Added global navigation across clipboard history and user categories for stored entries. The category cycling command is unassigned by default and can be configured in NVDA's Input Gestures dialog.
-- Updated the next, previous, and restore commands to operate within the selected category, and opened Clipboard Manager at the current global navigation position.
-- Added indexed category summary lookups for responsive repeated navigation.
-- Updated terminology, documentation, and Chinese translations.
-
-### 0.2.5
-
-- Improved Clipboard Manager search, file-group cleanup, and save behavior for more reliable editing and responsive operation.
-- Normalized line endings when pasting NVDA's last spoken text.
-- Improved OneDrive token cache writes and synchronization reliability.
-- Removed redundant internal code and simplified maintenance tooling."""),
+- Press `NVDA+C` once to report a clipboard summary and twice in quick succession to view its content in browse mode. This replaces the add-on's previous summary shortcuts and NVDA's standard clipboard report.
+- View HTML, Markdown, and common LaTeX content with scripts and external resource loading removed. An option in settings lets you show the text as-is instead.
+- Browse stored entries across clipboard history and user categories without opening the manager. Assign the category cycling command in Input Gestures; opening the manager starts at the current category and entry.
+- Use `NVDA+Windows+[` and `NVDA+Windows+]` to mark a clipboard text selection in either direction.
+- Use `NVDA+Windows+V` to paste the selection, or the current stored entry if there is no complete selection. The current entry remains selected after pasting, so you can paste it again.
+- Pasting stored entries preserves the original formatting when possible, using plain text when necessary.
+- Updated default gestures: laptop clipboard text navigation uses `NVDA+Windows` instead of `NVDA+Alt` combinations; the laptop-specific current-line gesture and the save clipboard image gesture are no longer assigned; appending the last spoken text uses `NVDA+Shift+X`.
+- Clarified English and Chinese documentation and messages for text selection, stored-entry navigation, and pasting."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
