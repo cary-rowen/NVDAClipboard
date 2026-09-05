@@ -159,6 +159,28 @@ def _normalizeClipboardLineEndings(text: str) -> str:
 	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
 
 
+def _mapClipboardSelectionOffsets(
+	offsets: tuple[int, int],
+	sourceText: str,
+	targetText: str,
+) -> tuple[int, int] | None:
+	"""Map selection endpoints across the clipboard's LF-to-CRLF conversion."""
+	if any(offset < 0 or offset >= len(sourceText) for offset in offsets):
+		return None
+	if sourceText == targetText:
+		return offsets
+	if _normalizeClipboardLineEndings(sourceText) != targetText:
+		return None
+	mappedOffsets: list[int] = []
+	for offset in offsets:
+		if 0 < offset < len(sourceText) and sourceText[offset - 1 : offset + 1] == "\r\n":
+			offset -= 1
+		mappedOffsets.append(len(_normalizeClipboardLineEndings(sourceText[:offset])))
+	if any(offset >= len(targetText) for offset in mappedOffsets):
+		return None
+	return mappedOffsets[0], mappedOffsets[1]
+
+
 def _getTextOrCharacterCount(text: str, maxLength: int = 1024) -> str:
 	"""Return text shorter than ``maxLength``, or its localized character count."""
 	textLength = len(text)
@@ -174,7 +196,7 @@ class _ClipboardChangeSource(Enum):
 	EXTERNAL = auto()
 	INITIAL = auto()
 	APPEND_TEXT = auto()
-	TEMPORARY_TEXT_PASTE = auto()
+	TEMPORARY_PASTE = auto()
 	TEMPORARY_PASTE_RESTORE = auto()
 	LOCAL_WRITE_FAILURE = auto()
 	MANAGER_TEXT_REPLACEMENT = auto()
@@ -226,27 +248,96 @@ class _PreparedPngRestore:
 
 
 @dataclass(frozen=True, slots=True)
-class _TemporaryTextPasteState:
-	"""Retain the data needed to restore one temporary text paste."""
+class _TemporaryPasteRequest:
+	"""Carry one immutable temporary paste through deferred preparation and retries."""
+
+	snapshot: ClipboardSnapshot
+	feedbackText: str
+	triggerKeyCodes: frozenset[int]
+	keyReleaseDeadline: float
+	sourceSequenceNumber: int | None = None
+	originalSelectionOffsets: tuple[int, int] | None = None
+	expectedFocus: object | None = None
+	preparedPngDib: bytes | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _TemporaryPasteState:
+	"""Retain the data needed to restore one temporary clipboard paste."""
 
 	originalSnapshot: ClipboardSnapshot | None
 	temporarySequenceNumber: int
-	temporaryText: str
+	temporarySnapshot: ClipboardSnapshot
 	allowsPartialWrite: bool = False
 	originalNavigationOffset: int | None = None
+	originalSelectionOffsets: tuple[int, int] | None = None
 
 
-def _isTemporaryTextSnapshot(
+def _isTemporarySnapshot(
 	snapshot: ClipboardSnapshot,
-	state: _TemporaryTextPasteState,
+	state: _TemporaryPasteState,
 ) -> bool:
-	"""Match temporary text after Windows has synthesized additional clipboard formats."""
+	"""Match temporary content after Windows has synthesized additional clipboard formats."""
+	expected = state.temporarySnapshot
 	return (
-		snapshot.contentType == ClipboardContentType.TEXT
-		and snapshot.text == _normalizeClipboardLineEndings(state.temporaryText)
+		snapshot.contentType == expected.contentType
+		and snapshot.text == _normalizeClipboardLineEndings(expected.text)
+		and snapshot.html == expected.html
+		and snapshot.rtf == expected.rtf
+		and snapshot.imageFormat == expected.imageFormat
+		and snapshot.imageData == expected.imageData
+		and snapshot.imageWidth == expected.imageWidth
+		and snapshot.imageHeight == expected.imageHeight
+		and snapshot.imageBitDepth == expected.imageBitDepth
+		and snapshot.files == expected.files
 		and not snapshot.canIncludeInHistory
 		and not snapshot.canUpload
 		and bool(snapshot.sequenceNumber)
+	)
+
+
+def _preparePngDib(snapshot: ClipboardSnapshot) -> bytes:
+	"""Decode a validated PNG snapshot into its DIB clipboard fallback."""
+	imageData = snapshot.imageData
+	if snapshot.imageFormat != "PNG" or imageData is None:
+		raise ValueError(snapshot.imageFormat)
+	dibData = pngToPackedDib(
+		imageData,
+		(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
+	)
+	if dibData is None:
+		raise ValueError(snapshot.imageFormat)
+	return dibData
+
+
+def _prepareTemporaryPngPaste(request: _TemporaryPasteRequest) -> _TemporaryPasteRequest:
+	"""Attach a worker-prepared DIB fallback to one temporary PNG paste."""
+	try:
+		return replace(request, preparedPngDib=_preparePngDib(request.snapshot))
+	except (OSError, ValueError):
+		fallback = _getPlainTextPasteRequest(request)
+		if fallback is None:
+			raise
+		log.debugWarning("Could not prepare the image; retaining temporary paste text.", exc_info=True)
+		return fallback
+
+
+def _getPlainTextPasteRequest(request: _TemporaryPasteRequest) -> _TemporaryPasteRequest | None:
+	"""Retain actual text when a rich temporary paste cannot be prepared or written."""
+	if not request.snapshot.text or request.snapshot.contentType not in (
+		ClipboardContentType.FORMATTED_TEXT,
+		ClipboardContentType.TEXT_AND_IMAGE,
+	):
+		return None
+	return replace(
+		request,
+		snapshot=ClipboardSnapshot(
+			ClipboardContentType.TEXT,
+			text=_normalizeUnicodeText(request.snapshot.text),
+			canIncludeInHistory=False,
+			canUpload=False,
+		),
+		preparedPngDib=None,
 	)
 
 
@@ -265,7 +356,7 @@ class _ClipboardWriteFailedError(RuntimeError):
 		self.sequenceNumber = sequenceNumber
 
 
-class _TemporaryTextApplyError(RuntimeError):
+class _TemporaryPasteApplyError(RuntimeError):
 	"""Report a completed temporary write whose local controller update failed."""
 
 	def __init__(self, sequenceNumber: int) -> None:
@@ -334,8 +425,10 @@ class ClipboardController:
 		self._lastAppliedSequenceNumber = 0
 		self._historySaveFailureReported = False
 		self._cloudFetchInProgress = False
-		self._temporaryTextPasteInProgress = False
-		self._temporaryTextPasteState: _TemporaryTextPasteState | None = None
+		self._temporaryPasteInProgress = False
+		self._shouldRestoreTemporaryPasteSelection = False
+		self._temporaryPasteState: _TemporaryPasteState | None = None
+		self._pendingTemporaryPngPaste: Future[_TemporaryPasteRequest] | None = None
 		self._isStarted = False
 
 	def start(self) -> None:
@@ -365,9 +458,10 @@ class ClipboardController:
 		self._awaitingInitialSnapshot = False
 		self._pendingWrites.clear()
 		self._cancelPendingPngRestore()
+		self._cancelPendingTemporaryPngPaste()
 		self._cloudFetchInProgress = False
-		self._temporaryTextPasteInProgress = False
-		self._temporaryTextPasteState = None
+		self._temporaryPasteInProgress = False
+		self._temporaryPasteState = None
 		self._pendingFileSizeReport = None
 		if self._fileSizeCalculation is not None:
 			self._fileSizeCalculation.cancel()
@@ -797,6 +891,7 @@ class ClipboardController:
 		if not self._ensureCurrentContentHasText():
 			return
 		self.navigator.markSelectionStart()
+		self._shouldRestoreTemporaryPasteSelection = False
 		# Translators: Indicates the start of clipboard text selected for pasting.
 		ui.message(_("Start marked"))
 
@@ -819,7 +914,8 @@ class ClipboardController:
 		if not self._ensureCurrentContentHasText():
 			return
 		selectedText = self.navigator.getSelectedText()
-		if not selectedText:
+		selectionOffsets = self.navigator.getSelectionOffsets()
+		if not selectedText or selectionOffsets is None:
 			# Translators: Message shown when a command requires selected text.
 			ui.message(_("No text is selected"))
 			return
@@ -827,7 +923,15 @@ class ClipboardController:
 			selectedText,
 			triggerKeyCodes,
 			sourceSequenceNumber=self._lastAppliedSequenceNumber,
+			originalSelectionOffsets=selectionOffsets,
 		)
+
+	def pasteCurrentNavigationTarget(self, triggerKeyCodes: frozenset[int]) -> None:
+		"""Paste a complete clipboard selection, or otherwise the current stored item."""
+		if self.navigator.getSelectionOffsets() is not None:
+			self.pasteClipboardSelection(triggerKeyCodes)
+		else:
+			self.pasteCurrentStoredItem(triggerKeyCodes)
 
 	def appendLastSpokenText(self) -> None:
 		"""Append the most recent NVDA speech text to text clipboard content."""
@@ -908,6 +1012,8 @@ class ClipboardController:
 
 	def cycleStoredItemCategory(self) -> None:
 		"""Select and report the next category of stored clipboard items."""
+		self.navigator.setSelectionOffsets(None)
+		self._shouldRestoreTemporaryPasteSelection = False
 		categories = self.getCategories()
 		if self._storedItemCategory in categories:
 			categoryIndex = (categories.index(self._storedItemCategory) + 1) % len(categories)
@@ -939,6 +1045,22 @@ class ClipboardController:
 			self._reportEmptyStoredItemCategory(category)
 			return
 		self.restoreItemToClipboard(category, item.itemId)
+
+	def pasteCurrentStoredItem(self, triggerKeyCodes: frozenset[int]) -> None:
+		"""Temporarily paste the globally selected stored item without moving from it."""
+		focusObject = self._getFocusObject()
+		category = self._resolveStoredItemCategory()
+		summary, self._storedItemIndex, _itemCount = self._getStoredItemSummaryAt(category)
+		if summary is None:
+			self._reportEmptyStoredItemCategory(category)
+			return
+		item = self._getStoredItemById(category, summary.itemId)
+		self._pasteSnapshotTemporarily(
+			self._snapshotFromItem(item),
+			self._formatItemSummary(summary),
+			triggerKeyCodes,
+			expectedFocus=focusObject,
+		)
 
 	def getCategories(self) -> list[CategoryId]:
 		"""Return stable category identifiers with history first."""
@@ -1153,21 +1275,12 @@ class ClipboardController:
 		confirmation: str,
 	) -> _PreparedPngRestore:
 		"""Decode a stored PNG into its DIB fallback on the serial worker."""
-		imageData = snapshot.imageData
-		if snapshot.imageFormat != "PNG" or imageData is None:
-			raise ValueError(snapshot.imageFormat)
-		dibData = pngToPackedDib(
-			imageData,
-			(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
-		)
-		if dibData is None:
-			raise ValueError(snapshot.imageFormat)
 		return _PreparedPngRestore(
 			snapshot=snapshot,
 			source=source,
 			expectedSequenceNumber=expectedSequenceNumber,
 			confirmation=confirmation,
-			dibData=dibData,
+			dibData=_preparePngDib(snapshot),
 		)
 
 	def _queuePngRestoreCompletion(self, future: Future[_PreparedPngRestore]) -> None:
@@ -1435,8 +1548,8 @@ class ClipboardController:
 				if snapshot.contentType == ClipboardContentType.IMAGE:
 					self.navigator.setText(self._summary)
 			return
-		state = self._temporaryTextPasteState
-		if state is not None and _isTemporaryTextSnapshot(snapshot, state):
+		state = self._temporaryPasteState
+		if state is not None and _isTemporarySnapshot(snapshot, state):
 			self._awaitingInitialSnapshot = False
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 			return
@@ -1862,64 +1975,156 @@ class ClipboardController:
 		triggerKeyCodes: frozenset[int],
 		*,
 		sourceSequenceNumber: int | None = None,
+		originalSelectionOffsets: tuple[int, int] | None = None,
 	) -> None:
 		"""Schedule a temporary text paste, optionally tied to the current clipboard."""
 		text = _normalizeUnicodeText(text)
-		if self._temporaryTextPasteInProgress:
-			# Translators: Message shown when another temporary text paste is still running.
-			raise RuntimeError(_("A temporary text paste is already in progress"))
-		self._temporaryTextPasteInProgress = True
-		self._beginTemporaryTextPaste(
+		self._pasteSnapshotTemporarily(
+			ClipboardSnapshot(ClipboardContentType.TEXT, text=text),
 			text,
-			0,
 			triggerKeyCodes,
-			monotonic() + _PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
-			sourceSequenceNumber,
+			sourceSequenceNumber=sourceSequenceNumber,
+			originalSelectionOffsets=originalSelectionOffsets,
 		)
 
-	def _beginTemporaryTextPaste(  # noqa: C901 - ordered recovery branches keep clipboard ownership explicit.
+	def _pasteSnapshotTemporarily(
 		self,
-		text: str,
-		retryCount: int,
+		snapshot: ClipboardSnapshot,
+		feedbackText: str,
 		triggerKeyCodes: frozenset[int],
-		keyReleaseDeadline: float,
-		sourceSequenceNumber: int | None,
+		*,
+		sourceSequenceNumber: int | None = None,
+		originalSelectionOffsets: tuple[int, int] | None = None,
+		expectedFocus: object | None = None,
 	) -> None:
-		"""Write and paste temporary text, retrying brief clipboard races."""
+		"""Schedule one temporary clipboard paste, preparing PNG data off-thread."""
+		if self._temporaryPasteInProgress:
+			# Translators: Message shown when another temporary clipboard paste is still running.
+			raise RuntimeError(_("A temporary clipboard paste is already in progress"))
+		request = _TemporaryPasteRequest(
+			snapshot=replace(snapshot, canIncludeInHistory=False, canUpload=False),
+			feedbackText=_getTextOrCharacterCount(feedbackText),
+			triggerKeyCodes=triggerKeyCodes,
+			keyReleaseDeadline=monotonic() + _PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
+			sourceSequenceNumber=sourceSequenceNumber,
+			originalSelectionOffsets=originalSelectionOffsets,
+			expectedFocus=expectedFocus,
+		)
+		self._temporaryPasteInProgress = True
+		self._shouldRestoreTemporaryPasteSelection = True
+		if request.snapshot.imageFormat != "PNG":
+			self._beginTemporaryPaste(request, 0)
+			return
+		if request.expectedFocus is None:
+			self._temporaryPasteInProgress = False
+			# Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
+			ui.message(_("Keyboard focus could not be identified. Clipboard paste was cancelled."))
+			return
+		try:
+			future = self._historyExecutor.submit(_prepareTemporaryPngPaste, request)
+		except Exception:
+			fallback = _getPlainTextPasteRequest(request)
+			if fallback is not None:
+				log.debugWarning(
+					"Could not queue image preparation; retaining temporary paste text.", exc_info=True
+				)
+				self._beginTemporaryPaste(fallback, 0)
+				return
+			self._temporaryPasteInProgress = False
+			log.exception("Failed to queue temporary PNG paste preparation.")
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
+			return
+		self._pendingTemporaryPngPaste = future
+		future.add_done_callback(self._queueTemporaryPngPasteCompletion)
+
+	def _cancelPendingTemporaryPngPaste(self) -> None:
+		"""Cancel a queued temporary PNG paste and make any running result stale."""
+		future = self._pendingTemporaryPngPaste
+		self._pendingTemporaryPngPaste = None
+		if future is not None:
+			future.cancel()
+
+	def _queueTemporaryPngPasteCompletion(self, future: Future[_TemporaryPasteRequest]) -> None:
+		"""Queue one prepared temporary PNG paste for the NVDA thread."""
+		if future is not self._pendingTemporaryPngPaste:
+			return
+		try:
+			wx.CallAfter(self._finishTemporaryPngPastePreparation, future)
+		except RuntimeError:
+			if future is self._pendingTemporaryPngPaste:
+				self._pendingTemporaryPngPaste = None
+				self._temporaryPasteInProgress = False
+			if self._isStarted:
+				log.debugWarning("Could not schedule a prepared temporary PNG paste.", exc_info=True)
+
+	def _finishTemporaryPngPastePreparation(self, future: Future[_TemporaryPasteRequest]) -> None:
+		"""Start the latest temporary PNG paste after worker preparation."""
+		if future is not self._pendingTemporaryPngPaste:
+			return
+		self._pendingTemporaryPngPaste = None
 		if not self._isStarted:
-			self._temporaryTextPasteInProgress = False
+			self._temporaryPasteInProgress = False
+			return
+		try:
+			request = future.result()
+		except ValueError as error:
+			self._temporaryPasteInProgress = False
+			log.debugWarning("Stored PNG data could not be prepared for temporary paste.", exc_info=error)
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
+			return
+		except Exception as error:
+			self._temporaryPasteInProgress = False
+			log.exception("Failed to prepare stored PNG data for temporary paste.", exc_info=error)
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
+			return
+		self._beginTemporaryPaste(request, 0)
+
+	def _beginTemporaryPaste(  # noqa: C901 - ordered recovery branches keep clipboard ownership explicit.
+		self,
+		request: _TemporaryPasteRequest,
+		retryCount: int,
+	) -> None:
+		"""Write and paste temporary clipboard content, retrying brief clipboard races."""
+		if not self._isStarted:
+			self._temporaryPasteInProgress = False
+			return
+		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
+			self._temporaryPasteInProgress = False
+			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
+			ui.message(_("Focus changed. Clipboard paste was cancelled."))
 			return
 		originalSnapshot: ClipboardSnapshot | None = None
 		originalNavigationOffset: int | None = None
+		originalSelectionOffsets: tuple[int, int] | None = None
 		try:
 			keyReleaseState = _waitForTriggerKeysReleased(
-				triggerKeyCodes,
-				keyReleaseDeadline,
-				lambda: self._beginTemporaryTextPaste(
-					text,
-					retryCount,
-					triggerKeyCodes,
-					keyReleaseDeadline,
-					sourceSequenceNumber,
-				),
+				request.triggerKeyCodes,
+				request.keyReleaseDeadline,
+				lambda: self._beginTemporaryPaste(request, retryCount),
 			)
 		except Exception:
-			self._temporaryTextPasteInProgress = False
+			self._temporaryPasteInProgress = False
 			log.exception("Failed while waiting for the temporary paste keys to be released.")
-			# Translators: Error shown when temporary text cannot be prepared for pasting.
-			ui.message(_("Could not paste the text"))
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
 			return
 		if keyReleaseState is None:
 			return
 		if not keyReleaseState:
-			self._temporaryTextPasteInProgress = False
+			self._temporaryPasteInProgress = False
 			# Translators: Message shown when a paste shortcut remains held until timeout.
 			ui.message(_("The keyboard shortcut was not released, so the paste was cancelled"))
 			return
 		try:
 			originalSnapshot, expectedSequenceNumber = self._captureOriginalClipboardForTemporaryPaste()
-			if sourceSequenceNumber is not None and expectedSequenceNumber != sourceSequenceNumber:
-				self._temporaryTextPasteInProgress = False
+			if (
+				request.sourceSequenceNumber is not None
+				and expectedSequenceNumber != request.sourceSequenceNumber
+			):
+				self._temporaryPasteInProgress = False
 				# Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
 				ui.message(_("The clipboard changed, so the selected text was not pasted"))
 				return
@@ -1931,97 +2136,151 @@ class ClipboardController:
 				== self.monitor.getSequenceNumber()
 			):
 				originalNavigationOffset = self.navigator.getPosition()
+				originalSelectionOffsets = request.originalSelectionOffsets
+				if self._text:
+					mappedNavigationOffset = _mapClipboardSelectionOffsets(
+						(originalNavigationOffset, originalNavigationOffset),
+						self._text,
+						originalSnapshot.text,
+					)
+					originalNavigationOffset = (
+						mappedNavigationOffset[0] if mappedNavigationOffset is not None else None
+					)
+					if originalSelectionOffsets is not None:
+						originalSelectionOffsets = _mapClipboardSelectionOffsets(
+							originalSelectionOffsets,
+							self._text,
+							originalSnapshot.text,
+						)
 		except Exception:
-			self._temporaryTextPasteInProgress = False
-			log.exception("Failed to capture the original clipboard before a temporary text paste.")
-			# Translators: Error shown when temporary text cannot be prepared for pasting.
-			ui.message(_("Could not paste the text"))
+			self._temporaryPasteInProgress = False
+			log.exception("Failed to capture the original clipboard before a temporary paste.")
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
 			return
 		try:
-			temporarySequenceNumber = self._writeSnapshot(
-				ClipboardSnapshot(
-					ClipboardContentType.TEXT,
-					text=text,
-					canIncludeInHistory=False,
-					canUpload=False,
-				),
-				_ClipboardChangeSource.TEMPORARY_TEXT_PASTE,
-				expectedSequenceNumber=expectedSequenceNumber,
-			)
+			partialWriteError: _ClipboardWriteFailedError | None = None
+			for attempt in range(2):
+				try:
+					temporarySequenceNumber = self._writeSnapshot(
+						request.snapshot,
+						_ClipboardChangeSource.TEMPORARY_PASTE,
+						expectedSequenceNumber=expectedSequenceNumber,
+						preparedPngDib=request.preparedPngDib,
+					)
+					break
+				except ClipboardSequenceChangedError:
+					if partialWriteError is not None:
+						raise partialWriteError
+					raise
+				except _TemporaryPasteApplyError:
+					raise
+				except RuntimeError as error:
+					if isinstance(error, _ClipboardWriteFailedError):
+						partialWriteError = error
+					fallback = _getPlainTextPasteRequest(request) if attempt == 0 else None
+					if (
+						fallback is None
+						or not isinstance(error, _ClipboardWriteFailedError)
+						and not isinstance(error.__cause__, (OSError, ValueError))
+						or request.expectedFocus is not None
+						and not self._isSameFocus(request.expectedFocus)
+					):
+						if partialWriteError is not None:
+							raise partialWriteError
+						raise
+					if partialWriteError is not None:
+						# Never recapture a partial write as the original clipboard for the fallback.
+						if (
+							not partialWriteError.sequenceNumber
+							or self.monitor.getSequenceNumber() != partialWriteError.sequenceNumber
+							or self.monitor.getOwnerHandle() != self._getClipboardOwnerHandle()
+						):
+							raise partialWriteError
+						expectedSequenceNumber = partialWriteError.sequenceNumber
+					log.debugWarning(
+						"Could not write rich formats; retrying temporary paste as text.", exc_info=True
+					)
+					request = fallback
 		except ClipboardSequenceChangedError:
 			if retryCount < _TEMPORARY_PASTE_MAX_RETRIES:
 				callLater(
 					_TEMPORARY_PASTE_RETRY_DELAY_MS,
-					self._beginTemporaryTextPaste,
-					text,
+					self._beginTemporaryPaste,
+					request,
 					retryCount + 1,
-					triggerKeyCodes,
-					keyReleaseDeadline,
-					sourceSequenceNumber,
 				)
 				return
-			self._temporaryTextPasteInProgress = False
-			# Translators: Error shown when the clipboard keeps changing before a temporary text paste.
-			ui.message(_("The clipboard kept changing, so the text could not be pasted"))
+			self._temporaryPasteInProgress = False
+			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
+			ui.message(_("The clipboard kept changing, so the content could not be pasted"))
 			return
-		except _TemporaryTextApplyError as error:
-			state = _TemporaryTextPasteState(
+		except _TemporaryPasteApplyError as error:
+			state = _TemporaryPasteState(
 				originalSnapshot,
 				error.sequenceNumber,
-				text,
+				request.snapshot,
 				originalNavigationOffset=originalNavigationOffset,
+				originalSelectionOffsets=originalSelectionOffsets,
 			)
-			self._temporaryTextPasteState = state
+			self._temporaryPasteState = state
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			log.exception("Failed to apply temporary text locally.")
-			# Translators: Error shown when temporary text cannot be prepared for pasting.
-			ui.message(_("Could not paste the text"))
+			log.exception("Failed to apply temporary clipboard content locally.")
+			# Translators: Error shown when clipboard content cannot be prepared for pasting.
+			ui.message(_("Could not paste the clipboard content"))
 			return
 		except _ClipboardWriteFailedError as error:
-			state = _TemporaryTextPasteState(
+			state = _TemporaryPasteState(
 				originalSnapshot,
 				error.sequenceNumber,
-				text,
+				request.snapshot,
 				originalNavigationOffset=originalNavigationOffset,
+				originalSelectionOffsets=originalSelectionOffsets,
 				allowsPartialWrite=True,
 			)
-			self._temporaryTextPasteState = state
+			self._temporaryPasteState = state
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			log.debugWarning("Failed to write temporary text.", exc_info=True)
-			# Translators: Error shown when temporary text cannot be written.
-			ui.message(_("Could not paste the text"))
+			log.debugWarning("Failed to write temporary clipboard content.", exc_info=True)
+			# Translators: Error shown when clipboard content cannot be written for pasting.
+			ui.message(_("Could not paste the clipboard content"))
 			return
 		except Exception:
-			self._temporaryTextPasteInProgress = False
-			log.exception("Failed to write temporary text.")
-			# Translators: Error shown when temporary text cannot be written.
-			ui.message(_("Could not paste the text"))
+			self._temporaryPasteInProgress = False
+			log.exception("Failed to write temporary clipboard content.")
+			# Translators: Error shown when clipboard content cannot be written for pasting.
+			ui.message(_("Could not paste the clipboard content"))
 			return
-		state = _TemporaryTextPasteState(
+		state = _TemporaryPasteState(
 			originalSnapshot,
 			temporarySequenceNumber,
-			text,
+			request.snapshot,
 			originalNavigationOffset=originalNavigationOffset,
+			originalSelectionOffsets=originalSelectionOffsets,
 		)
-		self._temporaryTextPasteState = state
-		verifiedSequenceNumber = self._getVerifiedTemporaryTextSequenceNumber(state)
+		self._temporaryPasteState = state
+		verifiedSequenceNumber = self._getVerifiedTemporarySequenceNumber(state)
 		if verifiedSequenceNumber is None:
 			self._pendingWrites.clear()
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			self.monitor.handleClipboardUpdate()
-			# Translators: Error shown when the clipboard keeps changing before a temporary text paste.
-			ui.message(_("The clipboard kept changing, so the text could not be pasted"))
+			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
+			ui.message(_("The clipboard kept changing, so the content could not be pasted"))
 			return
 		if verifiedSequenceNumber != temporarySequenceNumber:
 			state = replace(state, temporarySequenceNumber=verifiedSequenceNumber)
-			self._temporaryTextPasteState = state
+			self._temporaryPasteState = state
+		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
+			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
+			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
+			ui.message(_("Focus changed. Clipboard paste was cancelled."))
+			return
 		try:
 			KeyboardInputGesture.fromName("control+v").send()
 		except Exception:
-			log.exception("Failed to send the temporary text paste gesture.")
+			log.exception("Failed to send the temporary clipboard paste gesture.")
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			# Translators: Error shown when the temporary text paste gesture cannot be sent.
-			ui.message(_("Could not paste the text"))
+			# Translators: Error shown when the temporary clipboard paste gesture cannot be sent.
+			ui.message(_("Could not paste the clipboard content"))
 			return
 		try:
 			callLater(
@@ -2031,17 +2290,16 @@ class ClipboardController:
 			)
 		except Exception:
 			log.debugWarning("Could not schedule temporary clipboard restoration.", exc_info=True)
-			self._temporaryTextPasteState = None
-			self._temporaryTextPasteInProgress = False
-			# Translators: Error shown after text was pasted but clipboard restoration could not be scheduled.
-			ui.message(_("The text was pasted, but the clipboard could not be restored"))
+			self._temporaryPasteState = None
+			self._temporaryPasteInProgress = False
+			# Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
+			ui.message(_("The content was pasted, but the clipboard could not be restored"))
 			return
-		feedbackText = _getTextOrCharacterCount(text)
 		try:
-			ui.delayedMessage(feedbackText)
+			ui.delayedMessage(request.feedbackText)
 		except Exception:
 			log.debugWarning("Could not delay temporary paste feedback.", exc_info=True)
-			ui.message(feedbackText)
+			ui.message(request.feedbackText)
 
 	def _captureOriginalClipboardForTemporaryPaste(self) -> tuple[ClipboardSnapshot | None, int]:
 		"""Capture the best-effort restorable clipboard state and sequence number."""
@@ -2082,18 +2340,18 @@ class ClipboardController:
 			return None, sequenceNumber
 		return snapshot, sequenceNumber
 
-	def _getVerifiedTemporaryTextSequenceNumber(
+	def _getVerifiedTemporarySequenceNumber(
 		self,
-		state: _TemporaryTextPasteState,
+		state: _TemporaryPasteState,
 	) -> int | None:
-		"""Return a stable sequence only while the temporary clipboard text remains current."""
+		"""Return a stable sequence only while the temporary clipboard content remains current."""
 		temporarySnapshot = self.monitor.readNow()
 		try:
 			expectedOwnerHandle = self._getClipboardOwnerHandle()
 		except RuntimeError:
 			return None
 		if (
-			not _isTemporaryTextSnapshot(temporarySnapshot, state)
+			not _isTemporarySnapshot(temporarySnapshot, state)
 			or self.monitor.getOwnerHandle() != expectedOwnerHandle
 			or self.monitor.getSequenceNumber() != temporarySnapshot.sequenceNumber
 		):
@@ -2102,16 +2360,16 @@ class ClipboardController:
 
 	def _restoreClipboardAfterTemporaryPaste(
 		self,
-		state: _TemporaryTextPasteState,
+		state: _TemporaryPasteState,
 		*,
 		reportFailure: bool = True,
 	) -> None:
 		"""Restore the original clipboard, then fall back to newest history."""
-		if self._temporaryTextPasteState is not state:
+		if self._temporaryPasteState is not state:
 			return
 		ownedSequenceNumber = state.temporarySequenceNumber
 		try:
-			verifiedSequenceNumber = self._getVerifiedTemporaryTextSequenceNumber(state)
+			verifiedSequenceNumber = self._getVerifiedTemporarySequenceNumber(state)
 			if verifiedSequenceNumber is not None:
 				ownedSequenceNumber = verifiedSequenceNumber
 			elif (
@@ -2148,16 +2406,16 @@ class ClipboardController:
 				except Exception:
 					log.debugWarning("Could not restore the newest clipboard history item.", exc_info=True)
 			if reportFailure and self.monitor.getSequenceNumber() == ownedSequenceNumber:
-				# Translators: Error shown after text was pasted but no clipboard content could be restored.
-				ui.message(_("The text was pasted, but the clipboard could not be restored"))
+				# Translators: Error shown after content was pasted but no clipboard content could be restored.
+				ui.message(_("The content was pasted, but the clipboard could not be restored"))
 		finally:
-			if self._temporaryTextPasteState is state:
-				self._temporaryTextPasteState = None
-				self._temporaryTextPasteInProgress = False
+			if self._temporaryPasteState is state:
+				self._temporaryPasteState = None
+				self._temporaryPasteInProgress = False
 
 	def _restoreOriginalClipboardAfterTemporaryPaste(
 		self,
-		state: _TemporaryTextPasteState,
+		state: _TemporaryPasteState,
 		expectedSequenceNumber: int,
 	) -> bool:
 		"""Try to restore every retained format captured before a temporary paste."""
@@ -2183,6 +2441,8 @@ class ClipboardController:
 				== self.monitor.getSequenceNumber()
 			):
 				self.navigator.setPosition(state.originalNavigationOffset)
+				if self._shouldRestoreTemporaryPasteSelection and state.originalSelectionOffsets is not None:
+					self.navigator.setSelectionOffsets(state.originalSelectionOffsets)
 			return True
 		except ClipboardSequenceChangedError:
 			return False
@@ -2266,8 +2526,8 @@ class ClipboardController:
 				pngIsDecodable=snapshot.imageFormat == "PNG" and snapshot.imageData is not None,
 			)
 		except Exception as error:
-			if source == _ClipboardChangeSource.TEMPORARY_TEXT_PASTE:
-				raise _TemporaryTextApplyError(sequenceNumber) from error
+			if source == _ClipboardChangeSource.TEMPORARY_PASTE:
+				raise _TemporaryPasteApplyError(sequenceNumber) from error
 			raise
 		return sequenceNumber
 
@@ -2439,6 +2699,8 @@ class ClipboardController:
 		"""Move the global stored-item position and report one concise summary."""
 		if direction not in (-1, 1):
 			raise ValueError(direction)
+		self.navigator.setSelectionOffsets(None)
+		self._shouldRestoreTemporaryPasteSelection = False
 		category = self._resolveStoredItemCategory()
 		item, newIndex, itemCount = self._getStoredItemSummaryAt(category, direction)
 		if item is None:

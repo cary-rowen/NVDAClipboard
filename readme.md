@@ -19,7 +19,7 @@ Commands for paging up or down through the clipboard have no default gestures. Y
 
 Press the current line or navigation unit command once to read it, twice to spell it, and three times to hear character descriptions. For the current character, the second press gives its description and the third gives its numeric value.
 
-Press `NVDA+Windows+[` to mark the current clipboard navigation position as the selection start, move in either direction, then press `NVDA+Windows+]` to mark the end. Both endpoint characters are included and NVDA reports the selected text. Press `NVDA+Windows+V` to paste it temporarily; the full clipboard and navigation position are restored afterward when possible. Pasting it, changing the clipboard, or marking a new start clears the selection.
+Press `NVDA+Windows+[` to mark the current clipboard navigation position as the selection start, move in either direction, then press `NVDA+Windows+]` to mark the end. Both endpoint characters are included and NVDA reports the selected text. Press `NVDA+Windows+V` to paste it temporarily. If no complete selection is marked, the same shortcut temporarily pastes the current stored entry. The full clipboard and clipboard navigation position are restored afterward when possible; after a successful restoration, the marked range remains available for repeated pastes. Changing the clipboard, marking a new start, or navigating to another stored entry or category clears the range.
 
 Use `NVDA+Alt+A` to append selected text to the clipboard. Press `NVDA+Shift+X` to append the last text spoken by NVDA, or ``NVDA+` `` to paste it temporarily. Temporary paste attempts to restore the previous clipboard afterward. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
@@ -45,7 +45,7 @@ Formatted text keeps its original formatting when restored. Editing its text in 
 
 Older history entries are removed automatically, while entries in your own categories are retained. Older uncollected images may be removed sooner because image storage is limited.
 
-You can also browse stored entries without opening the manager. Assign the "Cycle through categories of stored entries" command in NVDA's Input Gestures dialog to cycle through clipboard history and user categories; the existing previous and next commands move within the selected category, and the restore command puts the selected stored entry on the system clipboard. Opening the manager starts at the same category and entry.
+You can also browse stored entries without opening the manager. Assign the "Cycle through categories of stored entries" command in NVDA's Input Gestures dialog to cycle through clipboard history and user categories; the existing previous and next commands move within the selected category. Press `NVDA+Windows+V` to paste the current entry without changing this position, or use the restore command to leave it on the system clipboard without pasting. Opening the manager starts at the same category and entry.
 
 ## Images
 
@@ -93,7 +93,7 @@ OneDrive sign-in data is encrypted for the current Windows user, but synchronize
 | Next clipboard character | `Ctrl+NumPad 3` | `NVDA+Windows+Right Arrow` |
 | Mark clipboard selection start | `NVDA+Windows+[` | — |
 | Mark clipboard selection end | `NVDA+Windows+]` | — |
-| Paste selected clipboard text | `NVDA+Windows+V` | — |
+| Paste clipboard selection or current stored entry | `NVDA+Windows+V` | — |
 | Open Clipboard Manager | `NVDA+E` | — |
 | Append selected text | `NVDA+Alt+A` | — |
 | Append last spoken text | `NVDA+Shift+X` | — |

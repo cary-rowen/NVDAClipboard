@@ -629,12 +629,12 @@ msgid ""
 "The clipboard kept changing, so the last spoken text could not be pasted"
 msgstr "剪贴板持续发生变化，无法粘贴最后朗读的文本"
 
-#. Translators: Error shown after text was pasted but clipboard restoration could not be scheduled.
-#. Translators: Error shown after text was pasted but no clipboard content could be restored.
+#. Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
+#. Translators: Error shown after content was pasted but no clipboard content could be restored.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1977
 #: addon\globalPlugins\nvdaClipboard\controller.py:2091
-msgid "The text was pasted, but the clipboard could not be restored"
-msgstr "文本已粘贴，但无法恢复剪贴板"
+msgid "The content was pasted, but the clipboard could not be restored"
+msgstr "内容已粘贴，但无法恢复剪贴板"
 
 #. Translators: Error shown when the system clipboard cannot be cleared.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2254
@@ -2529,9 +2529,9 @@ msgstr "将当前剪贴板导航位置标记为选区开始点"
 msgid "Marks the selection end and selects the clipboard text between both markers"
 msgstr "标记选区结束点并选中两个标记之间的剪贴板文本"
 
-#. Translators: Input help description for pasting text selected in clipboard navigation.
-msgid "Temporarily pastes the selected clipboard text"
-msgstr "临时粘贴选中的剪贴板文本"
+#. Translators: Input help description for pasting the current clipboard-navigation target.
+msgid "Pastes the clipboard selection, or the current stored entry if no selection is marked"
+msgstr "粘贴剪贴板选区；如果未标记选区，则粘贴当前已存条目"
 
 #. Translators: Indicates the start of clipboard text selected for pasting.
 msgid "Start marked"
@@ -2550,17 +2550,25 @@ msgstr "%s 已选择"
 msgid "The clipboard changed, so the selected text was not pasted"
 msgstr "剪贴板已改变，因此未粘贴所选文本"
 
-#. Translators: Message shown when another temporary text paste is still running.
-msgid "A temporary text paste is already in progress"
-msgstr "已有一个临时文本粘贴操作正在进行"
+#. Translators: Message shown when another temporary clipboard paste is still running.
+msgid "A temporary clipboard paste is already in progress"
+msgstr "已有一个临时剪贴板粘贴操作正在进行"
 
-#. Translators: Error shown when temporary text cannot be pasted.
-msgid "Could not paste the text"
-msgstr "无法粘贴文本"
+#. Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
+msgid "Keyboard focus could not be identified. Clipboard paste was cancelled."
+msgstr "无法确定键盘焦点，已取消剪贴板粘贴。"
 
-#. Translators: Error shown when the clipboard keeps changing before a temporary text paste.
-msgid "The clipboard kept changing, so the text could not be pasted"
-msgstr "剪贴板持续发生变化，因此无法粘贴文本"
+#. Translators: Temporary clipboard paste cancellation because focus changed before pasting.
+msgid "Focus changed. Clipboard paste was cancelled."
+msgstr "焦点已改变，已取消剪贴板粘贴。"
+
+#. Translators: Error shown when clipboard content cannot be prepared or written for pasting.
+msgid "Could not paste the clipboard content"
+msgstr "无法粘贴剪贴板内容"
+
+#. Translators: Error shown when the clipboard keeps changing before a temporary paste.
+msgid "The clipboard kept changing, so the content could not be pasted"
+msgstr "剪贴板持续发生变化，因此无法粘贴内容"
 
 #. Translators: Presented when a clipboard text command is used without clipboard text.
 msgid "There is no text on the clipboard"
