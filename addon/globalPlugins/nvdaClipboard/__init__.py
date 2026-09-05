@@ -268,7 +268,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for pasting the current clipboard-navigation target.
 		description=_(
-			"Pastes the clipboard selection, or the current stored entry if no selection is marked",
+			"Pastes the clipboard selection, or the current stored entry if there is no complete selection",
 		),
 		gesture="kb:NVDA+windows+v",
 		speakOnDemand=True,

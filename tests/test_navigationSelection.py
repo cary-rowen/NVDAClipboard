@@ -286,7 +286,7 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 		controller._captureOriginalClipboardForTemporaryPaste.assert_called_once_with()
 		controller._writeSnapshot.assert_not_called()
 		self.assertFalse(controller._temporaryPasteInProgress)
-		_UI.message.assert_called_once_with("The clipboard changed, so the selected text was not pasted")
+		_UI.message.assert_called_once_with("The clipboard changed. Paste cancelled.")
 
 	def testChangedFocusCancelsBeforeTemporaryClipboardWrite(self) -> None:
 		"""Cancel a prepared paste before it can replace the clipboard for another control."""
@@ -305,7 +305,7 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 
 		controller._isSameFocus.assert_called_once_with(expectedFocus)
 		self.assertFalse(controller._temporaryPasteInProgress)
-		_UI.message.assert_called_once_with("Focus changed. Clipboard paste was cancelled.")
+		_UI.message.assert_called_once_with("Focus changed. Paste cancelled.")
 
 	def testDeferredRestoreRespectsSelectionInvalidation(self) -> None:
 		"""Restore clipboard content without reviving a selection cleared during a pending paste."""

@@ -438,11 +438,6 @@ msgstr "已追加 {text} 到剪贴板"
 msgid "Appended: {text}"
 msgstr "已追加 {text}"
 
-#. Translators: Message shown when another last-spoken paste is still running.
-#: addon\globalPlugins\nvdaClipboard\controller.py:811
-msgid "A last spoken paste is already in progress"
-msgstr "已有一个最后朗读文本的粘贴操作正在进行"
-
 #. Translators: Message shown when append is requested without selected text.
 #: addon\globalPlugins\nvdaClipboard\controller.py:825
 msgid "No text is selected"
@@ -605,36 +600,17 @@ msgstr "无法读取当前剪贴板"
 msgid "Last spoken text can only be appended to an empty or text clipboard"
 msgstr "最后朗读的文本只能追加到空剪贴板或文本剪贴板"
 
-#. Translators: Error shown when temporary last-spoken text cannot be prepared for pasting.
-#. Translators: Error shown when temporary last-spoken text cannot be written.
-#. Translators: Error shown when the last-spoken paste gesture cannot be sent.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1856
-#: addon\globalPlugins\nvdaClipboard\controller.py:1879
-#: addon\globalPlugins\nvdaClipboard\controller.py:1918
-#: addon\globalPlugins\nvdaClipboard\controller.py:1932
-#: addon\globalPlugins\nvdaClipboard\controller.py:1938
-#: addon\globalPlugins\nvdaClipboard\controller.py:1964
-msgid "Could not paste the last spoken text"
-msgstr "无法粘贴最后朗读的文本"
-
 #. Translators: Message shown when a paste shortcut remains held until timeout.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1863
 msgid "The keyboard shortcut was not released, so the paste was cancelled"
-msgstr "键盘快捷键未释放，因此已取消粘贴。"
-
-#. Translators: Error shown when the clipboard keeps changing before a last-spoken paste.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1905
-#: addon\globalPlugins\nvdaClipboard\controller.py:1953
-msgid ""
-"The clipboard kept changing, so the last spoken text could not be pasted"
-msgstr "剪贴板持续发生变化，无法粘贴最后朗读的文本"
+msgstr "快捷键尚未松开，已取消粘贴"
 
 #. Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
 #. Translators: Error shown after content was pasted but no clipboard content could be restored.
 #: addon\globalPlugins\nvdaClipboard\controller.py:1977
 #: addon\globalPlugins\nvdaClipboard\controller.py:2091
-msgid "The content was pasted, but the clipboard could not be restored"
-msgstr "内容已粘贴，但无法恢复剪贴板"
+msgid "The content was pasted, but the original clipboard content could not be restored"
+msgstr "内容已粘贴，但无法恢复原剪贴板内容"
 
 #. Translators: Error shown when the system clipboard cannot be cleared.
 #: addon\globalPlugins\nvdaClipboard\controller.py:2254
@@ -1959,7 +1935,7 @@ msgstr "剪贴板命令执行失败"
 #: addon\globalPlugins\nvdaClipboard\__init__.py:99
 msgid ""
 "Reports the clipboard summary; press twice to view its content in browse mode"
-msgstr "读出剪贴板摘要；按两次在浏览模式下查看其内容"
+msgstr "读出剪贴板摘要；连按两次在浏览模式下查看其内容"
 
 #. Translators: Input help description for moving to the first clipboard line.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:112
@@ -1997,7 +1973,7 @@ msgstr "在剪贴板中向下翻一页并读出所在行"
 msgid ""
 "Reports the current clipboard line. Press twice to spell it and three times "
 "for character descriptions."
-msgstr "读出当前剪贴板行。连按两次逐字朗读，连按三次逐字解释。"
+msgstr "读出当前剪贴板行。连按两次拼读，连按三次读出字符描述。"
 
 #. Translators: Input help description for moving to the previous clipboard navigation unit.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:182
@@ -2014,7 +1990,7 @@ msgstr "移动到剪贴板的下一个导航单位并读出"
 msgid ""
 "Reports the current clipboard navigation unit. Press twice to spell it and "
 "three times for character descriptions."
-msgstr "读出当前剪贴板导航单位。连按两次逐字朗读，连按三次逐字解释。"
+msgstr "读出当前剪贴板导航单位。连按两次拼读，连按三次读出字符描述。"
 
 #. Translators: Input help description for moving to the previous clipboard character.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:218
@@ -2031,9 +2007,7 @@ msgstr "移动到剪贴板下一个字符并读出"
 msgid ""
 "Reports the current clipboard character. Press twice for a description and "
 "three times for its numeric value."
-msgstr ""
-"读出当前剪贴板字符，连按两次解释该字符，连按三次则读出该字符的十进制和十六进"
-"制代码"
+msgstr "读出当前剪贴板字符。连按两次读出字符描述，连按三次读出字符的数值。"
 
 #. Translators: Input help description for opening the clipboard manager.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:250
@@ -2530,8 +2504,8 @@ msgid "Marks the selection end and selects the clipboard text between both marke
 msgstr "标记选区结束点并选中两个标记之间的剪贴板文本"
 
 #. Translators: Input help description for pasting the current clipboard-navigation target.
-msgid "Pastes the clipboard selection, or the current stored entry if no selection is marked"
-msgstr "粘贴剪贴板选区；如果未标记选区，则粘贴当前已存条目"
+msgid "Pastes the clipboard selection, or the current stored entry if there is no complete selection"
+msgstr "粘贴剪贴板选区；没有完整选区时，粘贴当前已存条目"
 
 #. Translators: Indicates the start of clipboard text selected for pasting.
 msgid "Start marked"
@@ -2547,28 +2521,28 @@ msgid "%s selected"
 msgstr "%s 已选择"
 
 #. Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
-msgid "The clipboard changed, so the selected text was not pasted"
-msgstr "剪贴板已改变，因此未粘贴所选文本"
+msgid "The clipboard changed. Paste cancelled."
+msgstr "剪贴板已改变，已取消粘贴"
 
 #. Translators: Message shown when another temporary clipboard paste is still running.
-msgid "A temporary clipboard paste is already in progress"
-msgstr "已有一个临时剪贴板粘贴操作正在进行"
+msgid "Pasting is in progress. Please wait."
+msgstr "正在粘贴，请稍候"
 
 #. Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
-msgid "Keyboard focus could not be identified. Clipboard paste was cancelled."
-msgstr "无法确定键盘焦点，已取消剪贴板粘贴。"
+msgid "Keyboard focus could not be identified. Paste cancelled."
+msgstr "无法确定键盘焦点，已取消粘贴"
 
 #. Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-msgid "Focus changed. Clipboard paste was cancelled."
-msgstr "焦点已改变，已取消剪贴板粘贴。"
+msgid "Focus changed. Paste cancelled."
+msgstr "焦点已改变，已取消粘贴"
 
 #. Translators: Error shown when clipboard content cannot be prepared or written for pasting.
-msgid "Could not paste the clipboard content"
-msgstr "无法粘贴剪贴板内容"
+msgid "Could not paste the content"
+msgstr "无法粘贴内容"
 
 #. Translators: Error shown when the clipboard keeps changing before a temporary paste.
-msgid "The clipboard kept changing, so the content could not be pasted"
-msgstr "剪贴板持续发生变化，因此无法粘贴内容"
+msgid "The clipboard kept changing. Paste cancelled."
+msgstr "剪贴板持续变化，已取消粘贴"
 
 #. Translators: Presented when a clipboard text command is used without clipboard text.
 msgid "There is no text on the clipboard"
