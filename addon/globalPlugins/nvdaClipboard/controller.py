@@ -2000,7 +2000,7 @@ class ClipboardController:
 		"""Schedule one temporary clipboard paste, preparing PNG data off-thread."""
 		if self._temporaryPasteInProgress:
 			# Translators: Message shown when another temporary clipboard paste is still running.
-			raise RuntimeError(_("A temporary clipboard paste is already in progress"))
+			raise RuntimeError(_("Pasting is in progress. Please wait."))
 		request = _TemporaryPasteRequest(
 			snapshot=replace(snapshot, canIncludeInHistory=False, canUpload=False),
 			feedbackText=_getTextOrCharacterCount(feedbackText),
@@ -2018,7 +2018,7 @@ class ClipboardController:
 		if request.expectedFocus is None:
 			self._temporaryPasteInProgress = False
 			# Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
-			ui.message(_("Keyboard focus could not be identified. Clipboard paste was cancelled."))
+			ui.message(_("Keyboard focus could not be identified. Paste cancelled."))
 			return
 		try:
 			future = self._historyExecutor.submit(_prepareTemporaryPngPaste, request)
@@ -2033,7 +2033,7 @@ class ClipboardController:
 			self._temporaryPasteInProgress = False
 			log.exception("Failed to queue temporary PNG paste preparation.")
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		self._pendingTemporaryPngPaste = future
 		future.add_done_callback(self._queueTemporaryPngPasteCompletion)
@@ -2072,13 +2072,13 @@ class ClipboardController:
 			self._temporaryPasteInProgress = False
 			log.debugWarning("Stored PNG data could not be prepared for temporary paste.", exc_info=error)
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		except Exception as error:
 			self._temporaryPasteInProgress = False
 			log.exception("Failed to prepare stored PNG data for temporary paste.", exc_info=error)
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		self._beginTemporaryPaste(request, 0)
 
@@ -2094,7 +2094,7 @@ class ClipboardController:
 		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
 			self._temporaryPasteInProgress = False
 			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-			ui.message(_("Focus changed. Clipboard paste was cancelled."))
+			ui.message(_("Focus changed. Paste cancelled."))
 			return
 		originalSnapshot: ClipboardSnapshot | None = None
 		originalNavigationOffset: int | None = None
@@ -2109,7 +2109,7 @@ class ClipboardController:
 			self._temporaryPasteInProgress = False
 			log.exception("Failed while waiting for the temporary paste keys to be released.")
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		if keyReleaseState is None:
 			return
@@ -2126,7 +2126,7 @@ class ClipboardController:
 			):
 				self._temporaryPasteInProgress = False
 				# Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
-				ui.message(_("The clipboard changed, so the selected text was not pasted"))
+				ui.message(_("The clipboard changed. Paste cancelled."))
 				return
 			if (
 				originalSnapshot is not None
@@ -2156,7 +2156,7 @@ class ClipboardController:
 			self._temporaryPasteInProgress = False
 			log.exception("Failed to capture the original clipboard before a temporary paste.")
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		try:
 			partialWriteError: _ClipboardWriteFailedError | None = None
@@ -2213,7 +2213,7 @@ class ClipboardController:
 				return
 			self._temporaryPasteInProgress = False
 			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
-			ui.message(_("The clipboard kept changing, so the content could not be pasted"))
+			ui.message(_("The clipboard kept changing. Paste cancelled."))
 			return
 		except _TemporaryPasteApplyError as error:
 			state = _TemporaryPasteState(
@@ -2227,7 +2227,7 @@ class ClipboardController:
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			log.exception("Failed to apply temporary clipboard content locally.")
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		except _ClipboardWriteFailedError as error:
 			state = _TemporaryPasteState(
@@ -2242,13 +2242,13 @@ class ClipboardController:
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			log.debugWarning("Failed to write temporary clipboard content.", exc_info=True)
 			# Translators: Error shown when clipboard content cannot be written for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		except Exception:
 			self._temporaryPasteInProgress = False
 			log.exception("Failed to write temporary clipboard content.")
 			# Translators: Error shown when clipboard content cannot be written for pasting.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		state = _TemporaryPasteState(
 			originalSnapshot,
@@ -2264,7 +2264,7 @@ class ClipboardController:
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			self.monitor.handleClipboardUpdate()
 			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
-			ui.message(_("The clipboard kept changing, so the content could not be pasted"))
+			ui.message(_("The clipboard kept changing. Paste cancelled."))
 			return
 		if verifiedSequenceNumber != temporarySequenceNumber:
 			state = replace(state, temporarySequenceNumber=verifiedSequenceNumber)
@@ -2272,7 +2272,7 @@ class ClipboardController:
 		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-			ui.message(_("Focus changed. Clipboard paste was cancelled."))
+			ui.message(_("Focus changed. Paste cancelled."))
 			return
 		try:
 			KeyboardInputGesture.fromName("control+v").send()
@@ -2280,7 +2280,7 @@ class ClipboardController:
 			log.exception("Failed to send the temporary clipboard paste gesture.")
 			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
 			# Translators: Error shown when the temporary clipboard paste gesture cannot be sent.
-			ui.message(_("Could not paste the clipboard content"))
+			ui.message(_("Could not paste the content"))
 			return
 		try:
 			callLater(
@@ -2293,7 +2293,7 @@ class ClipboardController:
 			self._temporaryPasteState = None
 			self._temporaryPasteInProgress = False
 			# Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
-			ui.message(_("The content was pasted, but the clipboard could not be restored"))
+			ui.message(_("The content was pasted, but the original clipboard content could not be restored"))
 			return
 		try:
 			ui.delayedMessage(request.feedbackText)
@@ -2407,7 +2407,9 @@ class ClipboardController:
 					log.debugWarning("Could not restore the newest clipboard history item.", exc_info=True)
 			if reportFailure and self.monitor.getSequenceNumber() == ownedSequenceNumber:
 				# Translators: Error shown after content was pasted but no clipboard content could be restored.
-				ui.message(_("The content was pasted, but the clipboard could not be restored"))
+				ui.message(
+					_("The content was pasted, but the original clipboard content could not be restored")
+				)
 		finally:
 			if self._temporaryPasteState is state:
 				self._temporaryPasteState = None
