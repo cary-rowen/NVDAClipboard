@@ -1304,7 +1304,8 @@ class ClipboardController:
 			prepared = future.result()
 		except ValueError as error:
 			log.debugWarning(
-				"Stored PNG data could not be prepared for writing to the clipboard.", exc_info=error
+				"Stored PNG data could not be prepared for writing to the clipboard.",
+				exc_info=error,
 			)
 			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			ui.message(_("Could not write to the system clipboard"))
@@ -2028,7 +2029,8 @@ class ClipboardController:
 			fallback = _getPlainTextPasteRequest(request)
 			if fallback is not None:
 				log.debugWarning(
-					"Could not queue image preparation; retaining temporary paste text.", exc_info=True
+					"Could not queue image preparation; retaining temporary paste text.",
+					exc_info=True,
 				)
 				self._beginTemporaryPaste(fallback, 0)
 				return
@@ -2201,7 +2203,8 @@ class ClipboardController:
 							raise partialWriteError
 						expectedSequenceNumber = partialWriteError.sequenceNumber
 					log.debugWarning(
-						"Could not write rich formats; retrying temporary paste as text.", exc_info=True
+						"Could not write rich formats; retrying temporary paste as text.",
+						exc_info=True,
 					)
 					request = fallback
 		except ClipboardSequenceChangedError:
@@ -2410,7 +2413,7 @@ class ClipboardController:
 			if reportFailure and self.monitor.getSequenceNumber() == ownedSequenceNumber:
 				# Translators: Error shown after content was pasted but no clipboard content could be restored.
 				ui.message(
-					_("The content was pasted, but the original clipboard content could not be restored")
+					_("The content was pasted, but the original clipboard content could not be restored"),
 				)
 		finally:
 			if self._temporaryPasteState is state:

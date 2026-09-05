@@ -350,7 +350,11 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				)
 
 				def writeSnapshot(
-					snapshot: object, _source: object, *, expectedSequenceNumber: int, **_kwargs
+					snapshot: object,
+					_source: object,
+					*,
+					expectedSequenceNumber: int,
+					**_kwargs,
 				) -> int:
 					"""Simulate clipboard writes and their local navigation update at the OS boundary."""
 					self.assertEqual(controller._lastAppliedSequenceNumber, expectedSequenceNumber)
@@ -404,7 +408,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				self.assertFalse(controller._temporaryPasteInProgress)
 				self.assertIsNone(controller._temporaryPasteState)
 				self.assertEqual(
-					storedPosition, (controller._storedItemCategory, controller._storedItemIndex)
+					storedPosition,
+					(controller._storedItemCategory, controller._storedItemIndex),
 				)
 				_pasteCurrentNavigationTarget(controller, frozenset({1}))
 				if navigation is None:
@@ -432,7 +437,9 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 			with self.subTest(failure=failure):
 				contentType = clipboardMonitor.ClipboardContentType
 				original = clipboardMonitor.ClipboardSnapshot(
-					contentType.TEXT, text="a\r\nb", sequenceNumber=1
+					contentType.TEXT,
+					text="a\r\nb",
+					sequenceNumber=1,
 				)
 				rich = clipboardMonitor.ClipboardSnapshot(
 					contentType.TEXT if failure == "plainFailure" else contentType.FORMATTED_TEXT,
@@ -459,7 +466,11 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				writeError = _beginTemporaryPaste.__globals__["_ClipboardWriteFailedError"]
 
 				def writeSnapshot(
-					snapshot: object, _source: object, *, expectedSequenceNumber: int, **_kwargs
+					snapshot: object,
+					_source: object,
+					*,
+					expectedSequenceNumber: int,
+					**_kwargs,
 				) -> int:
 					"""Model format failure before or after replacing the clipboard, without sending real keys."""
 					nonlocal currentSnapshot
@@ -469,7 +480,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 							raise RuntimeError("write failed") from ValueError("rich format unavailable")
 						if failure in ("partial", "fallback", "fallbackPartial", "owner", "focus"):
 							currentSnapshot = clipboardMonitor.ClipboardSnapshot(
-								contentType.EMPTY, sequenceNumber=2
+								contentType.EMPTY,
+								sequenceNumber=2,
 							)
 							if failure == "owner":
 								controller.monitor.getOwnerHandle.return_value = 20
@@ -518,7 +530,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 						self.assertFalse(currentSnapshot.canIncludeInHistory)
 						self.assertFalse(currentSnapshot.canUpload)
 						self.assertEqual(
-							b"html" if failure in (None, "unmapped") else None, currentSnapshot.html
+							b"html" if failure in (None, "unmapped") else None,
+							currentSnapshot.html,
 						)
 						schedule.assert_called_once()
 						_delay, restore, state = schedule.call_args.args
