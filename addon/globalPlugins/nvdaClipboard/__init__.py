@@ -248,7 +248,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for marking the start of clipboard text to paste.
 		description=_("Marks the current clipboard navigation position as the selection start"),
-		gesture="kb:NVDA+windows+[",
+		gestures=("kb:control+windows+numpad4", "kb(laptop):NVDA+windows+["),
 		speakOnDemand=True,
 	)
 	def script_markClipboardSelectionStart(self, gesture: inputCore.InputGesture) -> None:
@@ -261,7 +261,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 			"Marks the current clipboard navigation position as the selection end "
 			"and selects the text between the two markers",
 		),
-		gesture="kb:NVDA+windows+]",
+		gestures=("kb:control+windows+numpad6", "kb(laptop):NVDA+windows+]"),
 		speakOnDemand=True,
 	)
 	def script_markClipboardSelectionEnd(self, gesture: inputCore.InputGesture) -> None:
@@ -347,7 +347,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Input help description for cycling through categories of stored entries.
 		description=_("Cycles through categories of stored entries"),
-		gesture="kb:control+windows+=",
+		gestures=("kb:control+windows+numpadDivide", "kb(laptop):control+windows+="),
 		speakOnDemand=True,
 	)
 	def script_cycleStoredItemCategory(self, gesture: inputCore.InputGesture) -> None:

@@ -35,20 +35,14 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.3.0",
+	addon_version="0.3.1",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.3.0
+	addon_changelog=_("""### 0.3.1
 
-- Press `NVDA+C` once to report a clipboard summary and twice in quick succession to view its content in browse mode. This replaces the add-on's previous summary shortcuts and NVDA's standard clipboard report.
-- View HTML, Markdown, and common LaTeX content with scripts and external resource loading removed. An option in settings lets you show the text as-is instead.
-- Browse stored entries across clipboard history and user categories without opening the manager. Press `Ctrl+Windows+=` to cycle through categories; opening the manager starts at the current category and entry.
-- Use `NVDA+Windows+[` and `NVDA+Windows+]` to mark the current clipboard navigation position as the selection start and end, respectively. Select in either direction, including the characters at both endpoints.
-- Use `NVDA+Windows+V` to paste the selection, or the current stored entry if there is no complete selection. Pasting a stored entry keeps it selected for repeated pasting.
-- Pasting stored entries preserves the original formatting when possible, using plain text when necessary.
-- Laptop clipboard text navigation now uses `NVDA+Windows` instead of `NVDA+Alt` combinations. The laptop-specific current-line gesture is removed; `Ctrl+NumPad8` remains available in both layouts.
-- Appending the last spoken text now uses `NVDA+Windows+A`. Saving the clipboard image and receiving and pasting from Tiantan Cloud Clipboard are unassigned by default.
-- Unified English and Chinese command descriptions and messages for text selection, stored entries, and putting content on the clipboard. Gesture tables now list all commands for both keyboard layouts, including commands unassigned by default."""),
+- Add all-layout shortcuts for clipboard selection marking: `Ctrl+Windows+NumPad 4` and `Ctrl+Windows+NumPad 6`.
+- Add the all-layout `Ctrl+Windows+NumPad Divide` shortcut for cycling through stored-entry categories.
+- Simplify the documentation so command descriptions appear in the introduction while concrete shortcuts are maintained in the default gesture table."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
