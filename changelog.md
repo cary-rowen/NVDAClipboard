@@ -1,3 +1,9 @@
+### 0.3.1
+
+- Add all-layout shortcuts for clipboard selection marking: `Ctrl+Windows+NumPad 4` and `Ctrl+Windows+NumPad 6`.
+- Add the all-layout `Ctrl+Windows+NumPad Divide` shortcut for cycling through stored-entry categories.
+- Simplify the documentation so command descriptions appear in the introduction while concrete shortcuts are maintained in the default gesture table.
+
 ### 0.3.0
 
 - Press `NVDA+C` once to report a clipboard summary and twice in quick succession to view its content in browse mode. This replaces the add-on's previous summary shortcuts and NVDA's standard clipboard report.
