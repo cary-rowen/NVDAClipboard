@@ -12,6 +12,9 @@ from typing import cast
 
 import addonHandler
 import api
+
+# NVDA 2026.3's private OCR capture backend; adapt if its module or signatures change.
+from contentRecog import RecogImageInfo, _wgcCapture
 from gui.message import displayDialogAsModal
 import screenCurtain
 import screenBitmap
@@ -24,14 +27,16 @@ from .imageCodec import ImageDataTooLargeError, encodeBgrPixelsToPng, isPngImage
 addonHandler.initTranslation()
 
 
-def isScreenCurtainEnabled() -> bool:
-	"""Return whether NVDA screen curtain is currently active."""
-	controller = screenCurtain.screenCurtain
-	return controller is not None and controller.enabled
+class ScreenCurtainCaptureUnavailableError(RuntimeError):
+	"""The system cannot capture images while Screen Curtain is enabled."""
 
 
 def captureNavigatorObjectPng() -> bytes | None:
 	"""Capture the visible navigator object and return it as bounded PNG data."""
+	controller = screenCurtain.screenCurtain
+	useWgcCapture = controller is not None and controller.enabled
+	if useWgcCapture and not _wgcCapture.isSupported():
+		raise ScreenCurtainCaptureUnavailableError
 	location = cast(tuple[int, int, int, int] | None, getattr(api.getNavigatorObject(), "location", None))
 	if location is None:
 		return None
@@ -61,11 +66,14 @@ def captureNavigatorObjectPng() -> bytes | None:
 	height = bottom - top
 	if not isImageSizeSafe(width, height, 32):
 		return None
-	bitmap = screenBitmap.ScreenBitmap(width, height)
-	try:
-		pixels = memoryview(bitmap.captureImage(left, top, width, height)).cast("B")
-	finally:
-		del bitmap
+	if useWgcCapture:
+		pixels = memoryview(_wgcCapture.captureImage(RecogImageInfo(left, top, width, height, 1))).cast("B")
+	else:
+		bitmap = screenBitmap.ScreenBitmap(width, height)
+		try:
+			pixels = memoryview(bitmap.captureImage(left, top, width, height)).cast("B")
+		finally:
+			del bitmap
 	try:
 		return encodeBgrPixelsToPng(
 			pixels,

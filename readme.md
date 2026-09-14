@@ -63,7 +63,7 @@ To put the entry on the clipboard without pasting, use the "Puts the current sto
 
 ## Images
 
-When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. The command for saving the current clipboard image has no default gesture; you can also save an image selected in the Clipboard Manager. Use the copy navigator object as an image command to copy the current navigator object as an image.
+When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. The command for saving the current clipboard image has no default gesture; you can also save an image selected in the Clipboard Manager. Use the copy navigator object as an image command to copy the current navigator object as an image. On supported systems, this also works while Screen Curtain remains enabled. If the system does not support capture with Screen Curtain, the command asks you to disable it first.
 
 ## Cloud Synchronization
 

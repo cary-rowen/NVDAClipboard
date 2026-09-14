@@ -61,8 +61,8 @@ from .oneDriveSync import OneDriveSyncManager
 from .search import matchesSearchKeywords, normalizeSearchText
 from .cues import playBoundary, playCopy, playLineBoundary, playNonPlainText
 from .images import (
+	ScreenCurtainCaptureUnavailableError,
 	captureNavigatorObjectPng,
-	isScreenCurtainEnabled,
 	savePngImage,
 )
 from .tiantanSupport import getTiantanSupportState
@@ -965,12 +965,12 @@ class ClipboardController:
 
 	def copyNavigatorObjectImage(self) -> None:
 		"""Copy a screenshot of the current navigator object."""
-		if isScreenCurtainEnabled():
+		try:
+			pngData = captureNavigatorObjectPng()
+		except ScreenCurtainCaptureUnavailableError:
 			# Translators: Message shown when a screenshot is blocked by screen curtain.
 			ui.message(_("Disable screen curtain before taking a screenshot"))
 			return
-		try:
-			pngData = captureNavigatorObjectPng()
 		except Exception:
 			log.exception("Failed to copy a navigator object screenshot.")
 			# Translators: Error shown when a navigator object screenshot cannot be copied.
