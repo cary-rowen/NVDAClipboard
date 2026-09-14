@@ -1,3 +1,8 @@
+### 0.3.3
+
+- Allow `NVDA+PrintScreen` screenshots with Screen Curtain enabled on supported systems.
+- Simplify internal code and remove redundant logic.
+
 ### 0.3.1
 
 - Add all-layout shortcuts for clipboard selection marking: `Ctrl+Windows+NumPad 4` and `Ctrl+Windows+NumPad 6`.

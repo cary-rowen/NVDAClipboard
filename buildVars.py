@@ -35,14 +35,13 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.3.1",
+	addon_version="0.3.3",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.3.1
+	addon_changelog=_("""### 0.3.3
 
-- Add all-layout shortcuts for clipboard selection marking: `Ctrl+Windows+NumPad 4` and `Ctrl+Windows+NumPad 6`.
-- Add the all-layout `Ctrl+Windows+NumPad Divide` shortcut for cycling through stored-entry categories.
-- Simplify the documentation so command descriptions appear in the introduction while concrete shortcuts are maintained in the default gesture table."""),
+- Allow `NVDA+PrintScreen` screenshots with Screen Curtain enabled on supported systems.
+- Simplify internal code and remove redundant logic."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
