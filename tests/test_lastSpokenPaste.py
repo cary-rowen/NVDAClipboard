@@ -13,6 +13,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
+from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
@@ -33,7 +34,6 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 			in {
 				"_getTextOrCharacterCount",
 				"_mapClipboardSelectionOffsets",
-				"_normalizeClipboardLineEndings",
 				"_isTemporarySnapshot",
 				"_normalizeUnicodeText",
 				"_getPlainTextPasteRequest",
@@ -47,6 +47,7 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 		"ClipboardContentType": clipboardMonitor.ClipboardContentType,
 		"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
 		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
+		"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
 		"replace": replace,
 		"log": Mock(),
 	}

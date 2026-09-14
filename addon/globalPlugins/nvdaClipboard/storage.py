@@ -2771,7 +2771,7 @@ class ClipboardStorage:
 		self,
 		itemIds: tuple[int, ...],
 		missingPaths: frozenset[str],
-	) -> tuple[int, int, int, dict[int, int]]:
+	) -> tuple[int, int, dict[int, int]]:
 		"""Remove missing paths from selected history file groups."""
 		return self._removeMissingFileReferences(itemIds, missingPaths)
 
@@ -2796,7 +2796,7 @@ class ClipboardStorage:
 		categoryName: str,
 		itemIds: tuple[int, ...],
 		missingPaths: frozenset[str],
-	) -> tuple[int, int, int, dict[int, int]]:
+	) -> tuple[int, int, dict[int, int]]:
 		"""Remove missing paths from selected category file groups."""
 		return self._removeMissingFileReferences(itemIds, missingPaths, categoryName)
 
@@ -2805,10 +2805,10 @@ class ClipboardStorage:
 		itemIds: tuple[int, ...],
 		missingPaths: frozenset[str],
 		categoryName: str | None = None,
-	) -> tuple[int, int, int, dict[int, int]]:
+	) -> tuple[int, int, dict[int, int]]:
 		"""Remove missing paths from selected history or category file groups."""
 		if not itemIds or not missingPaths:
-			return (0, 0, 0, {})
+			return (0, 0, {})
 		with self._transaction() as connection:
 			categoryId = None
 			nameFolded = None
@@ -2816,7 +2816,6 @@ class ClipboardStorage:
 				categoryId = self._categoryId(connection, categoryName)
 				nameFolded = self._categoryName(connection, categoryId).casefold()
 			changed = 0
-			deleted = 0
 			removed = 0
 			replacementIds: dict[int, int] = {}
 			for itemId in dict.fromkeys(itemIds):
@@ -2865,10 +2864,9 @@ class ClipboardStorage:
 							"DELETE FROM categoryItems WHERE categoryId = ? AND itemId = ?",
 							(categoryId, itemId),
 						)
-					deleted += 1
 			if changed:
 				_garbageCollect(connection)
-			return (changed, deleted, removed, replacementIds)
+			return (changed, removed, replacementIds)
 
 	def copyHistoryItemsToCategoryById(self, itemIds: tuple[int, ...], categoryName: str) -> None:
 		"""Reference ordered stable history entries at the front of a user category."""

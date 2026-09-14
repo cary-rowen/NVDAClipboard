@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import ctypes
+from itertools import groupby
 
 import textUtils
+
+from .clipboardData import normalizeNewlinesForWin32
 
 _EM_SETSEL = 0x00B1
 _EM_REPLACESEL = 0x00C2
@@ -81,22 +84,22 @@ def removeConsecutiveBlankLines(text: str) -> str:
 
 def removeConsecutiveDuplicateLines(text: str) -> str:
 	"""Remove immediately repeated lines while keeping the first occurrence."""
-	return _applyLineTransform(text, _removeConsecutiveDuplicateLines)
+	return _applyLineTransform(text, lambda lines: [line for line, _ in groupby(lines)])
 
 
 def removeDuplicateLines(text: str) -> str:
 	"""Remove repeated lines while keeping the first occurrence."""
-	return _applyLineTransform(text, _removeDuplicateLines)
+	return _applyLineTransform(text, lambda lines: list(dict.fromkeys(lines)))
 
 
 def sortLinesByLengthAscending(text: str) -> str:
 	"""Sort lines by length from shortest to longest."""
-	return _applyLineTransform(text, _sortLinesByLengthAscending)
+	return _applyLineTransform(text, lambda lines: sorted(lines, key=len))
 
 
 def sortLinesByLengthDescending(text: str) -> str:
 	"""Sort lines by length from longest to shortest."""
-	return _applyLineTransform(text, _sortLinesByLengthDescending)
+	return _applyLineTransform(text, lambda lines: sorted(lines, key=len, reverse=True))
 
 
 def applyEditorTextTransform(
@@ -160,14 +163,9 @@ def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replaceme
 		handle,
 		_EM_REPLACESEL,
 		True,
-		ctypes.c_wchar_p(_normalizeNewlinesForWin32(replacementText)),
+		ctypes.c_wchar_p(normalizeNewlinesForWin32(replacementText)),
 	)
 	return True
-
-
-def _normalizeNewlinesForWin32(text: str) -> str:
-	"""Convert normalized Python newlines to Win32 edit control line breaks."""
-	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
 
 
 def _expandToWholeLines(text: str, start: int, end: int) -> tuple[int, int]:
@@ -182,15 +180,6 @@ def _expandToWholeLines(text: str, start: int, end: int) -> tuple[int, int]:
 	return lineStart, lineEnd
 
 
-def _removeConsecutiveDuplicateLines(lines: list[str]) -> list[str]:
-	"""Return the first line from each run of consecutive duplicates."""
-	result = [lines[0]]
-	for line in lines[1:]:
-		if line != result[-1]:
-			result.append(line)
-	return result
-
-
 def _removeConsecutiveBlankLines(lines: list[str]) -> list[str]:
 	"""Return lines with each run of blank lines collapsed to one line."""
 	result: list[str] = []
@@ -202,18 +191,3 @@ def _removeConsecutiveBlankLines(lines: list[str]) -> list[str]:
 		result.append("" if isBlank else line)
 		previousBlank = isBlank
 	return result
-
-
-def _removeDuplicateLines(lines: list[str]) -> list[str]:
-	"""Return each line once while preserving the original order."""
-	return list(dict.fromkeys(lines))
-
-
-def _sortLinesByLengthAscending(lines: list[str]) -> list[str]:
-	"""Return the lines sorted from shortest to longest."""
-	return sorted(lines, key=len)
-
-
-def _sortLinesByLengthDescending(lines: list[str]) -> list[str]:
-	"""Return the lines sorted from longest to shortest."""
-	return sorted(lines, key=len, reverse=True)

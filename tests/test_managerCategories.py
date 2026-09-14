@@ -50,6 +50,7 @@ class ManagerCategoryContextMenuTests(unittest.TestCase):
 		manager = SimpleNamespace(
 			_categoryHasItems=False,
 			_categoryIds=["first", "second"],
+			_isSearchSessionActive=False,
 			_selectedCategory="first",
 			_confirmDirtyChanges=Mock(return_value=True),
 			_loadActiveItem=Mock(),

@@ -279,17 +279,11 @@ class _ManagerEditorCommands:
 			pattern = re.compile(findText if isRegex else re.escape(findText), flags)
 			if result == wx.ID_APPLY:
 				count = self._replaceOne(pattern, replacement, isRegex)
-			elif isRegex:
-				newText, count = pattern.subn(replacement, self._editor.GetValue())
-				if count:
-					self._editor.SetValue(newText)
 			else:
-
-				def replaceLiteral(_match: re.Match[str]) -> str:
-					"""Return replacement text without interpreting backslashes."""
-					return replacement
-
-				newText, count = pattern.subn(replaceLiteral, self._editor.GetValue())
+				newText, count = pattern.subn(
+					replacement if isRegex else lambda _match: replacement,
+					self._editor.GetValue(),
+				)
 				if count:
 					self._editor.SetValue(newText)
 		except re.error as error:

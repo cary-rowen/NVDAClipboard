@@ -76,10 +76,10 @@ class _ItemSizeLimitError(OneDriveError):
 	"""Report that one local item cannot fit in the bounded cloud representation."""
 
 
-def _emptySnapshot(accountId: str | None = None) -> OneDriveSyncSnapshot:
+def _emptySnapshot() -> OneDriveSyncSnapshot:
 	"""Return an empty synchronization snapshot."""
 	return OneDriveSyncSnapshot(
-		accountId=accountId,
+		accountId=None,
 		history=(),
 		categories=(),
 		categoryItems=(),
@@ -390,11 +390,6 @@ def _validateSyncItem(item: ClipboardItem) -> bytes:
 		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
 
 
-def _stateVersion(state: object) -> SyncVersion:
-	"""Return a typed version from one synchronization state record."""
-	return cast(SyncVersion, getattr(state, "version"))
-
-
 def _cleanSnapshot(snapshot: OneDriveSyncSnapshot) -> OneDriveSyncSnapshot:
 	"""Remove local-only dirty markers from a proposed committed snapshot."""
 	return replace(
@@ -412,10 +407,8 @@ def _cloudSnapshot(snapshot: OneDriveSyncSnapshot) -> OneDriveSyncSnapshot:
 
 def _preferNewer(left: Any, right: Any) -> Any:
 	"""Choose the deterministically newer state record."""
-	leftKey = (_stateVersion(left).clock, _stateVersion(left).operationId)
-	rightKey = (_stateVersion(right).clock, _stateVersion(right).operationId)
-	if leftKey != rightKey:
-		return replace(left if leftKey > rightKey else right, dirty=False)
+	if left.version != right.version:
+		return replace(left if left.version > right.version else right, dirty=False)
 	if isinstance(left, OneDriveCategoryState) and isinstance(right, OneDriveCategoryState):
 		isConsistent = replace(left, orderVersion=right.orderVersion, dirty=right.dirty) == right
 	else:
@@ -546,11 +539,7 @@ def _mergeSnapshots(local: OneDriveSyncSnapshot, remote: OneDriveSyncSnapshot) -
 	for state in local.categories:
 		if state.nameFolded in categories:
 			winner = _preferNewer(categories[state.nameFolded], state)
-			orderVersion = min(
-				categories[state.nameFolded].orderVersion,
-				state.orderVersion,
-				key=lambda value: (value.clock, value.operationId),
-			)
+			orderVersion = min(categories[state.nameFolded].orderVersion, state.orderVersion)
 			categories[state.nameFolded] = replace(winner, orderVersion=orderVersion)
 		else:
 			categories[state.nameFolded] = state
@@ -605,7 +594,7 @@ def _normalizationTargets(
 	"""Return live records that must become synthetic tombstones before cloud commit."""
 	live = sorted(
 		(state for state in snapshot.history if not state.deleted and state.payloadHash is not None),
-		key=lambda state: (state.version.clock, state.version.operationId),
+		key=lambda state: state.version,
 		reverse=True,
 	)
 	liveCategories = {state.nameFolded for state in snapshot.categories if not state.deleted}

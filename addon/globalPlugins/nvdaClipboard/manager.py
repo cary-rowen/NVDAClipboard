@@ -300,62 +300,40 @@ class ClipboardManagerFrame(wx.Frame):
 		)
 		editMenu.AppendSeparator()
 		textCleanupMenu = wx.Menu()
-		trailingSpacesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+		for label, transform in (
 			# Translators: Edit menu command to trim trailing spaces from each line.
-			_("Trim Trailing &Spaces"),
-		)
-		leadingSpacesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+			(_("Trim Trailing &Spaces"), textTransforms.trimTrailingSpaces),
 			# Translators: Edit menu command to trim leading spaces from each line.
-			_("Trim Leading S&paces"),
-		)
-		leadingAndTrailingSpacesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+			(_("Trim Leading S&paces"), textTransforms.trimLeadingSpaces),
 			# Translators: Edit menu command to trim leading and trailing spaces from each line.
-			_("Trim Leading and Trailing S&paces"),
-		)
-		lineBreaksToSpacesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+			(_("Trim Leading and Trailing S&paces"), textTransforms.trimLeadingAndTrailingSpaces),
 			# Translators: Edit menu command to replace line breaks with spaces.
-			_("Replace &Line Breaks with Spaces"),
-		)
-		removeBlankLinesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+			(_("Replace &Line Breaks with Spaces"), textTransforms.replaceLineBreaksWithSpaces),
 			# Translators: Edit menu command to remove blank lines.
-			_("Remove &Blank Lines"),
-		)
-		removeConsecutiveBlankLinesItem = textCleanupMenu.Append(
-			wx.ID_ANY,
+			(_("Remove &Blank Lines"), textTransforms.removeBlankLines),
 			# Translators: Edit menu command to collapse consecutive blank lines.
-			_("Remove Consecutive B&lank Lines"),
-		)
+			(_("Remove Consecutive B&lank Lines"), textTransforms.removeConsecutiveBlankLines),
+		):
+			item = textCleanupMenu.Append(wx.ID_ANY, label)
+			self.Bind(wx.EVT_MENU, partial(self._onApplyTextTransform, transform=transform), item)
 		self._textCleanupMenuItem = editMenu.AppendSubMenu(
 			textCleanupMenu,
 			# Translators: Submenu containing text cleanup commands.
 			_("Text &Cleanup"),
 		)
 		lineOperationsMenu = wx.Menu()
-		removeConsecutiveDuplicatesItem = lineOperationsMenu.Append(
-			wx.ID_ANY,
+		for label, transform in (
 			# Translators: Edit menu command to remove consecutive duplicate lines.
-			_("Remove Consecutive &Duplicate Lines"),
-		)
-		removeDuplicatesItem = lineOperationsMenu.Append(
-			wx.ID_ANY,
+			(_("Remove Consecutive &Duplicate Lines"), textTransforms.removeConsecutiveDuplicateLines),
 			# Translators: Edit menu command to remove duplicate lines.
-			_("Remove &Duplicate Lines"),
-		)
-		sortLinesDescendingItem = lineOperationsMenu.Append(
-			wx.ID_ANY,
+			(_("Remove &Duplicate Lines"), textTransforms.removeDuplicateLines),
 			# Translators: Edit menu command to sort lines by length from longest to shortest.
-			_("Sort Lines by Length, &Descending"),
-		)
-		sortLinesAscendingItem = lineOperationsMenu.Append(
-			wx.ID_ANY,
+			(_("Sort Lines by Length, &Descending"), textTransforms.sortLinesByLengthDescending),
 			# Translators: Edit menu command to sort lines by length from shortest to longest.
-			_("Sort Lines by Length, &Ascending"),
-		)
+			(_("Sort Lines by Length, &Ascending"), textTransforms.sortLinesByLengthAscending),
+		):
+			item = lineOperationsMenu.Append(wx.ID_ANY, label)
+			self.Bind(wx.EVT_MENU, partial(self._onApplyTextTransform, transform=transform), item)
 		self._lineOperationsMenuItem = editMenu.AppendSubMenu(
 			lineOperationsMenu,
 			# Translators: Submenu containing line-based clipboard text operations.
@@ -363,58 +341,8 @@ class ClipboardManagerFrame(wx.Frame):
 		)
 		self.Bind(
 			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.trimTrailingSpaces),
-			trailingSpacesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.trimLeadingSpaces),
-			leadingSpacesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.trimLeadingAndTrailingSpaces),
-			leadingAndTrailingSpacesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.replaceLineBreaksWithSpaces),
-			lineBreaksToSpacesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
 			partial(self._onApplyTextTransform, transform=textTransforms.segmentChineseWords),
 			self._segmentChineseWordsItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.removeBlankLines),
-			removeBlankLinesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.removeConsecutiveBlankLines),
-			removeConsecutiveBlankLinesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.removeConsecutiveDuplicateLines),
-			removeConsecutiveDuplicatesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.removeDuplicateLines),
-			removeDuplicatesItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.sortLinesByLengthDescending),
-			sortLinesDescendingItem,
-		)
-		self.Bind(
-			wx.EVT_MENU,
-			partial(self._onApplyTextTransform, transform=textTransforms.sortLinesByLengthAscending),
-			sortLinesAscendingItem,
 		)
 		menuBar.Append(
 			editMenu,
@@ -631,10 +559,9 @@ class ClipboardManagerFrame(wx.Frame):
 			and not oneDriveState.isSigningOut,
 		)
 
-	def _getEditorCodePointOffset(self, text: str | None = None) -> int:
+	def _getEditorCodePointOffset(self) -> int:
 		"""Return the wx insertion point as a Python string offset."""
-		if text is None:
-			text = self.editor.GetValue()
+		text = self.editor.GetValue()
 		offset = self.editor.GetInsertionPoint()
 		return textUtils.WideStringOffsetConverter(text).encodedToStrOffsets(offset, offset)[0]
 
@@ -1639,7 +1566,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onCategoryContextMenu(self, event: wx.ContextMenuEvent) -> None:
 		"""Select the clicked category and show commands for it."""
-		if getattr(self, "_isSearchSessionActive", False):
+		if self._isSearchSessionActive:
 			return
 		eventPosition = event.GetPosition()
 		if eventPosition != wx.DefaultPosition:
@@ -1845,11 +1772,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _selectCategory(self, selection: int) -> bool:
 		"""Select and load one category, restoring the previous selection when cancelled."""
-		if (
-			getattr(self, "_isSearchSessionActive", False)
-			or selection == wx.NOT_FOUND
-			or selection >= len(self._categoryIds)
-		):
+		if self._isSearchSessionActive or selection == wx.NOT_FOUND or selection >= len(self._categoryIds):
 			return False
 		self.categoryList.SetSelection(selection)
 		category = self._categoryIds[selection]
@@ -2171,7 +2094,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onNewEntry(self, event: wx.CommandEvent) -> None:
 		"""Start a blank plain-text entry in the selected category."""
-		if getattr(self, "_isSearchSessionActive", False):
+		if self._isSearchSessionActive:
 			return
 		if not self._confirmDirtyChanges():
 			return
@@ -2179,7 +2102,7 @@ class ClipboardManagerFrame(wx.Frame):
 		self.editor.SetFocus()
 
 	def _onOpenFile(self, event: wx.CommandEvent) -> None:
-		if getattr(self, "_isSearchSessionActive", False):
+		if self._isSearchSessionActive:
 			return
 		if not self._confirmDirtyChanges():
 			return
@@ -2272,11 +2195,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onReplace(self, event: wx.CommandEvent) -> None:
 		"""Open the editor replacement dialog for editable content."""
-		if (
-			getattr(self, "_isSearchSessionActive", False)
-			or not self._isContentCurrent()
-			or not self._contentEditable
-		):
+		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
 			return
 		self._editorCommands.showReplace()
 
@@ -2297,11 +2216,7 @@ class ClipboardManagerFrame(wx.Frame):
 		transform: Callable[[str], str],
 	) -> None:
 		"""Apply one text transform to the current editable content."""
-		if (
-			getattr(self, "_isSearchSessionActive", False)
-			or not self._isContentCurrent()
-			or not self._contentEditable
-		):
+		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
 			return
 		textTransforms.applyEditorTextTransform(self.editor, transform, lineWise=True)
 

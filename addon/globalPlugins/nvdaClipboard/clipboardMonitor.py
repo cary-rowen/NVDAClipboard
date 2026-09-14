@@ -29,6 +29,7 @@ from .clipboardData import (
 	MAX_TEXT_BYTES,
 	getPngImageInfo,
 	isImageSizeSafe,
+	normalizeNewlinesForWin32,
 )
 from .imageCodec import getImageProperties, isPngImageDecodable, pngToPackedDib
 
@@ -139,11 +140,6 @@ def _isNewerClipboardSequence(candidate: int, previous: int) -> bool:
 	"""Return whether a nonzero DWORD sequence follows another, including wraparound."""
 	difference = (candidate - previous) & _SEQUENCE_NUMBER_MASK
 	return 0 < difference < 0x80000000
-
-
-def _normalizeUnicodeTextForClipboard(text: str) -> str:
-	"""Return text with Win32 CF_UNICODETEXT line endings."""
-	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
 
 
 class _ClipboardDataLimitError(ValueError):
@@ -1132,7 +1128,7 @@ class ClipboardMonitor:
 				if "\0" in snapshot.text:
 					raise ValueError(CF_UNICODETEXT)
 				textData = (
-					_normalizeUnicodeTextForClipboard(snapshot.text).encode(
+					normalizeNewlinesForWin32(snapshot.text).encode(
 						"utf-16-le",
 						errors="surrogatepass",
 					)

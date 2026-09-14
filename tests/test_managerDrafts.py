@@ -64,6 +64,7 @@ class ManagerDraftTests(unittest.TestCase):
 		editor = Mock()
 		manager = SimpleNamespace(
 			_baselineText="old",
+			_isSearchSessionActive=False,
 			_confirmDirtyChanges=Mock(return_value=True),
 			_dirtyStateNeedsCheck=True,
 			_getSelectedCategory=Mock(return_value="Saved"),
@@ -95,6 +96,7 @@ class ManagerDraftTests(unittest.TestCase):
 		"""Leave the existing content untouched when the user cancels."""
 		manager = SimpleNamespace(
 			_confirmDirtyChanges=Mock(return_value=False),
+			_isSearchSessionActive=False,
 			_startPlainTextDraft=Mock(),
 			editor=Mock(),
 		)

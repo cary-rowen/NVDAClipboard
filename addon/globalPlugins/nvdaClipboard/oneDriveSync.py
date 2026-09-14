@@ -929,11 +929,6 @@ def _remoteItemMatches(itemFile: _RemoteItemFile, data: bytes) -> bool:
 	return itemFile.quickXorHash is not None and itemFile.quickXorHash == _quickXorHash(data)
 
 
-def _canReuseRemoteItem(itemFile: _RemoteItemFile, data: bytes, isReferenced: bool) -> bool:
-	"""Return whether a manifest-referenced immutable item can be reused unchanged."""
-	return isReferenced and _remoteItemMatches(itemFile, data)
-
-
 class OneDriveSyncManager:
 	"""Coordinate Microsoft sign-in and serialized background synchronization."""
 
@@ -1554,10 +1549,10 @@ class OneDriveSyncManager:
 					item = None
 					continue
 			itemFile = itemFiles.get(payloadHash)
-			if itemFile is None or not _canReuseRemoteItem(
-				itemFile,
-				itemData,
-				payloadHash in remotePayloads,
+			if (
+				itemFile is None
+				or payloadHash not in remotePayloads
+				or not _remoteItemMatches(itemFile, itemData)
 			):
 				graph.putItemData(payloadHash, itemData)
 				uploadedHashes.add(payloadHash)

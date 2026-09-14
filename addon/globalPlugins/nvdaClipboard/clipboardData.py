@@ -17,6 +17,11 @@ _MAX_IMAGE_PIXELS = 40_000_000
 _MAX_IMAGE_DIMENSION = 100_000
 
 
+def normalizeNewlinesForWin32(text: str) -> str:
+	"""Return text with CRLF line endings for Win32 clipboard and edit controls."""
+	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+
+
 def getPngImageInfo(data: bytes) -> tuple[int, int, int] | None:
 	"""Return PNG image information after validating its complete chunk stream."""
 	if len(data) < 45 or data[:8] != b"\x89PNG\r\n\x1a\n":

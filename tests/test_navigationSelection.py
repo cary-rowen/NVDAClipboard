@@ -16,6 +16,7 @@ from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
@@ -98,7 +99,6 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 			in {
 				"_getTextOrCharacterCount",
 				"_normalizeUnicodeText",
-				"_normalizeClipboardLineEndings",
 				"_mapClipboardSelectionOffsets",
 				"_getPlainTextPasteRequest",
 			}
@@ -139,6 +139,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 		"monotonic": monotonic,
 		"log": Mock(),
 		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
+		"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
 		"replace": replace,
 		"speech": _SPEECH,
 		"ui": _UI,

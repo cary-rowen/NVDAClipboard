@@ -684,13 +684,13 @@ class StorageSelfCheckTests(unittest.TestCase):
 			assert historyId is not None
 			storage.copyHistoryItemsToCategoryById((historyId,), "Saved")
 
-			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
+			changed, removed, replacements = storage.removeMissingCategoryFileReferences(
 				"Saved",
 				(historyId,),
 				frozenset({"missing.txt"}),
 			)
 
-			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			self.assertEqual((changed, removed), (1, 1))
 			self.assertEqual(storage.getHistoryItemById(historyId).files, ("kept.txt", "missing.txt"))
 			categoryItems = storage.getCategoryItems("Saved")
 			self.assertEqual(len(categoryItems), 1)
@@ -711,12 +711,12 @@ class StorageSelfCheckTests(unittest.TestCase):
 			itemId = storage.addHistory(fileGroup)
 			assert itemId is not None
 
-			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
+			changed, removed, replacements = storage.removeMissingHistoryFileReferences(
 				(itemId,),
 				frozenset({"missing.txt"}),
 			)
 
-			self.assertEqual((changed, deleted, removed), (1, 1, 1))
+			self.assertEqual((changed, removed), (1, 1))
 			self.assertEqual(replacements, {})
 			self.assertFalse(storage.history)
 			storage.close()
@@ -733,12 +733,12 @@ class StorageSelfCheckTests(unittest.TestCase):
 			assert existingId is not None
 			assert selectedId is not None
 
-			changed, deleted, removed, replacements = storage.removeMissingHistoryFileReferences(
+			changed, removed, replacements = storage.removeMissingHistoryFileReferences(
 				(selectedId,),
 				frozenset({"missing.txt"}),
 			)
 
-			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			self.assertEqual((changed, removed), (1, 1))
 			history = storage.history
 			self.assertEqual(2, len(history))
 			self.assertNotEqual(history[0].itemId, existingId)
@@ -762,13 +762,13 @@ class StorageSelfCheckTests(unittest.TestCase):
 			storage.copyHistoryItemsToCategoryById((existingId,), "Saved")
 			storage.copyHistoryItemsToCategoryById((selectedId,), "Saved")
 
-			changed, deleted, removed, replacements = storage.removeMissingCategoryFileReferences(
+			changed, removed, replacements = storage.removeMissingCategoryFileReferences(
 				"Saved",
 				(selectedId,),
 				frozenset({"missing.txt"}),
 			)
 
-			self.assertEqual((changed, deleted, removed), (1, 0, 1))
+			self.assertEqual((changed, removed), (1, 1))
 			categoryItems = storage.getCategoryItems("Saved")
 			self.assertEqual(2, len(categoryItems))
 			self.assertNotEqual(categoryItems[0].itemId, existingId)

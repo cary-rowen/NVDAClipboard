@@ -46,6 +46,7 @@ from .clipboardData import (
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,
 	isImageSizeSafe,
+	normalizeNewlinesForWin32,
 )
 from .imageCodec import (
 	ImageDataTooLargeError,
@@ -154,11 +155,6 @@ def _normalizeUnicodeText(text: str) -> str:
 	return text.encode("utf-16-le", errors="surrogatepass").decode("utf-16-le", errors="replace")
 
 
-def _normalizeClipboardLineEndings(text: str) -> str:
-	"""Return text as it is read back from Win32 CF_UNICODETEXT writes."""
-	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
-
-
 def _mapClipboardSelectionOffsets(
 	offsets: tuple[int, int],
 	sourceText: str,
@@ -169,13 +165,13 @@ def _mapClipboardSelectionOffsets(
 		return None
 	if sourceText == targetText:
 		return offsets
-	if _normalizeClipboardLineEndings(sourceText) != targetText:
+	if normalizeNewlinesForWin32(sourceText) != targetText:
 		return None
 	mappedOffsets: list[int] = []
 	for offset in offsets:
 		if 0 < offset < len(sourceText) and sourceText[offset - 1 : offset + 1] == "\r\n":
 			offset -= 1
-		mappedOffsets.append(len(_normalizeClipboardLineEndings(sourceText[:offset])))
+		mappedOffsets.append(len(normalizeNewlinesForWin32(sourceText[:offset])))
 	if any(offset >= len(targetText) for offset in mappedOffsets):
 		return None
 	return mappedOffsets[0], mappedOffsets[1]
@@ -224,7 +220,6 @@ class MissingFileCleanupResult:
 	"""Describe selected file-group cleanup performed by the manager."""
 
 	changedCount: int
-	deletedCount: int
 	removedCount: int
 	replacementIds: dict[int, int]
 
@@ -281,7 +276,7 @@ def _isTemporarySnapshot(
 	expected = state.temporarySnapshot
 	return (
 		snapshot.contentType == expected.contentType
-		and snapshot.text == _normalizeClipboardLineEndings(expected.text)
+		and snapshot.text == normalizeNewlinesForWin32(expected.text)
 		and snapshot.html == expected.html
 		and snapshot.rtf == expected.rtf
 		and snapshot.imageFormat == expected.imageFormat
@@ -1398,16 +1393,16 @@ class ClipboardController:
 					if _isMissingFilePath(filePath)
 				)
 				if not self._isStarted or not missingPaths:
-					result: MissingFileCleanupResult | Exception = MissingFileCleanupResult(0, 0, 0, {})
+					result: MissingFileCleanupResult | Exception = MissingFileCleanupResult(0, 0, {})
 				else:
 					try:
 						if self.isHistoryCategory(category):
-							changedCount, deletedCount, removedCount, replacementIds = (
+							changedCount, removedCount, replacementIds = (
 								self.storage.removeMissingHistoryFileReferences(itemIds, missingPaths)
 							)
 						else:
 							assert isinstance(category, str)
-							changedCount, deletedCount, removedCount, replacementIds = (
+							changedCount, removedCount, replacementIds = (
 								self.storage.removeMissingCategoryFileReferences(
 									category,
 									itemIds,
@@ -1418,14 +1413,13 @@ class ClipboardController:
 						self._raiseUserStorageError(error)
 					result = MissingFileCleanupResult(
 						changedCount,
-						deletedCount,
 						removedCount,
 						replacementIds,
 					)
 			except Exception as error:
 				result = error
 			try:
-				wx.CallAfter(self._finishMissingFileCleanup, category, onComplete, result)
+				wx.CallAfter(self._finishMissingFileCleanup, onComplete, result)
 			except RuntimeError:
 				self._missingFileCleanupInProgress = False
 				if self._isStarted:
@@ -1444,7 +1438,6 @@ class ClipboardController:
 
 	def _finishMissingFileCleanup(
 		self,
-		category: CategoryId,
 		onComplete: Callable[[MissingFileCleanupResult | Exception], None],
 		result: MissingFileCleanupResult | Exception,
 	) -> None:
