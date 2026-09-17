@@ -22,6 +22,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import addonHandler
+import api
 from gui import nvdaControls
 from gui.message import DefaultButton, DialogType, MessageDialog, ReturnCode, displayDialogAsModal
 from logHandler import log
@@ -34,7 +35,7 @@ from .cues import playNonPlainText
 from .clipboardData import MAX_TEXT_BYTES
 from . import textTransforms
 from .managerEditor import _ManagerEditorCommands
-from .configuration import getConfirmOnClose
+from .configuration import getConfirmOnClose, getManagerWindowState
 from .search import normalizeSearchText, splitSearchKeywords
 from .storage import ItemNotFoundError
 from .storageModels import ClipboardItemType
@@ -50,6 +51,19 @@ addonHandler.initTranslation()
 
 _ITEM_LOAD_DELAY_MS = 80
 _SEARCH_DELAY_MS = 100
+
+
+def _clampWindowRect(
+	rect: tuple[int, int, int, int],
+	workArea: tuple[int, int, int, int],
+) -> tuple[int, int, int, int]:
+	x, y, width, height = rect
+	left, top, availableWidth, availableHeight = workArea
+	width = min(width, availableWidth)
+	height = min(height, availableHeight)
+	x = min(max(x, left), left + availableWidth - width)
+	y = min(max(y, top), top + availableHeight - height)
+	return x, y, width, height
 
 
 def _sourceToEditorOffset(text: str, offset: int) -> int:
@@ -87,7 +101,6 @@ class ClipboardManagerFrame(wx.Frame):
 			parent,
 			# Translators: Title of the clipboard manager window.
 			title=_("Clipboard Manager"),
-			size=(900, 620),
 		)
 		self.controller = controller
 		self._contentEditable = False
@@ -142,79 +155,100 @@ class ClipboardManagerFrame(wx.Frame):
 			showError=self._showError,
 		)
 		self._makeMenus()
+		self._restoreWindowState()
 		self.Bind(wx.EVT_CLOSE, self._onClose)
 		self.Bind(wx.EVT_WINDOW_DESTROY, self._onWindowDestroy)
 		self.Bind(wx.EVT_CHAR_HOOK, self._onCharHook)
-		self.SetMinSize((700, 480))
-		self.CentreOnScreen()
+		self.Bind(wx.EVT_MOVE, self._onWindowGeometryChanged)
+		self.Bind(wx.EVT_SIZE, self._onWindowGeometryChanged)
+		self.Bind(wx.EVT_DISPLAY_CHANGED, self._onDisplayChanged)
+		self.Bind(wx.EVT_DPI_CHANGED, self._onDisplayChanged)
+		self._splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self._onWindowGeometryChanged)
 
 	def _makeUi(self) -> None:
 		panel = wx.Panel(self)
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
+		self._splitter = wx.SplitterWindow(panel, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH)
+		self._splitter.SetSashGravity(0)
+		navigationPanel = wx.Panel(self._splitter)
+		editorPanel = wx.Panel(self._splitter)
+		navigationSizer = wx.BoxSizer(wx.VERTICAL)
+		gap = self.FromDIP(5)
+		padding = self.FromDIP(10)
 
 		categorySizer = wx.BoxSizer(wx.VERTICAL)
 		categoryLabel = wx.StaticText(
-			panel,
+			navigationPanel,
 			# Translators: Label for the clipboard category list.
 			label=_("&Category:"),
 		)
-		self.categoryList = wx.ListBox(panel)
-		categorySizer.Add(categoryLabel, flag=wx.BOTTOM, border=5)
-		categorySizer.Add(self.categoryList, proportion=1, flag=wx.EXPAND)
-		mainSizer.Add(categorySizer, flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, border=10)
+		self.categoryList = wx.ListBox(navigationPanel)
+		self.categoryList.SetMinSize((1, self.categoryList.GetCharHeight() * 4 + self.FromDIP(8)))
+		categorySizer.Add(categoryLabel, flag=wx.BOTTOM, border=gap)
+		categorySizer.Add(self.categoryList, flag=wx.EXPAND)
+		navigationSizer.Add(categorySizer, flag=wx.BOTTOM | wx.EXPAND, border=padding)
 
 		searchSizer = wx.BoxSizer(wx.HORIZONTAL)
 		searchLabel = wx.StaticText(
-			panel,
+			navigationPanel,
 			# Translators: Label for searching entries in the selected clipboard category.
 			label=_("&Search:"),
 		)
-		self.searchCtrl = _SearchTextCtrl(panel)
+		self.searchCtrl = _SearchTextCtrl(navigationPanel)
+		self.searchCtrl.SetMinSize((1, -1))
 		self.clearSearchButton = wx.Button(
-			panel,
+			navigationPanel,
 			# Translators: Button that exits clipboard manager entry search.
 			label=_("C&lear Search"),
+			style=wx.BU_EXACTFIT,
 		)
 		self.clearSearchButton.Disable()
-		searchSizer.Add(searchLabel, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=8)
-		searchSizer.Add(self.searchCtrl, proportion=1, flag=wx.RIGHT | wx.EXPAND, border=8)
+		searchSizer.Add(searchLabel, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=gap)
 		searchSizer.Add(self.clearSearchButton)
-		mainSizer.Add(searchSizer, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		navigationSizer.Add(searchSizer, flag=wx.BOTTOM | wx.EXPAND, border=gap)
+		navigationSizer.Add(self.searchCtrl, flag=wx.BOTTOM | wx.EXPAND, border=padding)
 
-		contentSizer = wx.BoxSizer(wx.HORIZONTAL)
 		itemsSizer = wx.BoxSizer(wx.VERTICAL)
 		self.itemsLabel = wx.StaticText(
-			panel,
+			navigationPanel,
 			# Translators: Label for the stored clipboard entry list.
 			label=_("En&tries:"),
 		)
 		self.itemList = nvdaControls.AutoWidthColumnListCtrl(
-			panel,
+			navigationPanel,
 			autoSizeColumn=1,
 			itemTextCallable=self._getItemText,
 			style=wx.LC_REPORT | wx.LC_NO_HEADER | wx.LC_VIRTUAL,
 		)
 		self.itemList.InsertColumn(0, self.itemsLabel.GetLabel())
 		self.itemList.SetAccessible(_ItemListAccessible(self.itemList))
-		itemsSizer.Add(self.itemsLabel, flag=wx.BOTTOM, border=5)
+		# The splitter sets pane limits; the list's default best size must not constrain the editor.
+		self.itemList.SetMinSize((1, 1))
+		itemsSizer.Add(self.itemsLabel, flag=wx.BOTTOM, border=gap)
 		itemsSizer.Add(self.itemList, proportion=1, flag=wx.EXPAND)
+		navigationSizer.Add(itemsSizer, proportion=1, flag=wx.EXPAND)
+		navigationPanel.SetSizer(navigationSizer)
 
 		textSizer = wx.BoxSizer(wx.VERTICAL)
 		self.contentLabel = wx.StaticText(
-			panel,
+			editorPanel,
 			# Translators: Label for the selected clipboard entry content.
 			label=_("C&ontent:"),
 		)
 		self.editor = wx.TextCtrl(
-			panel,
+			editorPanel,
 			style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.HSCROLL,
 		)
-		textSizer.Add(self.contentLabel, flag=wx.BOTTOM | wx.EXPAND, border=5)
+		self.editor.SetMinSize((1, 1))
+		textSizer.Add(self.contentLabel, flag=wx.BOTTOM | wx.EXPAND, border=gap)
 		textSizer.Add(self.editor, proportion=1, flag=wx.EXPAND)
+		editorPanel.SetSizer(textSizer)
 
-		contentSizer.Add(itemsSizer, proportion=1, flag=wx.RIGHT | wx.EXPAND, border=10)
-		contentSizer.Add(textSizer, proportion=2, flag=wx.EXPAND)
-		mainSizer.Add(contentSizer, proportion=1, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		navigationPanel.SetMinSize((1, 1))
+		editorPanel.SetMinSize((1, 1))
+		self._splitter.SetMinimumPaneSize(self.FromDIP(180))
+		self._splitter.SplitVertically(navigationPanel, editorPanel, self.FromDIP(280))
+		mainSizer.Add(self._splitter, proportion=1, flag=wx.ALL | wx.EXPAND, border=padding)
 		panel.SetSizer(mainSizer)
 
 		self.categoryList.Bind(wx.EVT_LISTBOX, self._onCategoryChanged)
@@ -226,6 +260,79 @@ class ClipboardManagerFrame(wx.Frame):
 		self.itemList.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._onPutItemOnClipboard)
 		self.itemList.Bind(wx.EVT_CONTEXT_MENU, self._onItemContextMenu)
 		self.editor.Bind(wx.EVT_TEXT, self._onContentChanged)
+
+	def _restoreWindowState(self) -> None:
+		state = getManagerWindowState()
+		maximized = state["maximized"]
+		hasSavedSize = state["width"] > 0 and state["height"] > 0
+		position = (state["x"], state["y"])
+		displayIndex = wx.Display.GetFromPoint(position) if hasSavedSize else wx.NOT_FOUND
+		hasSavedPosition = displayIndex != wx.NOT_FOUND
+		if not hasSavedPosition:
+			focus = api.getFocusObject()
+			location = focus.location if focus else None
+			if location:
+				x, y, width, height = location
+				displayIndex = wx.Display.GetFromPoint((x + width // 2, y + height // 2))
+		workArea = wx.Display(displayIndex if displayIndex != wx.NOT_FOUND else 0).GetClientArea()
+		# Move to the target monitor before converting the saved DIP dimensions.
+		self.SetPosition(workArea.GetPosition())
+		size = self.FromDIP((state["width"], state["height"]) if hasSavedSize else (1100, 720))
+		if not hasSavedSize:
+			size = wx.Size(
+				min(size.width, workArea.width * 9 // 10), min(size.height, workArea.height * 9 // 10)
+			)
+		if not hasSavedPosition:
+			position = (
+				workArea.x + (workArea.width - size.width) // 2,
+				workArea.y + (workArea.height - size.height) // 2,
+			)
+		self.SetSize(_clampWindowRect((*position, *size), tuple(workArea)))
+		self._fitWindowToDisplay()
+		self.Layout()
+		navigationWidth = self.FromDIP(state["navigationWidth"])
+		if not hasSavedSize or size.width > workArea.width:
+			navigationWidth = min(navigationWidth, self._splitter.GetClientSize().width // 3)
+		self._splitter.SetSashPosition(navigationWidth)
+		self._saveWindowState()
+		self.Maximize(maximized)
+		state["maximized"] = maximized
+
+	def _fitWindowToDisplay(self) -> None:
+		if self._isBeingDestroyed:
+			return
+		workArea = wx.Display(self).GetClientArea()
+		minWidth, minHeight = self.FromDIP((680, 420))
+		minSize = (min(minWidth, workArea.width), min(minHeight, workArea.height))
+		self.SetMinSize(minSize)
+		self._splitter.SetMinimumPaneSize(min(self.FromDIP(180), workArea.width // 3))
+		if not self.IsMaximized() and not self.IsIconized():
+			x, y, width, height = self.GetRect()
+			clampedRect = _clampWindowRect(
+				(x, y, max(width, minSize[0]), max(height, minSize[1])),
+				tuple(workArea),
+			)
+			if tuple(self.GetRect()) != clampedRect:
+				self.SetSize(clampedRect)
+
+	def _saveWindowState(self) -> None:
+		if self._isBeingDestroyed or self.IsIconized():
+			return
+		state = getManagerWindowState()
+		state["maximized"] = self.IsMaximized()
+		if not self.IsMaximized():
+			state["x"], state["y"] = self.GetPosition()
+			state["width"], state["height"] = self.ToDIP(self.GetSize())
+		state["navigationWidth"] = self.ToDIP(self._splitter.GetSashPosition())
+
+	def _onWindowGeometryChanged(self, event: wx.Event) -> None:
+		event.Skip()
+		if self.IsShown():
+			self._saveWindowState()
+
+	def _onDisplayChanged(self, event: wx.Event) -> None:
+		event.Skip()
+		wx.CallAfter(self._fitWindowToDisplay)
 
 	def _makeMenus(self) -> None:
 		menuBar = wx.MenuBar()
@@ -460,12 +567,14 @@ class ClipboardManagerFrame(wx.Frame):
 				self._showError(error)
 		if self.IsIconized():
 			self.Iconize(False)
+		self._fitWindowToDisplay()
 		self.Show()
 		self.Raise()
 		self.editor.SetFocus()
 
 	def terminate(self) -> None:
 		"""Stop background search work before destroying the manager."""
+		self._saveWindowState()
 		destroyWindow = not self._isBeingDestroyed
 		self._isBeingDestroyed = True
 		self._cancelPendingItemLoad()
@@ -2322,6 +2431,7 @@ class ClipboardManagerFrame(wx.Frame):
 			if getConfirmOnClose() and not self._confirmDirtyChanges():
 				event.Veto()
 				return
+			self._saveWindowState()
 			self.Hide()
 			self._resetSearchState(clearEntries=True)
 			event.Veto()

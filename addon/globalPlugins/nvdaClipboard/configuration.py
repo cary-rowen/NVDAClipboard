@@ -28,6 +28,7 @@ _CONFIG_SEPARATE_PUNCTUATION = "separatePunctuation"
 _CONFIG_TIANTAN_ENABLED = "tiantanEnabled"
 _CONFIG_CONFIRM_ON_CLOSE = "confirmOnClose"
 _CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT = "showClipboardContentAsPlainText"
+_CONFIG_MANAGER_WINDOW = "managerWindow"
 _DEFAULT_PAGE_LINE_COUNT = 10
 
 _sectionSpec = config.conf.spec.setdefault(_CONFIG_SECTION, {})
@@ -45,6 +46,15 @@ _sectionSpec.update(
 		_CONFIG_TIANTAN_ENABLED: "boolean(default=false)",
 		_CONFIG_CONFIRM_ON_CLOSE: "boolean(default=true)",
 		_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT: "boolean(default=false)",
+		_CONFIG_MANAGER_WINDOW: {
+			# Positions use desktop coordinates; sizes use DPI-independent pixels.
+			"x": "integer(default=0)",
+			"y": "integer(default=0)",
+			"width": "integer(default=0, min=0)",
+			"height": "integer(default=0, min=0)",
+			"maximized": "boolean(default=false)",
+			"navigationWidth": "integer(default=280, min=0)",
+		},
 	},
 )
 
@@ -77,6 +87,10 @@ def getConfirmOnClose() -> bool:
 def getShowClipboardContentAsPlainText() -> bool:
 	"""Return whether browse mode should show clipboard content without rendering."""
 	return bool(config.conf[_CONFIG_SECTION][_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT])
+
+
+def getManagerWindowState() -> config.AggregatedSection:
+	return config.conf[_CONFIG_SECTION][_CONFIG_MANAGER_WINDOW]
 
 
 def saveSettings(
