@@ -82,6 +82,16 @@ def removeConsecutiveBlankLines(text: str) -> str:
 	return _applyLineTransform(text, _removeConsecutiveBlankLines)
 
 
+def cleanTerminalOutput(text: str) -> str:
+	"""Remove terminal padding and excess blank lines, preserving a final line break."""
+	# Inspired by Clean Terminal Output: https://github.com/cmwalton/clean-terminal-output
+	lines = _removeConsecutiveBlankLines([line.strip() for line in text.splitlines()])
+	result = "\n".join(lines).strip("\n")
+	if result and text.endswith(("\n", "\r")):
+		result += "\n"
+	return result
+
+
 def removeConsecutiveDuplicateLines(text: str) -> str:
 	"""Remove immediately repeated lines while keeping the first occurrence."""
 	return _applyLineTransform(text, lambda lines: [line for line, _ in groupby(lines)])

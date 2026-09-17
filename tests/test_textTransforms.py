@@ -119,6 +119,39 @@ class TextTransformTests(unittest.TestCase):
 		self.assertEqual("c\nbb\naa\n", textTransforms.sortLinesByLengthAscending("bb\naa\nc\n"))
 		self.assertEqual("bb\naa\nc\n", textTransforms.sortLinesByLengthDescending("bb\naa\nc\n"))
 
+	def testCleanTerminalOutput(self) -> None:
+		for original, expected in (
+			("", ""),
+			(" \t\u3000\r\n \t\u00a0\n", ""),
+			("\n \n  alpha  \r\n\t\r\n\r\n  beta  \r\n\r\n", "alpha\n\nbeta\n"),
+			("  alpha  \r  beta\t", "alpha\nbeta"),
+			("  alpha  \r  beta\t\r", "alpha\nbeta\n"),
+			("\u3000alpha\u00a0\n\u2003\n \t\n  beta\u3000", "alpha\n\nbeta"),
+			("    if ready:\n        run()\n", "if ready:\nrun()\n"),
+			("  alpha  beta\tgamma  ", "alpha  beta\tgamma"),
+			("already clean\n\nwith a blank line\n", "already clean\n\nwith a blank line\n"),
+		):
+			with self.subTest(original=original):
+				self.assertEqual(expected, textTransforms.cleanTerminalOutput(original))
+
+	def testCleanTerminalOutputKeepsSelectedLinesSeparate(self) -> None:
+		text = "before\n  alpha  \n \n\n  beta  \n \nafter\n"
+		selectionEnd = text.index("after")
+		editor = Mock()
+		editor.GetValue.return_value = text
+		editor.GetSelection.return_value = (10, selectionEnd)
+		editor.GetInsertionPoint.return_value = 19
+
+		changed = textTransforms.applyEditorTextTransform(
+			editor,
+			textTransforms.cleanTerminalOutput,
+			lineWise=True,
+		)
+
+		self.assertTrue(changed)
+		editor.Replace.assert_called_once_with(7, selectionEnd, "alpha\n\nbeta\n")
+		editor.SetSelection.assert_called_once_with(7, 19)
+
 	def testSegmentChineseWordsUsesNvdaWordSegmenter(self) -> None:
 		"""Segment Chinese text through NVDA's word segmentation API."""
 		with patch.dict(sys.modules, _makeTextUtilsPackage()):

@@ -301,6 +301,8 @@ class ClipboardManagerFrame(wx.Frame):
 		editMenu.AppendSeparator()
 		textCleanupMenu = wx.Menu()
 		for label, transform in (
+			# Translators: Edit menu command to clean whitespace from copied terminal output.
+			(_("Clean &Terminal Output"), textTransforms.cleanTerminalOutput),
 			# Translators: Edit menu command to trim trailing spaces from each line.
 			(_("Trim Trailing &Spaces"), textTransforms.trimTrailingSpaces),
 			# Translators: Edit menu command to trim leading spaces from each line.
