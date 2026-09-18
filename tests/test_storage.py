@@ -669,6 +669,35 @@ def _runSelfCheck() -> None:  # noqa: C901
 class StorageSelfCheckTests(unittest.TestCase):
 	"""Run the storage module's isolated behavior checks."""
 
+	def testImageLimitFailureRollsBackHistoryPruning(self) -> None:
+		"""Restore all stored state when pruning cannot make room alongside a collected image."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "images.db", root / "missing-history.json")
+			try:
+				storage.createCategory("Saved")
+				image = ClipboardItem(
+					ClipboardItemType.IMAGE,
+					imageData=b"saved",
+					imageWidth=1,
+					imageHeight=1,
+					imageBitDepth=32,
+				)
+				savedId = storage.addHistory(image)
+				assert savedId is not None
+				storage.copyHistoryItemsToCategoryById((savedId,), "Saved")
+				self.assertIsNotNone(storage.addHistory(replace(image, imageData=b"old")))
+				with storage._readConnection() as connection:
+					before = tuple(connection.iterdump())
+
+				with patch.object(storageModule, "MAX_TOTAL_IMAGE_BYTES", 8):
+					self.assertIsNone(storage.addHistory(replace(image, imageData=b"newer")))
+
+				with storage._readConnection() as connection:
+					self.assertEqual(before, tuple(connection.iterdump()))
+			finally:
+				storage.close()
+
 	def testRemoveMissingFilesOnlyUpdatesSelectedScope(self) -> None:
 		"""Clean selected file groups without changing other references."""
 		with TemporaryDirectory() as directory:

@@ -53,7 +53,7 @@ HISTORY_CATEGORY_NAME = "Clipboard history"
 _ONE_DRIVE_ITEM_SQL = f"""
 	items.canUpload = 1
 	AND items.contentType != '{ClipboardItemType.FILES.value}'
-	AND length(CAST(items.text AS BLOB)) <= {MAX_ONE_DRIVE_TEXT_BYTES}
+	AND octet_length(items.text) <= {MAX_ONE_DRIVE_TEXT_BYTES}
 	AND COALESCE(length(items.html), 0) + COALESCE(length(items.rtf), 0) <= {MAX_RICH_FORMAT_BYTES}
 	AND COALESCE(length(items.imageData), 0) <= {MAX_IMAGE_BYTES}
 	AND NOT EXISTS (
@@ -2226,12 +2226,10 @@ def _reconcileOneDriveState(
 	_reconcileOneDriveHistory(connection, payloadItemIds)
 	_reconcileOneDriveCategoryItems(connection, payloadItemIds)
 	_enforceHistoryLimits(connection)
-	_garbageCollect(connection)
 	try:
 		_enforceTotalImageBytes(connection, -1)
 	except _ImageLimitReached as error:
 		raise ImageStorageLimitError(MAX_TOTAL_IMAGE_BYTES) from error
-	_garbageCollect(connection)
 
 
 class ClipboardStorage:
@@ -2579,7 +2577,6 @@ class ClipboardStorage:
 				_enforceHistoryLimits(connection)
 				if wasInserted and item.imageData is not None:
 					_enforceTotalImageBytes(connection, itemId)
-				_garbageCollect(connection)
 				return itemId
 		except _ImageLimitReached:
 			return None
