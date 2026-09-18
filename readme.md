@@ -6,12 +6,12 @@ Content saved in clipboard history or in categories you create is referred to be
 
 ## Requirements
 
-- NVDA 2026.3 or later, using the x64 (AMD64) build or the ARM64 build on Windows 11.
-- Tiantan Cloud Clipboard also requires .NET 8 or later.
+- NVDA 2026.3 or later.
+- Tiantan Cloud Clipboard requires .NET 8 or later.
 
 ## Exploring the Clipboard
 
-You can browse clipboard text by line, navigation unit, or character. Navigation units use Windows word boundaries by default. Under **NVDA Clipboard** in NVDA's Settings dialog, you can instead split units at Unicode punctuation and choose whether each punctuation character is a separate unit. Joined words such as `getWord` are further split based on capitalization by default in either mode; this can be turned off. When punctuation is not separate, delimiter clusters are kept with the preceding text where possible. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
+You can browse clipboard text by line, navigation unit, or character. Navigation units use Windows word boundaries by default. Under **NVDA Clipboard** in NVDA's Settings dialog, you can instead split units at Unicode punctuation and choose whether each punctuation character is a separate unit. Joined words such as `getWord` are further split based on capitalization by default in either mode; this can be turned off. When punctuation is not separate, consecutive delimiter punctuation and following whitespace are kept with the preceding text where possible. If the clipboard contains copied files, the line commands move through their paths instead. Sound cues indicate boundaries and content that is not plain text.
 
 Text summaries report the current one-based navigation line and character column before the total line and character statistics; a tab counts as one column.
 
@@ -19,19 +19,29 @@ File summaries omit names and report whether the items were copied, cut, or link
 
 Commands for paging up or down through the clipboard have no default gestures. You can change the number of lines moved per page under **NVDA Clipboard** in NVDA's Settings dialog, and assign the commands under **NVDA Clipboard** in the Input Gestures dialog.
 
-Press the current line or navigation unit command once to read it, twice in quick succession to spell it, and three times to hear character descriptions. For the current character, the first press reads the character, the second gives its description, and the third gives its numeric value.
+Press the current line or navigation unit command once to read it, twice in quick succession to spell it, and three times to hear character descriptions. For the current character, the first press reads the character, the second gives its description, and the third gives its decimal and hexadecimal code points.
 
-Use the clipboard summary and clipboard content view commands to report a summary or open the content in browse mode. HTML is shown when available; otherwise Markdown and common LaTeX are rendered, while active web content is removed. To view the text as-is, enable **Show clipboard content as plain text in browse mode (do not render)** under **NVDA Clipboard** in NVDA Settings. This replaces NVDA's standard clipboard report.
+The add-on overrides NVDA's standard **Report clipboard text** command (`NVDA+C`): one press reports a clipboard summary, and two presses open the content in browse mode. HTML is shown when available; otherwise Markdown and common LaTeX are rendered, while content that might execute scripts or load external resources is removed. To view the text as-is, enable **Show clipboard content as plain text in browse mode (do not render)** under **NVDA Clipboard** in NVDA Settings.
 
-### Selecting and Pasting Text
+### Selecting, Copying, and Pasting Text
 
-Use the clipboard selection start and clipboard selection end commands to mark a range. Move forward or backward between them; both endpoint characters are included. NVDA reports the selected text, or the character count for a long selection.
+In addition to the standard text selection commands in editable text controls and browse mode documents, the add-on provides two selection commands. When browsing clipboard text, you can use them to paste part of the clipboard content:
+
+Use these commands to mark the current clipboard navigation position as the selection start or end. NVDA reports the selected text, or the character count for a long selection.
 
 Use the paste clipboard selection or current stored entry command to paste the selected text. If there is no complete selection, including when only the start is marked, it pastes the current stored entry.
 
 You can paste repeatedly while the selection remains marked. Marking a new start, browsing stored entries, switching categories, or replacing the clipboard content clears the selection.
 
-Use the append selected text, append last spoken text, and paste last spoken text commands as needed. The append selected text command supports selections in editable areas and browse mode documents, as well as object text selected with the review cursor, such as buttons and list items. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Starting with NVDA 2026.3, you can use `NVDA+control+x` to copy the last spoken information to the clipboard. You can also use the add-on's append last spoken text and append selected text commands.
+
+Note: Appending preserves the existing clipboard content and adds the new content at the end, joining the old and new content with a line break.
+
+The append selected text command supports selections in editable text controls and browse mode documents, as well as navigator object text selected with the review cursor, such as buttons and list items.
+
+The paste last spoken text command offers more flexibility. For example, while browsing clipboard content, you can paste different text units (lines, words, and characters), as well as character descriptions or the result of spelling a word, into the focused application.
+
+These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 ## Clipboard History
 
@@ -44,7 +54,7 @@ Copies are added automatically to a history that supports:
 Open the Clipboard Manager. From there you can:
 
 - Browse and delete history entries.
-- Choose **Put on Clipboard** to put the selected entry on the system clipboard. This does not paste it into an application.
+- Choose **Put on Clipboard** to put the selected entry on the system clipboard.
 - Edit text, open or save text files, find and replace text (including with regular expressions), and go to a line.
 - Create your own categories and collect or move entries into them.
 - Save an image from the selected entry.
@@ -63,7 +73,11 @@ To put the entry on the clipboard without pasting, use the "Puts the current sto
 
 ## Images
 
-When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description. The add-on does not infer image content. The command for saving the current clipboard image has no default gesture; you can also save an image selected in the Clipboard Manager. Use the copy navigator object as an image command to copy the current navigator object as an image. On supported systems, this also works while Screen Curtain remains enabled. If the system does not support capture with Screen Curtain, the command asks you to disable it first.
+When the clipboard contains an image, its summary reports exact dimensions and orientation. It also reports an exact fully transparent or solid-color image, or the percentage when at least 95% of its pixels are black, white, or fully transparent. Pixel properties are analyzed only for common PNG and standard 24/32-bit DIB data where source pixels remain exact; other formats omit them rather than risking an inaccurate description.
+
+The command for saving the current clipboard image has no default gesture; you can also save an image selected in the Clipboard Manager. Use the copy navigator object as an image command to take a screenshot of the current navigator object.
+
+Screenshots also work while Screen Curtain is enabled. If the system does not support this, the command asks you to disable Screen Curtain first.
 
 ## Cloud Synchronization
 
@@ -73,13 +87,18 @@ Cloud features are optional and are available from the Clipboard Manager's **Clo
 
 OneDrive keeps clipboard history and user categories in sync between your NVDA installations. Sign in with your Microsoft account from **Cloud > OneDrive**. The add-on can access only its own OneDrive application folder, not your other files.
 
-Synchronization is bidirectional and runs automatically while NVDA is running. You can also start it from the **Cloud** menu. Text, formatting, and images can be synchronized; copied file groups remain on the computer where they were created.
+Synchronization is bidirectional and runs automatically while NVDA is running. You can also run a manual synchronization from the **Cloud** menu. Text, formatting, and images can be synchronized; copied file groups remain on the computer where they were created.
 
 Deleting a synchronized entry or category also deletes it from the other synchronized installations. OneDrive synchronization is therefore not a backup.
 
 ### Tiantan Cloud Clipboard
 
-Tiantan Cloud Clipboard can send text between this computer and the Tiantan cloud clipboard. Formatting, images, and copied files stay local. Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
+[Tiantan Screen Reader](https://www.tatans.cn) is an Android screen reader for the Chinese market.
+NVDA Clipboard integrates the Tiantan Cloud Clipboard SDK to synchronize clipboard text between Windows and Tiantan Screen Reader.
+This feature is available only to Tiantan VIP users and is disabled by default. After enabling it, restart NVDA before its commands appear in the **Cloud** menu.
+
+Tiantan Cloud Clipboard synchronizes text only; formatting, images, and copied files are not uploaded.
+Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
 
 The "Receives and pastes from Tiantan Cloud Clipboard" command receives Tiantan text and immediately pastes it into the focused application. It has no default gesture; you can assign one in NVDA's Input Gestures dialog. A manual receive leaves the text on the clipboard without pasting it.
 
