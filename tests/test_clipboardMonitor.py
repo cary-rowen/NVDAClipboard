@@ -14,7 +14,7 @@ import struct
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from tests._module_loader import loadAddonModule
 
@@ -327,6 +327,90 @@ class ClipboardMonitorTests(unittest.TestCase):
 
 		self.assertFalse(monitor._readInProgress)
 		self.assertFalse(monitor._readAgain)
+
+	def testCancelledReaderKeepsNewUpdatesSerialized(self) -> None:
+		for updateBeforeCleanup in (False, True):
+			with self.subTest(updateBeforeCleanup=updateBeforeCleanup):
+				callback = Mock()
+				with patch.object(clipboardMonitor, "_registerFormats", return_value=Mock()):
+					monitor = clipboardMonitor.ClipboardMonitor(callback)
+				monitor._isRunning = True
+				stale = clipboardMonitor.ClipboardSnapshot(
+					clipboardMonitor.ClipboardContentType.TEXT,
+					sequenceNumber=1,
+					text="old",
+				)
+				current = clipboardMonitor.ClipboardSnapshot(
+					clipboardMonitor.ClipboardContentType.TEXT,
+					sequenceNumber=2,
+					text="new",
+				)
+				monitor.readNow = Mock(return_value=stale)
+				with (
+					patch.object(clipboardMonitor, "Thread") as readerThread,
+					patch.object(
+						clipboardMonitor.wx,
+						"CallAfter",
+						side_effect=lambda function, *args: function(*args),
+						create=True,
+					),
+				):
+					monitor.handleClipboardUpdate()
+					oldTask = readerThread.call_args.kwargs
+					monitor.invalidatePendingSnapshots()
+					if updateBeforeCleanup:
+						monitor.handleClipboardUpdate()
+					else:
+						# Deliver the next notification immediately after cancellation releases the lock.
+						monitor._lock = MagicMock()
+
+						def updateAfterUnlock(*_args):
+							monitor._lock.__exit__.side_effect = None
+							monitor.handleClipboardUpdate()
+
+						monitor._lock.__exit__.side_effect = updateAfterUnlock
+					oldTask["target"](*oldTask["args"])
+					callback.assert_not_called()
+					self.assertEqual(2, readerThread.call_count)
+					newTask = readerThread.call_args.kwargs
+					monitor.handleClipboardUpdate()
+					self.assertEqual(2, readerThread.call_count)
+					monitor.readNow.return_value = current
+					newTask["target"](*newTask["args"])
+					callback.assert_called_once_with(current)
+					self.assertFalse(monitor._readInProgress)
+
+	def testDropFilesUseTheSameUtf16LimitForReadingAndWriting(self) -> None:
+		# Both paths occupy five UTF-16 code units, with or without surrogate pairs.
+		for files in ((r"C:\ab", r"D:\cd"), (r"C:\😀", r"D:\𠀀")):
+			data = clipboardMonitor._buildDropFilesData(files)
+			monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+			monitor._readGlobalData = Mock(return_value=data)
+			header = clipboardMonitor._DROPFILES.from_buffer_copy(data)
+			self.assertEqual(files, tuple(data[header.pFiles :].decode("utf-16-le").split("\0")[:-2]))
+
+			def queryFile(_handle, index, buffer, _length):
+				if index == clipboardMonitor.DRAG_QUERY_FILE_COUNT:
+					return len(files)
+				if buffer is not None:
+					buffer.value = files[index]
+				return 5
+
+			for limit in (9, 10, 11):
+				with (
+					self.subTest(files=files, limit=limit),
+					patch.object(clipboardMonitor, "_MAX_FILE_PATH_CHARACTERS", limit),
+					patch.object(clipboardMonitor, "_getClipboardData", return_value=1),
+					patch.object(clipboardMonitor, "_dragQueryFile", side_effect=queryFile),
+				):
+					if limit < 10:
+						with self.assertRaises(ValueError):
+							clipboardMonitor._buildDropFilesData(files)
+						with self.assertRaises(clipboardMonitor._ClipboardDataLimitError):
+							monitor._readFilesFromOpenClipboard()
+					else:
+						self.assertEqual(data, clipboardMonitor._buildDropFilesData(files))
+						self.assertEqual(list(files), monitor._readFilesFromOpenClipboard())
 
 	def testInvalidDropFilesErrorDoesNotContainPaths(self) -> None:
 		"""Keep rejected clipboard file paths out of exception chains."""

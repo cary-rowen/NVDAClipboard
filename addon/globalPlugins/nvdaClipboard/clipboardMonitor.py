@@ -392,9 +392,13 @@ def _buildDropFilesData(files: tuple[str, ...]) -> bytes:
 		or sum(len(path) for path in files) > _MAX_FILE_PATH_CHARACTERS
 	):
 		raise ValueError("Invalid clipboard file list")
+	encodedPaths = ("\0".join(files) + "\0\0").encode("utf-16-le", errors="surrogatepass")
+	# Match DragQueryFileW's UTF-16 lengths, allowing one NUL per path and a final list terminator.
+	if len(encodedPaths) > 2 * (_MAX_FILE_PATH_CHARACTERS + len(files) + 1):
+		raise ValueError("Invalid clipboard file list")
 	header = _DROPFILES(pFiles=ctypes.sizeof(_DROPFILES), ptX=0, ptY=0, fNC=False, fWide=True)
 	headerData = string_at(ctypes.addressof(header), ctypes.sizeof(header))
-	return headerData + ("\0".join(files) + "\0\0").encode("utf-16-le", errors="surrogatepass")
+	return headerData + encodedPaths
 
 
 def _isValidDropFilesData(data: bytes) -> bool:
@@ -652,7 +656,8 @@ class ClipboardMonitor:
 			shouldRetry = False
 			shouldReadAgain = False
 			with self._lock:
-				if not self._isRunning or cancelToken != self._cancelToken:
+				isCancelled = not self._isRunning or cancelToken != self._cancelToken
+				if isCancelled:
 					shouldRestart = self._isRunning and self._readAgain
 					self._readInProgress = False
 					self._readAgain = False
@@ -664,8 +669,9 @@ class ClipboardMonitor:
 					if not shouldRetry:
 						shouldReadAgain = self._readAgain
 						self._readAgain = False
-			if shouldRestart:
-				self._queueMainThread(self.handleClipboardUpdate)
+			if isCancelled:
+				if shouldRestart:
+					self._queueMainThread(self.handleClipboardUpdate)
 				return
 			if shouldRetry:
 				if not reportedOpenFailure:
