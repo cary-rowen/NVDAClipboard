@@ -328,6 +328,47 @@ class ClipboardMonitorTests(unittest.TestCase):
 		self.assertFalse(monitor._readInProgress)
 		self.assertFalse(monitor._readAgain)
 
+	def testLightweightReadDoesNotFetchOptionalFormats(self) -> None:
+		"""Use advertised formats for classification without triggering delayed rendering."""
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._formats = SimpleNamespace(
+			html=101,
+			rtf=102,
+			png=103,
+			excludeMonitor=104,
+			canIncludeHistory=105,
+			canUpload=106,
+		)
+		monitor._openClipboardWithRetry = Mock(return_value=True)
+		monitor._isFormatAvailable = Mock(
+			side_effect=lambda formatId: formatId
+			in {
+				monitor._formats.html,
+				monitor._formats.png,
+			},
+		)
+		monitor._readPolicy = Mock(return_value=True)
+		monitor._readTextIfAvailable = Mock(return_value="plain")
+		monitor._readImageFromOpenClipboard = Mock()
+		monitor.getSequenceNumber = Mock(return_value=11)
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+			patch.object(clipboardMonitor, "_getClipboardData") as getData,
+		):
+			snapshot = monitor.readNow(includeRichFormats=False, includeImages=False)
+
+		self.assertEqual(clipboardMonitor.ClipboardContentType.TEXT_AND_IMAGE, snapshot.contentType)
+		self.assertEqual("plain", snapshot.text)
+		getData.assert_not_called()
+		monitor._readImageFromOpenClipboard.assert_not_called()
+
+	def testExhaustedRichBudgetNeverRequestsDelayedRtf(self) -> None:
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._isFormatAvailable = Mock(return_value=True)
+		with patch.object(clipboardMonitor, "_getClipboardData") as getData:
+			self.assertEqual((None, True), monitor._readOptionalFormat(102, 0))
+		getData.assert_not_called()
+
 	def testCancelledReaderKeepsNewUpdatesSerialized(self) -> None:
 		for updateBeforeCleanup in (False, True):
 			with self.subTest(updateBeforeCleanup=updateBeforeCleanup):

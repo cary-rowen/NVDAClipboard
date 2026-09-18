@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 import struct
 from threading import Lock, Thread
-from time import sleep
+from time import monotonic, sleep
 
 from logHandler import log
 from winBindings import gdi32, kernel32, user32
@@ -492,13 +492,25 @@ class ClipboardMonitor:
 		*,
 		decodePng: bool = False,
 		analyzeImage: bool = False,
+		includeRichFormats: bool = True,
+		includeImages: bool = True,
 	) -> ClipboardSnapshot:
 		"""Read the clipboard, optionally validating PNG or analyzing image pixels after close."""
+		started = monotonic()
 		try:
-			return self._readSnapshot(decodePng=decodePng, analyzeImage=analyzeImage)
+			return self._readSnapshot(
+				decodePng=decodePng,
+				analyzeImage=analyzeImage,
+				includeRichFormats=includeRichFormats,
+				includeImages=includeImages,
+			)
 		except Exception as error:
 			log.debugWarning("ClipboardMonitor failed to read clipboard.", exc_info=True)
 			return ClipboardSnapshot(ClipboardContentType.ERROR, error=str(error))
+		finally:
+			elapsed = monotonic() - started
+			if elapsed >= 0.1:
+				log.debugWarning(f"Reading clipboard content took {elapsed:.3f}s.")
 
 	def readBitmapDib(
 		self,
@@ -723,7 +735,14 @@ class ClipboardMonitor:
 			except Exception:
 				log.exception("ClipboardMonitor callback failed.")
 
-	def _readSnapshot(self, *, decodePng: bool, analyzeImage: bool) -> ClipboardSnapshot:
+	def _readSnapshot(
+		self,
+		*,
+		decodePng: bool,
+		analyzeImage: bool,
+		includeRichFormats: bool = True,
+		includeImages: bool = True,
+	) -> ClipboardSnapshot:
 		"""Read one internally consistent snapshot, decoding copied PNG data after close."""
 		if not self._openClipboardWithRetry(None):
 			return ClipboardSnapshot(ClipboardContentType.ERROR, error=_OPEN_CLIPBOARD_ERROR)
@@ -739,6 +758,13 @@ class ClipboardMonitor:
 			canIncludeInHistory = self._readPolicy(self._formats.canIncludeHistory)
 			canUpload = self._readPolicy(self._formats.canUpload)
 			if self._isFormatAvailable(CF_HDROP):
+				if not includeImages and not includeRichFormats:
+					return ClipboardSnapshot(
+						ClipboardContentType.FILES,
+						sequenceNumber=self.getSequenceNumber(),
+						canIncludeInHistory=canIncludeInHistory,
+						canUpload=canUpload,
+					)
 				try:
 					files = tuple(self._readFilesFromOpenClipboard())
 				except _ClipboardDataLimitError:
@@ -757,10 +783,23 @@ class ClipboardMonitor:
 					canUpload=canUpload,
 				)
 			text = self._readTextIfAvailable()
-			html, htmlDropped = self._readOptionalFormat(self._formats.html, MAX_RICH_FORMAT_BYTES)
-			richBytesRemaining = MAX_RICH_FORMAT_BYTES - len(html or b"")
-			rtf, rtfDropped = self._readOptionalFormat(self._formats.rtf, richBytesRemaining)
-			imageFormat, imageData, imageInfo, imageDropped = self._readImageFromOpenClipboard()
+			richLimit = MAX_RICH_FORMAT_BYTES if includeRichFormats else 0
+			html, htmlDropped = self._readOptionalFormat(self._formats.html, richLimit)
+			rtf, rtfDropped = self._readOptionalFormat(self._formats.rtf, richLimit - len(html or b""))
+			if includeImages:
+				imageFormat, imageData, imageInfo, imageDropped = self._readImageFromOpenClipboard()
+			else:
+				imageFormatsAdvertised = any(
+					self._isFormatAvailable(formatId)
+					for formatId in (
+						self._formats.png,
+						CF_DIBV5,
+						CF_DIB,
+						CF_BITMAP,
+					)
+				)
+				imageFormat = imageData = imageInfo = None
+				imageDropped = imageFormatsAdvertised
 			hasAdvertisedImage = imageData is not None or imageDropped
 			if hasAdvertisedImage:
 				width, height, bitDepth = imageInfo or (0, 0, 0)
@@ -877,6 +916,8 @@ class ClipboardMonitor:
 		"""Read one optional HGLOBAL format and report whether it was dropped."""
 		if not self._isFormatAvailable(formatId):
 			return None, False
+		if maximumBytes <= 0:
+			return None, True
 		try:
 			return self._readGlobalData(formatId, maximumBytes), False
 		except _ClipboardDataLimitError:

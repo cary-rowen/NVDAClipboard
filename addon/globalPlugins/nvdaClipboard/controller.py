@@ -1485,7 +1485,7 @@ class ClipboardController:
 
 	def _saveCurrentClipboardImage(self, parent: wx.Window) -> None:
 		"""Save the current clipboard image as a validated PNG file."""
-		snapshot = self.monitor.readNow(decodePng=True)
+		snapshot = self.monitor.readNow(decodePng=True, includeRichFormats=False)
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when the current clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
@@ -2343,11 +2343,19 @@ class ClipboardController:
 		state: _TemporaryPasteState,
 	) -> int | None:
 		"""Return a stable sequence only while the temporary clipboard content remains current."""
-		temporarySnapshot = self.monitor.readNow()
 		try:
 			expectedOwnerHandle = self._getClipboardOwnerHandle()
 		except RuntimeError:
 			return None
+		if self.monitor.getOwnerHandle() != expectedOwnerHandle:
+			return None
+		# Re-read only if Windows may have synthesized formats after our write.
+		if (
+			state.temporarySequenceNumber
+			and self.monitor.getSequenceNumber() == state.temporarySequenceNumber
+		):
+			return state.temporarySequenceNumber
+		temporarySnapshot = self.monitor.readNow()
 		if (
 			not _isTemporarySnapshot(temporarySnapshot, state)
 			or self.monitor.getOwnerHandle() != expectedOwnerHandle
@@ -3122,7 +3130,7 @@ class ClipboardController:
 		text = self._text
 		canUpload = self._canUpload
 		if self.monitor.getSequenceNumber() != self._lastAppliedSequenceNumber:
-			snapshot = self.monitor.readNow()
+			snapshot = self.monitor.readNow(includeRichFormats=False, includeImages=False)
 			if snapshot.contentType == ClipboardContentType.ERROR:
 				# Translators: Error shown when current clipboard upload policy cannot be checked.
 				raise RuntimeError(_("Could not verify the current clipboard for upload"))
@@ -3239,12 +3247,11 @@ class ClipboardController:
 					),
 				)
 				return
-			snapshot = self.monitor.readNow()
 			if (
-				snapshot.contentType != ClipboardContentType.TEXT
-				or snapshot.sequenceNumber != expectedSequenceNumber
-				or snapshot.text != expectedText
+				self._lastAppliedSequenceNumber != expectedSequenceNumber
+				or self._text != expectedText
 				or self.monitor.getSequenceNumber() != expectedSequenceNumber
+				or self.monitor.getOwnerHandle() != self._getClipboardOwnerHandle()
 			):
 				# Translators: Cloud paste cancellation because another application changed the clipboard.
 				ui.message(_("Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."))
