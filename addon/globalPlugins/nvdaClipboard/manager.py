@@ -280,7 +280,8 @@ class ClipboardManagerFrame(wx.Frame):
 		size = self.FromDIP((state["width"], state["height"]) if hasSavedSize else (1100, 720))
 		if not hasSavedSize:
 			size = wx.Size(
-				min(size.width, workArea.width * 9 // 10), min(size.height, workArea.height * 9 // 10)
+				min(size.width, workArea.width * 9 // 10),
+				min(size.height, workArea.height * 9 // 10),
 			)
 		if not hasSavedPosition:
 			position = (
