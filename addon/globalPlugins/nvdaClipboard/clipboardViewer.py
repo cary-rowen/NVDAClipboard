@@ -675,6 +675,8 @@ def _findMathCloser(text: str, position: int, closer: str) -> tuple[int | None, 
 # ponytail: Conversion stays synchronous; add a formula budget or worker if large formula-heavy clips stall NVDA.
 def _convertMathText(text: str, convertFormula: Callable[[str, str], str]) -> str:
 	"""Convert supported LaTeX delimiters in one forward pass."""
+	if not any(delimiter[0] in text for delimiter in _MATH_DELIMITERS):
+		return text
 	output: list[str] = []
 	unchangedStart = 0
 	position = 0
