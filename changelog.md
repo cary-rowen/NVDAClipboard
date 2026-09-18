@@ -1,3 +1,14 @@
+### 0.4.0
+
+- The **Append selected text** command now supports navigator object text selected with the review cursor, such as buttons and list items.
+- Improved the Clipboard Manager layout and saved and restored its window position, size, maximized state, and navigation pane width.
+- Added a **Clean Terminal Output** editing command to remove leading and trailing whitespace and excess blank lines.
+- Optimized clipboard reads by skipping unnecessary rich-format and image reads, improving responsiveness.
+- Improved cancellation handling, temporary pasting, and clipboard file-list size validation.
+- Improved storage index migration, image quota handling, and history maintenance.
+- Skipped formula scanning for HTML text without mathematical content.
+- Updated the English and Chinese README files for consistent content and terminology.
+
 ### 0.3.3
 
 - Allow `NVDA+PrintScreen` screenshots with Screen Curtain enabled on supported systems.
