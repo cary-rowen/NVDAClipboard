@@ -287,6 +287,9 @@ def _initializeSchema(connection: sqlite3.Connection) -> None:
 		).fetchall()
 		if not requiredTables.issubset({cast(str, row[0]) for row in tableRows}):
 			raise StorageFormatError
+		connection.execute(
+			"CREATE INDEX IF NOT EXISTS categoryItems_itemId_idx ON categoryItems (itemId)",
+		)
 		if version == SCHEMA_VERSION:
 			return
 	if version == 0:
@@ -339,6 +342,7 @@ def _initializeSchema(connection: sqlite3.Connection) -> None:
 				PRIMARY KEY (categoryId, itemId)
 			);
 			CREATE INDEX categoryItems_sortOrder_idx ON categoryItems (categoryId, sortOrder);
+			CREATE INDEX categoryItems_itemId_idx ON categoryItems (itemId);
 			PRAGMA user_version = 1;
 			COMMIT;
 			""",

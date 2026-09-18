@@ -669,6 +669,50 @@ def _runSelfCheck() -> None:  # noqa: C901
 class StorageSelfCheckTests(unittest.TestCase):
 	"""Run the storage module's isolated behavior checks."""
 
+	def testExistingSchemaAddsCategoryItemIdIndex(self) -> None:
+		"""Restore the item lookup index without changing existing stored state."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			dataPath = root / "index-migration.db"
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			storage.createCategory("Saved")
+			itemId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="saved"))
+			assert itemId is not None
+			storage.copyHistoryItemsToCategoryById((itemId,), "Saved")
+			storage.bindOneDriveAccount("account.tenant")
+			before = (
+				storage.history,
+				storage.categoryNames,
+				storage.getCategoryItems("Saved"),
+				storage.getOneDriveSnapshot(),
+			)
+			storage.close()
+
+			connection = sqlite3.connect(dataPath)
+			connection.execute("DROP INDEX categoryItems_itemId_idx")
+			connection.close()
+
+			for _ in range(2):
+				storage = ClipboardStorage(dataPath, root / "missing-history.json")
+				try:
+					self.assertEqual(
+						before,
+						(
+							storage.history,
+							storage.categoryNames,
+							storage.getCategoryItems("Saved"),
+							storage.getOneDriveSnapshot(),
+						),
+					)
+					with storage._readConnection() as connection:
+						indexRow = connection.execute(
+							"SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+							("categoryItems_itemId_idx",),
+						).fetchone()
+					self.assertIsNotNone(indexRow)
+				finally:
+					storage.close()
+
 	def testImageLimitFailureRollsBackHistoryPruning(self) -> None:
 		"""Restore all stored state when pruning cannot make room alongside a collected image."""
 		with TemporaryDirectory() as directory:
