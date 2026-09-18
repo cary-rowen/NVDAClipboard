@@ -31,7 +31,7 @@ Use the paste clipboard selection or current stored entry command to paste the s
 
 You can paste repeatedly while the selection remains marked. Marking a new start, browsing stored entries, switching categories, or replacing the clipboard content clears the selection.
 
-Use the append selected text, append last spoken text, and paste last spoken text commands as needed. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
+Use the append selected text, append last spoken text, and paste last spoken text commands as needed. The append selected text command supports selections in editable areas and browse mode documents, as well as object text selected with the review cursor, such as buttons and list items. These commands can be reassigned under **NVDA Clipboard** in NVDA's Input Gestures dialog.
 
 ## Clipboard History
 

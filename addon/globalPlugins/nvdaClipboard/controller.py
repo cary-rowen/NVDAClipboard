@@ -3268,7 +3268,7 @@ class ClipboardController:
 				self._cloudFetchInProgress = False
 
 	def _getSelectionText(self) -> str | None:
-		"""Return selected text from the focused object or tree interceptor."""
+		"""Return selected text from the focused object or NVDA's review copy range."""
 		obj = api.getFocusObject()
 		treeInterceptor = getattr(obj, "treeInterceptor", None)
 		if (
@@ -3280,7 +3280,18 @@ class ClipboardController:
 		try:
 			info = obj.makeTextInfo(textInfos.POSITION_SELECTION)
 		except (RuntimeError, NotImplementedError):
+			info = None
+		if info is not None and not info.isCollapsed:
+			return info.text
+		try:
+			import globalCommands
+
+			# ponytail: private NVDA state; use a public review-selection API if one is added.
+			reviewSelection = getattr(
+				getattr(globalCommands, "commands", None),
+				"_reviewSelectThenCopyRange",
+				None,
+			)
+			return reviewSelection.text if reviewSelection is not None else None
+		except (AttributeError, LookupError, NotImplementedError, RuntimeError):
 			return None
-		if info is None or info.isCollapsed:
-			return None
-		return info.text

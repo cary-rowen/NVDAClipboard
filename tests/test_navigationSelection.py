@@ -13,6 +13,7 @@ from enum import Enum, auto
 from pathlib import Path
 from time import monotonic
 from types import MethodType, SimpleNamespace
+import sys
 import unittest
 from unittest.mock import Mock, patch
 
@@ -117,6 +118,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 			"_restoreOriginalClipboardAfterTemporaryPaste",
 			"_moveStoredItem",
 			"cycleStoredItemCategory",
+			"_getSelectionText",
 			"markClipboardSelectionStart",
 			"markClipboardSelectionEnd",
 			"pasteClipboardSelection",
@@ -142,6 +144,8 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 		"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
 		"replace": replace,
 		"speech": _SPEECH,
+		"api": SimpleNamespace(),
+		"textInfos": SimpleNamespace(POSITION_SELECTION="selection"),
 		"ui": _UI,
 	}
 	exec(compile(ast.Module(body=nodes, type_ignores=[]), _CONTROLLER_PATH, "exec"), namespace)
@@ -157,6 +161,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 		namespace["_restoreOriginalClipboardAfterTemporaryPaste"],
 		namespace["_moveStoredItem"],
 		namespace["cycleStoredItemCategory"],
+		namespace["_getSelectionText"],
 		namespace["markClipboardSelectionStart"],
 	)
 
@@ -173,6 +178,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 	_restoreOriginalClipboardAfterTemporaryPaste,
 	_moveStoredItem,
 	_cycleStoredItemCategory,
+	_getSelectionText,
 	_markClipboardSelectionStart,
 ) = _loadSelectionControllerMethods()
 
@@ -252,6 +258,18 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 
 		_SPEECH.speakTextSelected.assert_called_once_with(selectedText)
 		_BRAILLE.handler.message.assert_called_once_with("512 characters selected")
+
+	def testReviewCopyRangeProvidesObjectTextSelection(self) -> None:
+		"""Use NVDA's review-copy range when the focused object has no selection API."""
+		focusObject = SimpleNamespace(makeTextInfo=Mock(side_effect=NotImplementedError()))
+		reviewRange = SimpleNamespace(text="Button title")
+		api = _getSelectionText.__globals__["api"]
+		api.getFocusObject = Mock(return_value=focusObject)
+		globalCommands = SimpleNamespace(
+			commands=SimpleNamespace(_reviewSelectThenCopyRange=reviewRange),
+		)
+		with patch.dict(sys.modules, {"globalCommands": globalCommands}):
+			self.assertEqual("Button title", _getSelectionText(SimpleNamespace()))
 
 	def testClipboardChangeCancelsDeferredSelectionPaste(self) -> None:
 		"""Preserve marked offsets but never write a selection invalidated while keys were held."""
