@@ -125,3 +125,15 @@ hooks = [
     name = "format with ruff"
   }
 ]
+
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "pyright",
+    name = "type check with pyright",
+    entry = "uv run pyright",
+    language = "system",
+    types = ["python"]
+  }
+]
