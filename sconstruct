@@ -1,4 +1,4 @@
-# NVDA Clipboard add-on SCONSTRUCT file
+# NVDA add-on template SCONSTRUCT file
 # Copyright (C) 2012-2025 Rui Batista, Noelia Martinez, Joseph Lee
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
@@ -12,14 +12,15 @@ from typing import Final
 
 # While names imported below are available by default in every SConscript
 # Linters aren't aware about them.
-# When using other SCons functions please add them to the line below.
+# To avoid PyRight `reportUndefinedVariable` errors about them they are imported explicitly.
+# When using other  Scons functions please add them to the line below.
 from SCons.Script import EnsurePythonVersion, Variables, BoolVariable, Environment, Copy
 from SCons.Errors import UserError
 
 # Imports for type hints
 from SCons.Node import FS
 
-# Add-on localization exchange facility requires Python 3.10.
+# Add-on localization exchange facility and the template requires Python 3.10.
 # For best practice, use Python 3.11 or later to align with NVDA development.
 EnsurePythonVersion(3, 10)
 
@@ -30,7 +31,6 @@ import buildVars  # NOQA: E402
 
 
 def validateVersionNumber(key: str, val: str, _):
-	"""Validate an add-on store compatible dotted numeric version."""
 	# Used to make sure version major.minor.patch are integers to comply with NV Access add-on store.
 	# Ignore all this if version number is not specified.
 	if val == "0.0.0":
@@ -43,7 +43,6 @@ def validateVersionNumber(key: str, val: str, _):
 
 
 def expandGlobs(patterns: Iterable[str], rootdir: Path = Path(".")) -> list[FS.Entry]:
-	"""Expand source globs into SCons entries."""
 	return [env.Entry(e) for pattern in patterns for e in rootdir.glob(pattern.lstrip("/"))]
 
 
