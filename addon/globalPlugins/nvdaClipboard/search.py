@@ -31,7 +31,7 @@ def matchRegexSelection(pattern: re.Pattern[str], text: str, start: int, end: in
 		limited: list[tuple[Any, Any]] = []
 		for operation, argument in subPattern:
 			simpleRepeat = operation in (_parser.MIN_REPEAT, _parser.MAX_REPEAT) and _compiler._simple(
-				argument[2]
+				argument[2],
 			)
 			if simpleRepeat:
 				minimum, maximum, child = argument

@@ -70,7 +70,8 @@ class AppendTextTests(unittest.TestCase):
 						_writeClipboardText=Mock(),
 					)
 					controller._appendTextToClipboard = MethodType(
-						namespace["_appendTextToClipboard"], controller
+						namespace["_appendTextToClipboard"],
+						controller,
 					)
 					if expectedText is None:
 						with self.assertRaisesRegex(RuntimeError, "Could not read the current clipboard"):

@@ -211,7 +211,10 @@ class ManagerEditorTests(unittest.TestCase):
 		for result in (_NAMESPACE["wx"].ID_APPLY, _NAMESPACE["wx"].ID_OK):
 			for pattern, replacement, isRegex, errorType, expected in cases:
 				with self.subTest(
-					result=result, pattern=pattern[:80], replacement=replacement, isRegex=isRegex
+					result=result,
+					pattern=pattern[:80],
+					replacement=replacement,
+					isRegex=isRegex,
 				):
 					editor = Mock()
 					editor.GetValue.return_value = "abc"
