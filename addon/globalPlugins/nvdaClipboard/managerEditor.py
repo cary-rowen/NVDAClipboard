@@ -15,7 +15,7 @@ from gui.message import displayDialogAsModal
 import textUtils
 import wx
 
-from .search import findPreviousLiteralMatch
+from .search import findPreviousLiteralMatch, matchRegexSelection
 
 
 addonHandler.initTranslation()
@@ -244,7 +244,7 @@ class _ManagerEditorCommands:
 		else:
 			match = pattern.search(text, start)
 			if match is None and start > 0:
-				match = pattern.search(text, 0, start)
+				match = pattern.search(text)
 			if match is not None:
 				matchSpan = match.span()
 		if matchSpan is None:
@@ -286,7 +286,7 @@ class _ManagerEditorCommands:
 				)
 				if count:
 					self._editor.SetValue(newText)
-		except re.error as error:
+		except (re.error, IndexError, ValueError, OverflowError, RecursionError) as error:
 			self._showError(error)
 			return
 		if count == 0:
@@ -313,12 +313,13 @@ class _ManagerEditorCommands:
 		"""Replace the selected or next matching text once."""
 		text = self._editor.GetValue()
 		offsetConverter = textUtils.WideStringOffsetConverter(text)
-		selectionStart, selectionEnd = self._editor.GetSelection()
-		selection = self._editor.GetStringSelection()
-		selectedMatch = pattern.fullmatch(selection) if selection else None
+		selectionStart, selectionEnd = offsetConverter.encodedToStrOffsets(*self._editor.GetSelection())
+		selectedMatch = (
+			matchRegexSelection(pattern, text, selectionStart, selectionEnd)
+			if selectionStart < selectionEnd
+			else None
+		)
 		if selectedMatch is not None:
-			start = selectionStart
-			end = selectionEnd
 			match = selectedMatch
 		else:
 			encodedInsertionPoint = self._editor.GetInsertionPoint()
@@ -328,10 +329,10 @@ class _ManagerEditorCommands:
 			)[0]
 			match = pattern.search(text, insertionPoint)
 			if match is None:
-				match = pattern.search(text, 0, insertionPoint)
+				match = pattern.search(text)
 			if match is None:
 				return 0
-			start, end = offsetConverter.strToEncodedOffsets(match.start(), match.end())
+		start, end = offsetConverter.strToEncodedOffsets(match.start(), match.end())
 		replacementText = match.expand(replacement) if isRegex else replacement
 		self._editor.Replace(start, end, replacementText)
 		replacementEnd = self._editor.GetInsertionPoint()
