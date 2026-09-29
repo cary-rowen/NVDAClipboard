@@ -927,12 +927,9 @@ class ClipboardController:
 			self.pasteCurrentStoredItem(triggerKeyCodes)
 
 	def appendLastSpokenText(self) -> None:
-		"""Append the most recent NVDA speech text to text clipboard content."""
+		"""Append the most recent NVDA speech text to the clipboard."""
 		text = self._requireLastSpokenText()
-		self._appendTextToClipboard(
-			text,
-			canReplaceNonText=False,
-		)
+		self._appendTextToClipboard(text)
 		spokenText = _getTextOrCharacterCount(text)
 		ui.message(
 			# Translators: Announced after text is appended to the clipboard.
@@ -952,7 +949,7 @@ class ClipboardController:
 			# Translators: Message shown when append is requested without selected text.
 			ui.message(_("No text is selected"))
 			return
-		self._appendTextToClipboard(selectedText, canReplaceNonText=True)
+		self._appendTextToClipboard(selectedText)
 		# Translators: Confirmation after selected text is appended to the clipboard.
 		ui.message(_("Selected text appended"))
 
@@ -1932,8 +1929,8 @@ class ClipboardController:
 			raise ValueError(_("No spoken text is available"))
 		return text
 
-	def _appendTextToClipboard(self, text: str, *, canReplaceNonText: bool) -> None:
-		"""Append text while preserving current clipboard policy flags."""
+	def _appendTextToClipboard(self, text: str) -> None:
+		"""Append to existing text or replace non-text content, preserving clipboard policy flags."""
 		snapshot = self.monitor.readNow()
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when text cannot be appended because the clipboard is busy.
@@ -1947,13 +1944,7 @@ class ClipboardController:
 			ClipboardContentType.FORMATTED_TEXT,
 			ClipboardContentType.TEXT_AND_IMAGE,
 		)
-		if snapshot.contentType in textContentTypes:
-			clipboardText = snapshot.text
-		elif snapshot.contentType == ClipboardContentType.EMPTY or canReplaceNonText:
-			clipboardText = ""
-		else:
-			# Translators: Error shown when last spoken text would replace non-text clipboard content.
-			raise ValueError(_("Last spoken text can only be appended to an empty or text clipboard"))
+		clipboardText = snapshot.text if snapshot.contentType in textContentTypes else ""
 		separator = "\n" if clipboardText and not clipboardText.endswith(("\r", "\n")) else ""
 		self._writeClipboardText(
 			f"{clipboardText}{separator}{text}",

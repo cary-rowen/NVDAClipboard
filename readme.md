@@ -35,7 +35,7 @@ You can paste repeatedly while the selection remains marked. Marking a new start
 
 Starting with NVDA 2026.3, you can use `NVDA+control+x` to copy the last spoken information to the clipboard. You can also use the add-on's append last spoken text and append selected text commands.
 
-Note: Appending preserves the existing clipboard content and adds the new content at the end, joining the old and new content with a line break.
+Note: Appending writes plain text. It adds to existing text, inserting a line break if needed; otherwise, it replaces the clipboard content.
 
 The append selected text command supports selections in editable text controls and browse mode documents, as well as navigator object text selected with the review cursor, such as buttons and list items.
 
