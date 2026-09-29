@@ -35,24 +35,17 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.4.0",
+	addon_version="0.4.5",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.4.0
+	addon_changelog=_("""### 0.4.5
 
-- The **Append selected text** command now supports navigator object text selected with the review cursor, such as buttons and list items.
-- Improved the Clipboard Manager layout and saved and restored its window position, size, maximized state, and navigation pane width.
-- Added a **Clean Terminal Output** editing command to remove leading and trailing whitespace and excess blank lines.
-- Optimized clipboard reads by skipping unnecessary rich-format and image reads, improving responsiveness.
-- Improved cancellation handling, temporary pasting, and clipboard file-list size validation.
-- Improved storage index migration, image quota handling, and history maintenance.
-- Skipped formula scanning for HTML text without mathematical content.
-- Updated the English and Chinese README files for consistent content and terminology.
-
-### 0.3.3
-
-- Allow `NVDA+PrintScreen` screenshots with Screen Curtain enabled on supported systems.
-- Simplify internal code and remove redundant logic."""),
+- Unified appending selected and last spoken text: existing text is extended; non-text clipboard content is replaced with plain text.
+- Made pasting and appending the last spoken text consistent with NVDA's built-in copy command.
+- Fixed Clipboard Manager find and replace missing matches across the cursor and mishandling regular expressions in selected text.
+- Improved error reporting for invalid regular expressions and replacement group references.
+- Clarified documentation on marked selections, browse mode, and plain-text appending.
+- Updated issue templates and development tooling."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
