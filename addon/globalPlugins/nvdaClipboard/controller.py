@@ -432,7 +432,6 @@ class ClipboardController:
 			return
 		self._isStarted = True
 		try:
-			lastSpoken.initialize()
 			cloudSync = self.cloudSync
 			if cloudSync is not None:
 				cloudSync.initialize()
@@ -465,7 +464,6 @@ class ClipboardController:
 		if self._textStatisticsCalculation is not None:
 			self._textStatisticsCalculation.cancel()
 			self._textStatisticsCalculation = None
-		lastSpoken.terminate()
 		try:
 			self.monitor.stop()
 		except Exception:
