@@ -2583,7 +2583,7 @@ class ClipboardStorage:
 						),
 					).fetchone()
 					if row is not None and normalizeNewlinesForWin32(
-						cast(str, row[3])
+						cast(str, row[3]),
 					) == normalizeNewlinesForWin32(replaceText):
 						replacedItemId = cast(int, row[0])
 						replacedDedupKey = cast(bytes, row[1])

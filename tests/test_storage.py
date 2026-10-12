@@ -701,7 +701,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 					oldItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old")
 					oldId = storage.addHistory(oldItem)
 					deletedId = storage.addHistory(
-						ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="deleted")
+						ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="deleted"),
 					)
 					assert olderId is not None and oldId is not None and deletedId is not None
 					storage.deleteHistoryItemsById((deletedId,))
