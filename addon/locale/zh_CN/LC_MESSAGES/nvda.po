@@ -5,10 +5,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: nvdaClipboard 0.4.5\n"
+"Project-Id-Version: nvdaClipboard 0.4.6\n"
 "Report-Msgid-Bugs-To: 'nvda-translations@groups.io'\n"
-"POT-Creation-Date: 2026-09-29 21:15+0800\n"
-"PO-Revision-Date: 2026-09-29 21:16+0800\n"
+"POT-Creation-Date: 2026-10-12 22:43+0800\n"
+"PO-Revision-Date: 2026-10-12 22:43+0800\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: zh_CN\n"
@@ -324,13 +324,13 @@ msgstr[0] "%d 个字符"
 #: addon\globalPlugins\nvdaClipboard\controller.py:1301
 #: addon\globalPlugins\nvdaClipboard\controller.py:1306
 #: addon\globalPlugins\nvdaClipboard\controller.py:1330
-#: addon\globalPlugins\nvdaClipboard\controller.py:2515
+#: addon\globalPlugins\nvdaClipboard\controller.py:2542
 msgid "Could not write to the system clipboard"
 msgstr "无法写入系统剪贴板"
 
 #. Translators: Summary used when the system clipboard is empty.
 #: addon\globalPlugins\nvdaClipboard\controller.py:413
-#: addon\globalPlugins\nvdaClipboard\controller.py:2951
+#: addon\globalPlugins\nvdaClipboard\controller.py:2979
 msgid "Clipboard is empty"
 msgstr "剪贴板为空"
 
@@ -348,7 +348,7 @@ msgstr "无法确定键盘焦点，已取消云剪贴板粘贴。"
 
 #. Translators: Cloud paste cancellation because focus changed before pasting.
 #: addon\globalPlugins\nvdaClipboard\controller.py:597
-#: addon\globalPlugins\nvdaClipboard\controller.py:3211
+#: addon\globalPlugins\nvdaClipboard\controller.py:3239
 msgid "Focus changed. Tiantan Cloud Clipboard paste was cancelled."
 msgstr "焦点已改变，已取消云剪贴板粘贴。"
 
@@ -379,8 +379,8 @@ msgstr[0] "{count} 个文件夹"
 #. Translators: Separator between file size, file count, and folder count.
 #. Translators: Separator between exact clipboard text statistics.
 #: addon\globalPlugins\nvdaClipboard\controller.py:754
-#: addon\globalPlugins\nvdaClipboard\controller.py:2892
-#: addon\globalPlugins\nvdaClipboard\controller.py:2897
+#: addon\globalPlugins\nvdaClipboard\controller.py:2920
+#: addon\globalPlugins\nvdaClipboard\controller.py:2925
 msgid ", "
 msgstr "，"
 
@@ -508,9 +508,9 @@ msgstr "无法保存空条目"
 #: addon\globalPlugins\nvdaClipboard\controller.py:1239
 #: addon\globalPlugins\nvdaClipboard\controller.py:1310
 #: addon\globalPlugins\nvdaClipboard\controller.py:1321
-#: addon\globalPlugins\nvdaClipboard\controller.py:2478
 #: addon\globalPlugins\nvdaClipboard\controller.py:2504
-#: addon\globalPlugins\nvdaClipboard\controller.py:2566
+#: addon\globalPlugins\nvdaClipboard\controller.py:2531
+#: addon\globalPlugins\nvdaClipboard\controller.py:2594
 msgid "The clipboard changed before it could be updated. Try again."
 msgstr "剪贴板在更新前发生了变化，请重试。"
 
@@ -573,156 +573,156 @@ msgid "Selected image saved"
 msgstr "所选图片已保存"
 
 #. Translators: Message shown when oversized rich formats are omitted from a history entry.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1605
+#: addon\globalPlugins\nvdaClipboard\controller.py:1620
 msgid "Some text formatting was too large and was not saved in history"
 msgstr "部分文本格式数据过大，未保存到历史记录"
 
 #. Translators: Message shown when a clipboard image could not be normalized for history.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1676
-#: addon\globalPlugins\nvdaClipboard\controller.py:1793
+#: addon\globalPlugins\nvdaClipboard\controller.py:1697
+#: addon\globalPlugins\nvdaClipboard\controller.py:1816
 msgid "The image could not be added to clipboard history"
 msgstr "无法将图片添加到剪贴板历史"
 
 #. Translators: Error shown when clipboard content changed but history could not be saved.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1780
+#: addon\globalPlugins\nvdaClipboard\controller.py:1803
 msgid "Clipboard updated, but history could not be saved"
 msgstr "剪贴板已更新，但无法保存历史记录"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:1787
+#: addon\globalPlugins\nvdaClipboard\controller.py:1810
 #, python-brace-format
 msgid "The image was not added because it exceeds the {limit} MB history limit"
 msgstr "图片超过 {limit} MB 的历史记录大小上限，未能添加"
 
 #. Translators: Message shown when an image exceeds the total history storage limit.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1796
+#: addon\globalPlugins\nvdaClipboard\controller.py:1819
 msgid "The image was not added because image history storage is full"
 msgstr "图片历史存储空间已满，未能添加图片"
 
 #. Translators: Message shown when mixed clipboard content is retained as text only.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1802
+#: addon\globalPlugins\nvdaClipboard\controller.py:1825
 msgid "The text was saved in history, but its image could not be stored"
 msgstr "文本已保存到历史记录，但无法保存其中的图片"
 
 #. Translators: Error shown when a last-spoken command has no captured speech text.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1929
+#: addon\globalPlugins\nvdaClipboard\controller.py:1952
 msgid "No spoken text is available"
 msgstr "没有可用的朗读文本"
 
 #. Translators: Error shown when text cannot be appended because the clipboard is busy.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1937
+#: addon\globalPlugins\nvdaClipboard\controller.py:1960
 msgid "Could not read the current clipboard"
 msgstr "无法读取当前剪贴板"
 
 #. Translators: Message shown when another temporary clipboard paste is still running.
-#: addon\globalPlugins\nvdaClipboard\controller.py:1988
+#: addon\globalPlugins\nvdaClipboard\controller.py:2012
 msgid "Pasting is in progress. Please wait."
 msgstr "正在粘贴，请稍候"
 
 #. Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2006
+#: addon\globalPlugins\nvdaClipboard\controller.py:2030
 msgid "Keyboard focus could not be identified. Paste cancelled."
 msgstr "无法确定键盘焦点，已取消粘贴"
 
 #. Translators: Error shown when clipboard content cannot be prepared for pasting.
 #. Translators: Error shown when clipboard content cannot be written for pasting.
 #. Translators: Error shown when the temporary clipboard paste gesture cannot be sent.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2022
-#: addon\globalPlugins\nvdaClipboard\controller.py:2061
-#: addon\globalPlugins\nvdaClipboard\controller.py:2067
-#: addon\globalPlugins\nvdaClipboard\controller.py:2098
-#: addon\globalPlugins\nvdaClipboard\controller.py:2145
-#: addon\globalPlugins\nvdaClipboard\controller.py:2217
-#: addon\globalPlugins\nvdaClipboard\controller.py:2232
-#: addon\globalPlugins\nvdaClipboard\controller.py:2238
-#: addon\globalPlugins\nvdaClipboard\controller.py:2270
+#: addon\globalPlugins\nvdaClipboard\controller.py:2046
+#: addon\globalPlugins\nvdaClipboard\controller.py:2085
+#: addon\globalPlugins\nvdaClipboard\controller.py:2091
+#: addon\globalPlugins\nvdaClipboard\controller.py:2122
+#: addon\globalPlugins\nvdaClipboard\controller.py:2169
+#: addon\globalPlugins\nvdaClipboard\controller.py:2241
+#: addon\globalPlugins\nvdaClipboard\controller.py:2256
+#: addon\globalPlugins\nvdaClipboard\controller.py:2262
+#: addon\globalPlugins\nvdaClipboard\controller.py:2294
 msgid "Could not paste the content"
 msgstr "无法粘贴内容"
 
 #. Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2083
-#: addon\globalPlugins\nvdaClipboard\controller.py:2262
+#: addon\globalPlugins\nvdaClipboard\controller.py:2107
+#: addon\globalPlugins\nvdaClipboard\controller.py:2286
 msgid "Focus changed. Paste cancelled."
 msgstr "焦点已改变，已取消粘贴"
 
 #. Translators: Message shown when a paste shortcut remains held until timeout.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2105
+#: addon\globalPlugins\nvdaClipboard\controller.py:2129
 msgid "The keyboard shortcut was not released, so the paste was cancelled"
 msgstr "快捷键尚未松开，已取消粘贴"
 
 #. Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2115
+#: addon\globalPlugins\nvdaClipboard\controller.py:2139
 msgid "The clipboard changed. Paste cancelled."
 msgstr "剪贴板已改变，已取消粘贴"
 
 #. Translators: Error shown when the clipboard keeps changing before a temporary paste.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2203
-#: addon\globalPlugins\nvdaClipboard\controller.py:2254
+#: addon\globalPlugins\nvdaClipboard\controller.py:2227
+#: addon\globalPlugins\nvdaClipboard\controller.py:2278
 msgid "The clipboard kept changing. Paste cancelled."
 msgstr "剪贴板持续变化，已取消粘贴"
 
 #. Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2283
-#: addon\globalPlugins\nvdaClipboard\controller.py:2406
+#: addon\globalPlugins\nvdaClipboard\controller.py:2307
+#: addon\globalPlugins\nvdaClipboard\controller.py:2430
 msgid ""
 "The content was pasted, but the original clipboard content could not be "
 "restored"
 msgstr "内容已粘贴，但无法恢复原剪贴板内容"
 
 #. Translators: Error shown when the system clipboard cannot be cleared.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2572
+#: addon\globalPlugins\nvdaClipboard\controller.py:2600
 msgid "Could not clear the system clipboard"
 msgstr "无法清空系统剪贴板"
 
 #. Translators: Confirmation before clearing the system clipboard from an empty editor.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2623
+#: addon\globalPlugins\nvdaClipboard\controller.py:2651
 msgid "The editor is empty. Clear the system clipboard?"
 msgstr "编辑框为空，是否清空系统剪贴板？"
 
 #. Translators: Title of the clear clipboard confirmation dialog.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2625
+#: addon\globalPlugins\nvdaClipboard\controller.py:2653
 msgid "Clear Clipboard"
 msgstr "清空剪贴板"
 
 #. Translators: Presented when a clipboard text command is used without clipboard text.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2651
+#: addon\globalPlugins\nvdaClipboard\controller.py:2679
 msgid "There is no text on the clipboard"
 msgstr "剪贴板内没有文本"
 
 #. Translators: Message shown when text navigation is attempted on an image.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2666
+#: addon\globalPlugins\nvdaClipboard\controller.py:2694
 msgid "Image content cannot be browsed as text"
 msgstr "无法以文本方式浏览图片内容"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:2713
+#: addon\globalPlugins\nvdaClipboard\controller.py:2741
 #, python-brace-format
 msgid "{index}. {summary}"
 msgstr "{index}. {summary}"
 
 #. Translators: Category and entry count reported by the global category navigation command.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2729
+#: addon\globalPlugins\nvdaClipboard\controller.py:2757
 #, python-brace-format
 msgid "{category}, {count} entry"
 msgid_plural "{category}, {count} entries"
 msgstr[0] "{category}，{count} 个条目"
 
 #. Translators: Clipboard list summary when text contains no visible characters.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2798
+#: addon\globalPlugins\nvdaClipboard\controller.py:2826
 msgid "No visible text"
 msgstr "无可见文本"
 
 #. Translators: Clipboard file summary when additional file names are omitted.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2804
+#: addon\globalPlugins\nvdaClipboard\controller.py:2832
 #, python-brace-format
 msgid "{names}, …"
 msgstr "{names}，……"
 
 #. Translators: Concise image metadata used inside clipboard list labels.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2809
+#: addon\globalPlugins\nvdaClipboard\controller.py:2837
 #, python-brace-format
 msgid "{width} by {height} pixels, {size}"
 msgstr "{width} × {height} 像素，{size}"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:2818
+#: addon\globalPlugins\nvdaClipboard\controller.py:2846
 #, python-brace-format
 msgid ""
 "Image\n"
@@ -736,79 +736,79 @@ msgstr ""
 "存储大小：{size}"
 
 #. Translators: Binary data size in terabytes.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2830
+#: addon\globalPlugins\nvdaClipboard\controller.py:2858
 #, python-brace-format
 msgid "{size:.1f} TB"
 msgstr "{size:.1f} TB"
 
 #. Translators: Binary data size in gigabytes.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2833
+#: addon\globalPlugins\nvdaClipboard\controller.py:2861
 #, python-brace-format
 msgid "{size:.1f} GB"
 msgstr "{size:.1f} GB"
 
 #. Translators: Binary data size in megabytes.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2836
+#: addon\globalPlugins\nvdaClipboard\controller.py:2864
 #, python-brace-format
 msgid "{size:.1f} MB"
 msgstr "{size:.1f} MB"
 
 #. Translators: Binary data size in kilobytes.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2839
+#: addon\globalPlugins\nvdaClipboard\controller.py:2867
 #, python-brace-format
 msgid "{size:.1f} KB"
 msgstr "{size:.1f} KB"
 
 #. Translators: Binary data size in bytes.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2842
+#: addon\globalPlugins\nvdaClipboard\controller.py:2870
 #, python-brace-format
 msgid "{count} byte"
 msgid_plural "{count} bytes"
 msgstr[0] "{count} 字节"
 
 #. Translators: Number of user-perceived Unicode characters including whitespace; line breaks are excluded.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2852
+#: addon\globalPlugins\nvdaClipboard\controller.py:2880
 #, python-brace-format
 msgid "{count} character (including whitespace)"
 msgid_plural "{count} characters (including whitespace)"
 msgstr[0] "{count} 个字符（含空白）"
 
 #. Translators: Number of user-perceived Unicode characters excluding whitespace and line breaks.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2858
+#: addon\globalPlugins\nvdaClipboard\controller.py:2886
 #, python-brace-format
 msgid "{count} character (excluding whitespace)"
 msgid_plural "{count} characters (excluding whitespace)"
 msgstr[0] "{count} 个字符（不含空白）"
 
 #. Translators: Number of Han ideographic code points in clipboard text.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2868
+#: addon\globalPlugins\nvdaClipboard\controller.py:2896
 #, python-brace-format
 msgid "{count} Han character"
 msgid_plural "{count} Han characters"
 msgstr[0] "{count} 个汉字"
 
 #. Translators: Number of Unicode punctuation grapheme clusters in clipboard text.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2877
+#: addon\globalPlugins\nvdaClipboard\controller.py:2905
 #, python-brace-format
 msgid "{count} punctuation mark"
 msgid_plural "{count} punctuation marks"
 msgstr[0] "{count} 个标点"
 
 #. Translators: Number of Unicode symbol grapheme clusters in clipboard text.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2886
+#: addon\globalPlugins\nvdaClipboard\controller.py:2914
 #, python-brace-format
 msgid "{count} symbol"
 msgid_plural "{count} symbols"
 msgstr[0] "{count} 个符号"
 
 #. Translators: Selected character attributes follow the main, additive text statistics.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2895
+#: addon\globalPlugins\nvdaClipboard\controller.py:2923
 #, python-brace-format
 msgid "{details}; including {attributes}"
 msgstr "{details}；其中 {attributes}"
 
 #. Translators: Total explicit lines and exact statistics after the clipboard type and current position.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2901
+#: addon\globalPlugins\nvdaClipboard\controller.py:2929
 #, python-brace-format
 msgid "{summary}, {count} line in total; {details}"
 msgid_plural "{summary}, {count} lines in total; {details}"
@@ -816,213 +816,213 @@ msgstr[0] "{summary}，共 {count} 行；{details}"
 
 #. Translators: Type-only summary of plain text before exact statistics are available.
 #. Translators: Kind of stored plain text in the manager.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2914
+#: addon\globalPlugins\nvdaClipboard\controller.py:2942
 #: addon\globalPlugins\nvdaClipboard\manager.py:1324
 msgid "Plain text"
 msgstr "纯文本"
 
 #. Translators: Type-only summary of formatted text before exact statistics are available.
 #. Translators: Kind of stored formatted text in the manager.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2917
+#: addon\globalPlugins\nvdaClipboard\controller.py:2945
 #: addon\globalPlugins\nvdaClipboard\manager.py:1327
 msgid "Formatted text"
 msgstr "格式化文本"
 
 #. Translators: Type of clipboard content containing both text and an image.
 #. Translators: Kind of stored text-and-image content in the manager.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2920
+#: addon\globalPlugins\nvdaClipboard\controller.py:2948
 #: addon\globalPlugins\nvdaClipboard\manager.py:1330
 msgid "Text and image"
 msgstr "文本和图片"
 
 #. Translators: Number of top-level file system items cut to the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2926
+#: addon\globalPlugins\nvdaClipboard\controller.py:2954
 #, python-brace-format
 msgid "Cut files: {count} item"
 msgid_plural "Cut files: {count} items"
 msgstr[0] "已剪切文件：共 {count} 项"
 
 #. Translators: Number of top-level file system items linked from the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2933
+#: addon\globalPlugins\nvdaClipboard\controller.py:2961
 #, python-brace-format
 msgid "Linked files: {count} item"
 msgid_plural "Linked files: {count} items"
 msgstr[0] "已创建链接的文件：共 {count} 项"
 
 #. Translators: Number of top-level file system items copied to the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2939
+#: addon\globalPlugins\nvdaClipboard\controller.py:2967
 #, python-brace-format
 msgid "Copied files: {count} item"
 msgid_plural "Copied files: {count} items"
 msgstr[0] "已复制文件：共 {count} 项"
 
 #. Translators: Type of image-only clipboard content.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2945
+#: addon\globalPlugins\nvdaClipboard\controller.py:2973
 msgid "Image"
 msgstr "图片"
 
 #. Translators: Summary for clipboard content excluded from monitoring by its source application.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2948
+#: addon\globalPlugins\nvdaClipboard\controller.py:2976
 msgid "Protected clipboard content is not available"
 msgstr "受保护的剪贴板内容不可用"
 
 #. Translators: Summary used for clipboard data this add-on cannot navigate.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2953
+#: addon\globalPlugins\nvdaClipboard\controller.py:2981
 msgid "Unsupported clipboard content"
 msgstr "不支持的剪贴板内容"
 
 #. Translators: Orientation of an image whose width and height are equal.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2961
+#: addon\globalPlugins\nvdaClipboard\controller.py:2989
 msgid "square"
 msgstr "正方形"
 
 #. Translators: Orientation of an image wider than it is tall.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2964
+#: addon\globalPlugins\nvdaClipboard\controller.py:2992
 msgid "landscape"
 msgstr "横向"
 
 #. Translators: Orientation of an image taller than it is wide.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2967
+#: addon\globalPlugins\nvdaClipboard\controller.py:2995
 msgid "portrait"
 msgstr "纵向"
 
 #. Translators: Clipboard image type, dimensions, and orientation.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2969
+#: addon\globalPlugins\nvdaClipboard\controller.py:2997
 #, python-brace-format
 msgid "{summary}: {width} by {height} pixels, {orientation}"
 msgstr "{summary}：{orientation}，{width} × {height} 像素"
 
 #. Translators: Exact image property indicating that every pixel is fully transparent.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2977
+#: addon\globalPlugins\nvdaClipboard\controller.py:3005
 #, python-brace-format
 msgid "{summary}; fully transparent"
 msgstr "{summary}；全透明"
 
 #. Translators: Exact image property indicating that every pixel has the same color.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2980
+#: addon\globalPlugins\nvdaClipboard\controller.py:3008
 #, python-brace-format
 msgid "{summary}; solid {color}"
 msgstr "{summary}；纯{color}"
 
 #. Translators: Image summary followed by the percentage of fully transparent pixels.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2987
+#: addon\globalPlugins\nvdaClipboard\controller.py:3015
 #, python-brace-format
 msgid "{summary}; fully transparent pixels: {percentage}%"
 msgstr "{summary}；全透明像素占 {percentage}%"
 
 #. Translators: Image summary followed by the percentage of black or white pixels.
-#: addon\globalPlugins\nvdaClipboard\controller.py:2993
+#: addon\globalPlugins\nvdaClipboard\controller.py:3021
 #, python-brace-format
 msgid "{summary}; {color} pixels: {percentage}%"
 msgstr "{summary}；{color}像素占 {percentage}%"
 
 #. Translators: Confirmation after putting one or multiple files on the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3006
+#: addon\globalPlugins\nvdaClipboard\controller.py:3034
 #, python-brace-format
 msgid "{count} file put on the clipboard"
 msgid_plural "{count} files put on the clipboard"
 msgstr[0] "已将 {count} 个文件放入剪贴板"
 
 #. Translators: Confirmation after putting an image on the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3012
+#: addon\globalPlugins\nvdaClipboard\controller.py:3040
 msgid "Image put on the clipboard"
 msgstr "图片已放入剪贴板"
 
 #. Translators: Confirmation after putting mixed text and image content on the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3015
+#: addon\globalPlugins\nvdaClipboard\controller.py:3043
 msgid "Text and image put on the clipboard"
 msgstr "文本和图片已放入剪贴板"
 
 #. Translators: Confirmation after putting plain or formatted text on the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3017
+#: addon\globalPlugins\nvdaClipboard\controller.py:3045
 msgid "Text put on the clipboard"
 msgstr "文本已放入剪贴板"
 
 #. Translators: Navigable clipboard file entry with name, position, and full path.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3025
+#: addon\globalPlugins\nvdaClipboard\controller.py:3053
 #, python-brace-format
 msgid "{name}, item {index} of {count}, {path}"
 msgstr "{name}，第 {index} 项，共 {count} 项，{path}"
 
 #. Translators: Summary used when a file-list clipboard format contains no paths.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3033
+#: addon\globalPlugins\nvdaClipboard\controller.py:3061
 msgid "No files in clipboard"
 msgstr "剪贴板中没有文件"
 
 #. Translators: Error shown when a clipboard category name is empty.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3039
+#: addon\globalPlugins\nvdaClipboard\controller.py:3067
 msgid "The category name cannot be empty"
 msgstr "类别名称不能为空"
 
 #. Translators: Error shown when the built-in history name is used for a category.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3042
+#: addon\globalPlugins\nvdaClipboard\controller.py:3070
 msgid "That category name is reserved"
 msgstr "该类别名称已被保留"
 
 #. Translators: Error shown when a clipboard category already exists.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3045
+#: addon\globalPlugins\nvdaClipboard\controller.py:3073
 msgid "A category with that name already exists"
 msgstr "已存在同名类别"
 
 #. Translators: Error shown when a clipboard category no longer exists.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3048
+#: addon\globalPlugins\nvdaClipboard\controller.py:3076
 msgid "The selected category no longer exists"
 msgstr "所选类别已不存在"
 
 #. Translators: Error shown when deletion of a non-empty category is attempted.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3051
+#: addon\globalPlugins\nvdaClipboard\controller.py:3079
 msgid "Delete all entries before deleting this category"
 msgstr "请先删除该类别中的所有条目"
 
 #. Translators: Error shown when a collected image cannot fit in clipboard storage.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3054
+#: addon\globalPlugins\nvdaClipboard\controller.py:3082
 msgid "The image cannot fit in clipboard history storage"
 msgstr "剪贴板历史存储空间不足，无法保存该图片"
 
 #. Translators: Error shown when stored clipboard entry data is invalid or missing.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3057
+#: addon\globalPlugins\nvdaClipboard\controller.py:3085
 msgid "The selected clipboard entry is no longer available"
 msgstr "所选剪贴板条目已不可用"
 
 #. Translators: Error shown for an invalid clipboard category operation.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3060
+#: addon\globalPlugins\nvdaClipboard\controller.py:3088
 msgid "The requested category operation is not valid"
 msgstr "请求的类别操作无效"
 
 #. Translators: Generic clipboard storage operation error.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3062
+#: addon\globalPlugins\nvdaClipboard\controller.py:3090
 msgid "Could not update clipboard storage"
 msgstr "无法更新剪贴板存储"
 
 #. Translators: Error shown when current clipboard upload policy cannot be checked.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3125
+#: addon\globalPlugins\nvdaClipboard\controller.py:3153
 msgid "Could not verify the current clipboard for upload"
 msgstr "无法验证当前剪贴板是否允许上传"
 
 #. Translators: Message shown when an application forbids cloud upload of clipboard content.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3130
+#: addon\globalPlugins\nvdaClipboard\controller.py:3158
 msgid "The current clipboard content is protected from cloud upload"
 msgstr "当前剪贴板内容受保护，禁止上传到云端"
 
 #. Translators: Cloud paste cancellation because another application changed the clipboard.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3215
-#: addon\globalPlugins\nvdaClipboard\controller.py:3246
+#: addon\globalPlugins\nvdaClipboard\controller.py:3243
+#: addon\globalPlugins\nvdaClipboard\controller.py:3274
 msgid "Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."
 msgstr "剪贴板已改变，已取消云剪贴板粘贴。"
 
-#: addon\globalPlugins\nvdaClipboard\controller.py:3235
+#: addon\globalPlugins\nvdaClipboard\controller.py:3263
 msgid ""
 "The keyboard shortcut was not released. Tiantan Cloud Clipboard text was "
 "left on the clipboard without pasting."
 msgstr "快捷键未释放。云剪贴板文本已保留在剪贴板中，但未粘贴。"
 
 #. Translators: Confirmation after downloaded cloud text is pasted.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3250
+#: addon\globalPlugins\nvdaClipboard\controller.py:3278
 msgid "Pasted from Tiantan Cloud Clipboard"
 msgstr "已从云剪贴板粘贴"
 
 #. Translators: Error shown when the cloud paste keyboard gesture fails.
-#: addon\globalPlugins\nvdaClipboard\controller.py:3254
+#: addon\globalPlugins\nvdaClipboard\controller.py:3282
 msgid "Tiantan Cloud Clipboard paste failed"
 msgstr "云剪贴板粘贴失败"
 
@@ -2169,28 +2169,42 @@ msgstr ""
 #. Translators: what's new content for the add-on version to be shown in the add-on store
 #: buildVars.py:41
 msgid ""
-"### 0.4.5\n"
+"### 0.4.6\n"
 "\n"
-"- Unified appending selected and last spoken text: existing text is "
-"extended; non-text clipboard content is replaced with plain text.\n"
-"- Made pasting and appending the last spoken text consistent with NVDA's "
-"built-in copy command.\n"
-"- Fixed Clipboard Manager find and replace missing matches across the cursor "
-"and mishandling regular expressions in selected text.\n"
-"- Improved error reporting for invalid regular expressions and replacement "
-"group references.\n"
-"- Clarified documentation on marked selections, browse mode, and plain-text "
-"appending.\n"
-"- Updated issue templates and development tooling."
+"- Fixed clipboard history creating a separate entry for each append. "
+"Repeated appends now keep the accumulated text in one entry.\n"
+"- Added diagnostic logging to help investigate occasional NVDA freezes."
 msgstr ""
-"### 0.4.5\n"
+"### 0.4.6\n"
 "\n"
-"- 统一追加所选文本和最后朗读文本的行为：已有文本时在末尾追加，否则以纯文本替换剪贴板内容。\n"
-"- 粘贴和追加最后朗读文本时，与 NVDA 内置复制命令使用相同的朗读内容。\n"
-"- 修复剪贴板管理器查找和替换时漏查跨越光标位置的文本，以及选中文本的正则匹配错误。\n"
-"- 改进正则表达式或替换文本中的分组引用无效时的错误提示。\n"
-"- 明确文档中有关标记选区、浏览模式和纯文本追加的说明。\n"
-"- 更新问题反馈模板和开发工具。"
+"- 修复追加文本时每次生成一条剪贴板历史的问题，连续追加现在合并为一条历史。\n"
+"- 增加诊断日志，帮助排查 NVDA 偶发卡顿。"
+
+#~ msgid ""
+#~ "### 0.4.5\n"
+#~ "\n"
+#~ "- Unified appending selected and last spoken text: existing text is "
+#~ "extended; non-text clipboard content is replaced with plain text.\n"
+#~ "- Made pasting and appending the last spoken text consistent with NVDA's "
+#~ "built-in copy command.\n"
+#~ "- Fixed Clipboard Manager find and replace missing matches across the "
+#~ "cursor and mishandling regular expressions in selected text.\n"
+#~ "- Improved error reporting for invalid regular expressions and "
+#~ "replacement group references.\n"
+#~ "- Clarified documentation on marked selections, browse mode, and plain-"
+#~ "text appending.\n"
+#~ "- Updated issue templates and development tooling."
+#~ msgstr ""
+#~ "### 0.4.5\n"
+#~ "\n"
+#~ "- 统一追加所选文本和最后朗读文本的行为：已有文本时在末尾追加，否则以纯文本"
+#~ "替换剪贴板内容。\n"
+#~ "- 粘贴和追加最后朗读文本时，与 NVDA 内置复制命令使用相同的朗读内容。\n"
+#~ "- 修复剪贴板管理器查找和替换时漏查跨越光标位置的文本，以及选中文本的正则匹"
+#~ "配错误。\n"
+#~ "- 改进正则表达式或替换文本中的分组引用无效时的错误提示。\n"
+#~ "- 明确文档中有关标记选区、浏览模式和纯文本追加的说明。\n"
+#~ "- 更新问题反馈模板和开发工具。"
 
 #~ msgid "Last spoken text can only be appended to an empty or text clipboard"
 #~ msgstr "最后朗读的文本只能追加到空剪贴板或文本剪贴板"

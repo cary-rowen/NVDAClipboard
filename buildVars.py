@@ -35,17 +35,13 @@ History supports Unicode text with optional HTML or RTF, PNG or DIB images, mixe
 Commands can append or temporarily paste NVDA's last spoken text.
 Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."""),
 	# version
-	addon_version="0.4.5",
+	addon_version="0.4.6",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.4.5
+	addon_changelog=_("""### 0.4.6
 
-- Unified appending selected and last spoken text: existing text is extended; non-text clipboard content is replaced with plain text.
-- Made pasting and appending the last spoken text consistent with NVDA's built-in copy command.
-- Fixed Clipboard Manager find and replace missing matches across the cursor and mishandling regular expressions in selected text.
-- Improved error reporting for invalid regular expressions and replacement group references.
-- Clarified documentation on marked selections, browse mode, and plain-text appending.
-- Updated issue templates and development tooling."""),
+- Fixed clipboard history creating a separate entry for each append. Repeated appends now keep the accumulated text in one entry.
+- Added diagnostic logging to help investigate occasional NVDA freezes."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
