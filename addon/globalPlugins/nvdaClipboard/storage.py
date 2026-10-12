@@ -18,7 +18,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from logHandler import log
-from .clipboardData import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES
+from .clipboardData import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES, normalizeNewlinesForWin32
 from . import _sqlite3 as sqlite3
 from .storageModels import (
 	ClipboardItem,
@@ -2546,11 +2546,13 @@ class ClipboardStorage:
 				_reconcileOneDriveState(connection, loadItem)
 			return hasChanged
 
-	def addHistory(self, item: ClipboardItem) -> int | None:
+	def addHistory(self, item: ClipboardItem, *, replaceText: str | None = None) -> int | None:
 		"""Add or move an entry to newest history and return its identifier.
 
 		Return ``None`` only when an image exceeds the single-entry limit or
 		cannot fit after pruning uncollected image history.
+		When ``replaceText`` is supplied, replace the newest entry only if its text matches
+		after Win32 newline normalization.
 		"""
 		_validateItem(item)
 		if len(item.imageData or b"") > MAX_IMAGE_BYTES:
@@ -2559,6 +2561,33 @@ class ClipboardStorage:
 		payloadHash = _payloadHash(item)
 		try:
 			with self._transaction() as connection:
+				replacedItemId = None
+				replacedDedupKey = None
+				replacedCanSync = False
+				if replaceText is not None:
+					row = connection.execute(
+						f"""
+						SELECT history.itemId, items.dedupKey,
+							CASE WHEN {_ONE_DRIVE_ITEM_SQL} THEN 1 ELSE 0 END AS isOneDrive,
+							items.text
+						FROM history JOIN items USING (itemId)
+						WHERE history.itemId = (
+							SELECT itemId FROM history ORDER BY sortOrder LIMIT 1
+						)
+							AND items.contentType IN (?, ?, ?)
+						""",
+						(
+							ClipboardItemType.PLAIN_TEXT,
+							ClipboardItemType.FORMATTED_TEXT,
+							ClipboardItemType.TEXT_AND_IMAGE,
+						),
+					).fetchone()
+					if row is not None and normalizeNewlinesForWin32(
+						cast(str, row[3])
+					) == normalizeNewlinesForWin32(replaceText):
+						replacedItemId = cast(int, row[0])
+						replacedDedupKey = cast(bytes, row[1])
+						replacedCanSync = bool(cast(int, row[2]))
 				itemId = _findReusableItemId(connection, item, payloadHash)
 				wasInserted = itemId is None
 				if itemId is None:
@@ -2576,6 +2605,10 @@ class ClipboardStorage:
 						"DELETE FROM history WHERE itemId = ?",
 						((cast(int, row[0]),) for row in duplicateRows),
 					)
+				if replacedItemId is not None and replacedItemId != itemId:
+					if replacedCanSync:
+						_recordHistoryDeleted(connection, replacedDedupKey)
+					connection.execute("DELETE FROM history WHERE itemId = ?", (replacedItemId,))
 				_moveHistoryItemToFront(connection, itemId)
 				_recordHistoryItem(connection, itemId)
 				_enforceHistoryLimits(connection)

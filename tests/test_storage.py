@@ -669,6 +669,139 @@ def _runSelfCheck() -> None:  # noqa: C901
 class StorageSelfCheckTests(unittest.TestCase):
 	"""Run the storage module's isolated behavior checks."""
 
+	def testAppendingTextReplacesTheCurrentHistoryEntry(self) -> None:
+		"""Keep append operations as one history entry while preserving older entries."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+			oldItemId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old"))
+			assert oldItemId is not None
+			olderItemId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="older"))
+			assert olderItemId is not None
+			newItemId = storage.addHistory(
+				ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old\nnew"),
+				replaceText="older",
+			)
+			assert newItemId is not None
+			assert tuple(item.textPreview for item in storage.history) == ("old new", "old")
+			storage.addHistory(
+				ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old\nnewer"),
+				replaceText="missing",
+			)
+			assert tuple(item.textPreview for item in storage.history) == ("old newer", "old new", "old")
+			storage.close()
+
+	def testAppendingTextAfterDeletingTheNewestHistoryEntry(self) -> None:
+		for previousText in ("old", "older"):
+			with self.subTest(previousText=previousText), TemporaryDirectory() as directory:
+				root = Path(directory)
+				storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+				try:
+					olderId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="older"))
+					oldItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old")
+					oldId = storage.addHistory(oldItem)
+					deletedId = storage.addHistory(
+						ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="deleted")
+					)
+					assert olderId is not None and oldId is not None and deletedId is not None
+					storage.deleteHistoryItemsById((deletedId,))
+					assert storage.getLatestHistoryItem() == oldItem
+					newItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=f"{previousText}\nnew")
+					newId = storage.addHistory(newItem, replaceText=previousText)
+					assert newId is not None
+					expectedIds = (newId, olderId) if previousText == "old" else (newId, oldId, olderId)
+					assert tuple(item.itemId for item in storage.history) == expectedIds
+					assert storage.getHistoryItemById(newId) == newItem
+				finally:
+					storage.close()
+
+	def testRepeatedAppendsAfterClipboardNewlineConversion(self) -> None:
+		from tests.test_clipboardMonitor import clipboardMonitor
+
+		for newline in ("\n", "\r", "\r\n"):
+			with self.subTest(newline=newline), TemporaryDirectory() as directory:
+				root = Path(directory)
+				storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+				try:
+					storage.bindOneDriveAccount("account.tenant")
+					assert (
+						storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old"))
+						is not None
+					)
+					firstItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=f"old{newline}new")
+					assert storage.addHistory(firstItem, replaceText="old") is not None
+					monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+					snapshot = clipboardMonitor.ClipboardSnapshot(
+						clipboardMonitor.ClipboardContentType.TEXT,
+						text=firstItem.text,
+					)
+					formats = dict(monitor._buildWritableFormats(snapshot))
+					clipboardText = formats[clipboardMonitor.CF_UNICODETEXT][:-2].decode("utf-16-le")
+					assert clipboardText == "old\r\nnew"
+					secondItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=f"{clipboardText}\nnewer")
+					secondId = storage.addHistory(secondItem, replaceText=clipboardText)
+					assert secondId is not None
+					assert tuple(item.itemId for item in storage.history) == (secondId,)
+					assert storage.getHistoryItemById(secondId) == secondItem
+					states = {state.dedupKey: state for state in storage.getOneDriveSnapshot().history}
+					deletedState = states[getItemDedupKey(firstItem)]
+					assert deletedState.deleted and deletedState.dirty
+					assert deletedState.payloadHash is None
+					newState = states[getItemDedupKey(secondItem)]
+					assert not newState.deleted and newState.dirty
+					assert newState.payloadHash == getItemPayloadHash(secondItem)
+				finally:
+					storage.close()
+
+	def testAppendReplacementPreservesWhitespaceDifferences(self) -> None:
+		for previousText in ("old\r\nnew ", "old\r\n\r\nnew"):
+			with self.subTest(previousText=previousText), TemporaryDirectory() as directory:
+				root = Path(directory)
+				storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+				try:
+					oldItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old\nnew")
+					oldId = storage.addHistory(oldItem)
+					assert oldId is not None
+					newId = storage.addHistory(
+						ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=f"{previousText}\nnewer"),
+						replaceText=previousText,
+					)
+					assert newId is not None
+					assert tuple(item.itemId for item in storage.history) == (newId, oldId)
+					assert storage.getHistoryItemById(oldId) == oldItem
+				finally:
+					storage.close()
+
+	def testAppendingTextRecordsOneDriveHistoryReplacement(self) -> None:
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+			try:
+				storage.bindOneDriveAccount("account.tenant")
+				oldItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old")
+				assert storage.addHistory(oldItem) is not None
+				oldState = next(
+					state
+					for state in storage.getOneDriveSnapshot().history
+					if state.dedupKey == getItemDedupKey(oldItem)
+				)
+				assert not oldState.deleted
+				newItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old\nnew")
+				newItemId = storage.addHistory(newItem, replaceText=oldItem.text)
+				assert newItemId is not None
+				states = {state.dedupKey: state for state in storage.getOneDriveSnapshot().history}
+				deletedState = states[getItemDedupKey(oldItem)]
+				assert deletedState.deleted and deletedState.dirty
+				assert deletedState.payloadHash is None
+				assert deletedState.version > oldState.version
+				newState = states[getItemDedupKey(newItem)]
+				assert not newState.deleted and newState.dirty
+				assert newState.payloadHash == getItemPayloadHash(newItem)
+				assert tuple(item.itemId for item in storage.history) == (newItemId,)
+				assert storage.getHistoryItemById(newItemId) == newItem
+			finally:
+				storage.close()
+
 	def testExistingSchemaAddsCategoryItemIdIndex(self) -> None:
 		"""Restore the item lookup index without changing existing stored state."""
 		with TemporaryDirectory() as directory:

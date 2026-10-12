@@ -1574,6 +1574,7 @@ class ClipboardController:
 		source: _ClipboardChangeSource,
 		*,
 		pngIsDecodable: bool = False,
+		historyPreviousText: str | None = None,
 	) -> None:
 		"""Apply current state immediately and queue source-dependent history work."""
 		if snapshot.contentType == ClipboardContentType.ERROR:
@@ -1603,6 +1604,9 @@ class ClipboardController:
 				if item is not None:
 					self._queueHistoryItem(
 						item,
+						replaceText=historyPreviousText
+						if source == _ClipboardChangeSource.APPEND_TEXT
+						else None,
 						expectedText=item.text
 						if source == _ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT
 						else None,
@@ -1666,6 +1670,7 @@ class ClipboardController:
 		item: ClipboardItem,
 		imageWasDropped: bool = False,
 		*,
+		replaceText: str | None = None,
 		expectedText: str | None = None,
 	) -> None:
 		"""Queue one immutable item for ordered history storage."""
@@ -1674,7 +1679,7 @@ class ClipboardController:
 			f"type={item.contentType.value}, textChars={len(item.text)}, "
 			f"imageBytes={len(item.imageData or b'')}, files={len(item.files)}",
 		)
-		future = self._historyExecutor.submit(self._storeHistoryItem, item, imageWasDropped)
+		future = self._historyExecutor.submit(self._storeHistoryItem, item, imageWasDropped, replaceText)
 		future.add_done_callback(
 			partial(self._queueHistoryWriteCompletion, expectedText=expectedText),
 		)
@@ -1731,10 +1736,11 @@ class ClipboardController:
 		self,
 		item: ClipboardItem,
 		imageWasDropped: bool,
+		replaceText: str | None = None,
 		imageWasTooLarge: bool = False,
 	) -> _HistoryWriteResult:
 		"""Write history on the serial worker, preserving text when a mixed image is rejected."""
-		itemId = self.storage.addHistory(item)
+		itemId = self.storage.addHistory(item, replaceText=replaceText)
 		if itemId is not None or item.contentType != ClipboardItemType.TEXT_AND_IMAGE:
 			return _HistoryWriteResult(
 				itemId,
@@ -1754,6 +1760,7 @@ class ClipboardController:
 				rtf=item.rtf,
 				canUpload=item.canUpload,
 			),
+			replaceText=replaceText,
 		)
 		return _HistoryWriteResult(
 			fallbackId,
@@ -1968,6 +1975,7 @@ class ClipboardController:
 			expectedSequenceNumber=snapshot.sequenceNumber,
 			canIncludeInHistory=snapshot.canIncludeInHistory,
 			canUpload=snapshot.canUpload,
+			historyPreviousText=clipboardText or None,
 		)
 
 	def _pasteTextTemporarily(
@@ -2473,6 +2481,7 @@ class ClipboardController:
 		*,
 		canIncludeInHistory: bool = True,
 		canUpload: bool = True,
+		historyPreviousText: str | None = None,
 	) -> int:
 		"""Write non-empty text and synchronously apply its source semantics."""
 		text = _normalizeUnicodeText(text)
@@ -2488,6 +2497,7 @@ class ClipboardController:
 				),
 				source,
 				expectedSequenceNumber=expectedSequenceNumber,
+				historyPreviousText=historyPreviousText,
 			)
 		except ClipboardSequenceChangedError as error:
 			# Translators: Error shown when another application changes the clipboard during an append action.
@@ -2500,6 +2510,7 @@ class ClipboardController:
 		*,
 		expectedSequenceNumber: int | None = None,
 		preparedPngDib: bytes | None = None,
+		historyPreviousText: str | None = None,
 	) -> int:
 		"""Replace the system clipboard through the monitor and apply local semantics."""
 		ownerHandle = self._getClipboardOwnerHandle()
@@ -2537,6 +2548,7 @@ class ClipboardController:
 				appliedSnapshot,
 				source,
 				pngIsDecodable=snapshot.imageFormat == "PNG" and snapshot.imageData is not None,
+				historyPreviousText=historyPreviousText,
 			)
 		except Exception as error:
 			if source == _ClipboardChangeSource.TEMPORARY_PASTE:

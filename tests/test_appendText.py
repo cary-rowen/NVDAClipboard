@@ -85,6 +85,7 @@ class AppendTextTests(unittest.TestCase):
 							expectedSequenceNumber=7,
 							canIncludeInHistory=False,
 							canUpload=False,
+							historyPreviousText=oldText or None,
 						)
 
 
