@@ -1,3 +1,4 @@
-### 0.4.7
+### 0.4.8
 
-- Updated the Tiantan Cloud Clipboard SDK.
+- Removed temporary diagnostic logging.
+- Updated the Chinese documentation.
