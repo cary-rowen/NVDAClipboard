@@ -1530,11 +1530,6 @@ class ClipboardController:
 
 	def _onClipboardSnapshot(self, snapshot: ClipboardSnapshot) -> None:
 		"""Handle a monitor snapshot not already processed by a local write."""
-		log.debug(
-			"ClipboardController received snapshot: "
-			f"type={snapshot.contentType.value}, sequence={snapshot.sequenceNumber}, "
-			f"started={self._isStarted}, pendingWrites={len(self._pendingWrites)}",
-		)
 		if not self._isStarted or snapshot.contentType == ClipboardContentType.ERROR:
 			return
 		if self._consumePendingWrite(snapshot):
@@ -1587,12 +1582,6 @@ class ClipboardController:
 			_ClipboardChangeSource.CATEGORY_ITEM_WRITE,
 			_ClipboardChangeSource.NAVIGATOR_SCREENSHOT,
 		}
-		log.debug(
-			"ClipboardController applying snapshot: "
-			f"source={source.name}, type={snapshot.contentType.value}, "
-			f"sequence={snapshot.sequenceNumber}, record={shouldRecord}, "
-			f"includeHistory={snapshot.canIncludeInHistory}, canUpload={snapshot.canUpload}",
-		)
 		if snapshot.sequenceNumber:
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 		self._applyCurrentSnapshot(snapshot)
@@ -1674,11 +1663,6 @@ class ClipboardController:
 		expectedText: str | None = None,
 	) -> None:
 		"""Queue one immutable item for ordered history storage."""
-		log.debug(
-			"ClipboardController queueing history item: "
-			f"type={item.contentType.value}, textChars={len(item.text)}, "
-			f"imageBytes={len(item.imageData or b'')}, files={len(item.files)}",
-		)
 		future = self._historyExecutor.submit(self._storeHistoryItem, item, imageWasDropped, replaceText)
 		future.add_done_callback(
 			partial(self._queueHistoryWriteCompletion, expectedText=expectedText),

@@ -624,21 +624,13 @@ class ClipboardMonitor:
 		with self._lock:
 			shouldRead = self._isRunning
 			cancelToken = self._cancelToken
-			isRunning = self._isRunning
-			readInProgress = self._readInProgress
-			readAgain = self._readAgain
 			if shouldRead and self._readInProgress:
 				self._readAgain = True
 				shouldRead = False
 			elif shouldRead:
 				self._readInProgress = True
 		if not shouldRead:
-			log.debug(
-				f"Clipboard update deferred: running={isRunning}, "
-				f"readInProgress={readInProgress}, readAgain={readAgain}",
-			)
 			return
-		log.debug(f"Clipboard update starting reader: cancelToken={cancelToken}")
 		thread = Thread(
 			target=self._readAndDispatchSnapshot,
 			args=(cancelToken,),
@@ -672,14 +664,6 @@ class ClipboardMonitor:
 		reportedOpenFailure = False
 		while True:
 			snapshot = self.readNow(analyzeImage=True)
-			log.debug(
-				"Clipboard snapshot read: "
-				f"type={snapshot.contentType.value}, sequence={snapshot.sequenceNumber}, "
-				f"textChars={len(snapshot.text)}, "
-				f"htmlBytes={len(snapshot.html or b'')}, rtfBytes={len(snapshot.rtf or b'')}, "
-				f"imageBytes={len(snapshot.imageData or b'')}, files={len(snapshot.files)}, "
-				f"error={snapshot.error!r}",
-			)
 			shouldRestart = False
 			shouldRetry = False
 			shouldReadAgain = False
@@ -709,12 +693,10 @@ class ClipboardMonitor:
 					reportedOpenFailure = True
 				sleep(_FAILED_OPEN_RETRY_INTERVAL)
 				continue
-			queuedAt = monotonic()
 			if self._onSnapshot is not None and not self._queueMainThread(
 				self._dispatchSnapshot,
 				cancelToken,
 				snapshot,
-				queuedAt,
 			):
 				return
 			with self._lock:
@@ -734,20 +716,8 @@ class ClipboardMonitor:
 			if not shouldReadAgain:
 				return
 
-	def _dispatchSnapshot(
-		self,
-		cancelToken: int,
-		snapshot: ClipboardSnapshot,
-		queuedAt: float | None = None,
-	) -> None:
+	def _dispatchSnapshot(self, cancelToken: int, snapshot: ClipboardSnapshot) -> None:
 		"""Invoke the snapshot callback when the queued result is still applicable."""
-		if queuedAt is not None:
-			dispatchDelay = monotonic() - queuedAt
-			if dispatchDelay >= 0.5:
-				log.debugWarning(
-					f"Clipboard snapshot waited {dispatchDelay:.3f}s for the main thread: "
-					f"type={snapshot.contentType.value}, sequence={snapshot.sequenceNumber}",
-				)
 		with self._lock:
 			if cancelToken != self._cancelToken or not self._isRunning:
 				return
@@ -760,18 +730,10 @@ class ClipboardMonitor:
 				self._lastDispatchedSequence = snapshot.sequenceNumber
 			callback = self._onSnapshot
 		if callback is not None:
-			callbackStarted = monotonic()
 			try:
 				callback(snapshot)
 			except Exception:
 				log.exception("ClipboardMonitor callback failed.")
-			finally:
-				callbackDuration = monotonic() - callbackStarted
-				if callbackDuration >= 0.5:
-					log.debugWarning(
-						f"Clipboard snapshot callback took {callbackDuration:.3f}s: "
-						f"type={snapshot.contentType.value}, sequence={snapshot.sequenceNumber}",
-					)
 
 	def _readSnapshot(
 		self,
