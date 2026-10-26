@@ -118,7 +118,7 @@ Laptop and Desktop refer to NVDA's keyboard layouts. Gestures in the Desktop col
 | First clipboard line | `NVDA+Windows+Shift+Up Arrow` | `Ctrl+NumPad Divide` |
 | Last clipboard line | `NVDA+Windows+Shift+Down Arrow` | `Ctrl+NumPad Multiply` |
 | Previous clipboard line | `NVDA+Windows+Up Arrow` | `Ctrl+NumPad 7` |
-| Current clipboard line | `Ctrl+NumPad 8` | `Ctrl+NumPad 8` |
+| Current clipboard line | Unassigned by default | `Ctrl+NumPad 8` |
 | Next clipboard line | `NVDA+Windows+Down Arrow` | `Ctrl+NumPad 9` |
 | Page up through the clipboard | Unassigned by default | Unassigned by default |
 | Page down through the clipboard | Unassigned by default | Unassigned by default |

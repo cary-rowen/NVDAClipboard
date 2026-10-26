@@ -136,7 +136,7 @@ OneDrive 登录信息会针对当前 Windows 用户加密，但同步的剪贴�
 | 剪贴板第一行 | `NVDA+Windows+Shift+上光标` | `Ctrl+数字键盘除号` |
 | 剪贴板最后一行 | `NVDA+Windows+Shift+下光标` | `Ctrl+数字键盘乘号` |
 | 上一行 | `NVDA+Windows+上光标` | `Ctrl+数字键盘 7` |
-| 当前行 | `Ctrl+数字键盘 8` | `Ctrl+数字键盘 8` |
+| 当前行 | 默认未分配 | `Ctrl+数字键盘 8` |
 | 下一行 | `NVDA+Windows+下光标` | `Ctrl+数字键盘 9` |
 | 向上翻页 | 默认未分配 | 默认未分配 |
 | 向下翻页 | 默认未分配 | 默认未分配 |
