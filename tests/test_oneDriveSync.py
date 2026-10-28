@@ -180,6 +180,7 @@ class _FakeStorage:
 		self.excludedPayloads: set[bytes] = set()
 		self.applyCalls = 0
 		self.failReservations = 0
+		self.missingPayloadApplies = 0
 		self.trace: list[str] | None = None
 		self._clock = 0
 		self._operationBase = operationBase
@@ -300,6 +301,10 @@ class _FakeStorage:
 	) -> bool:
 		"""Apply a committed snapshot and materialize downloaded payloads."""
 		self.applyCalls += 1
+		if self.missingPayloadApplies:
+			# Real storage raises this when a concurrent local deletion removed a reused payload row.
+			self.missingPayloadApplies -= 1
+			raise storageModels.ItemNotFoundError(b"payload")
 		if self.snapshot != expectedSnapshot:
 			raise oneDriveSync.OneDriveLocalChangeError
 		if self.trace is not None:
@@ -699,6 +704,17 @@ class OneDriveSyncTests(unittest.TestCase):
 		self.assertEqual(graph.putManifestCalls, 2)
 		self.assertEqual(storage.applyCalls, 1)
 		self.assertEqual(storage.snapshot, replace(graph.snapshot, accountId=storage.accountId))
+
+	def testPayloadDeletedLocallyDuringSyncIsRetried(self) -> None:
+		"""Retry instead of failing when a local deletion removes a payload the merge reuses."""
+		graph = _FakeGraph()
+		storage = _FakeStorage(3)
+		storage.missingPayloadApplies = 1
+		storage.addText("deleted during sync")
+		result = self._sync(storage, graph)
+		self.assertEqual(storage.applyCalls, 2)
+		self.assertEqual(storage.snapshot, replace(graph.snapshot, accountId=storage.accountId))
+		self.assertEqual(result.manifestEtag, graph.etag)
 
 	def testCancellationBeforeCommitLeavesLocalStateUntouched(self) -> None:
 		"""Propagate cancellation after listing without committing or applying data."""

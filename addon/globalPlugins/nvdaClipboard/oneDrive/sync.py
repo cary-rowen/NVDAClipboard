@@ -71,6 +71,7 @@ from ..storage.database import (
 )
 from ..storage.models import (
 	ClipboardItem,
+	ItemNotFoundError,
 	OneDriveSyncSnapshot,
 )
 
@@ -582,14 +583,11 @@ class OneDriveSyncManager:
 			self._ensureActive()
 			# Translators: OneDrive synchronization phase while merged data is saved on this device.
 			self._updateProgress(_("Saving synchronized data on this device..."), force=True)
-			changedLocally = (
-				self._storage.applyOneDriveMerge(
-					merged,
-					local,
-					stage.load,
-				)
-				or changedLocally
-			)
+			try:
+				changedLocally = self._storage.applyOneDriveMerge(merged, local, stage.load) or changedLocally
+			except ItemNotFoundError:
+				# A concurrent local deletion removed a reused payload; the next attempt downloads it.
+				continue
 			self._cleanupOrphanFiles(graph, orphanFiles)
 			return _SyncResult(
 				uploaded=len(uploadedHashes),
