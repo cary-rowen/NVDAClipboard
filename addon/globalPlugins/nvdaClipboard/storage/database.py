@@ -173,11 +173,11 @@ def _openDatabase(path: Path) -> sqlite3.Connection:
 	connection = sqlite3.connect(path, timeout=5, check_same_thread=False)
 	try:
 		connection.row_factory = sqlite3.Row
-		_ = connection.execute("PRAGMA foreign_keys = ON")
-		_ = connection.execute("PRAGMA busy_timeout = 5000")
+		connection.execute("PRAGMA foreign_keys = ON").close()
+		connection.execute("PRAGMA busy_timeout = 5000").close()
 		_initializeSchema(connection)
-		_ = connection.execute("PRAGMA journal_mode = WAL")
-		_ = connection.execute("PRAGMA synchronous = NORMAL")
+		connection.execute("PRAGMA journal_mode = WAL").close()
+		connection.execute("PRAGMA synchronous = NORMAL").close()
 	except Exception:
 		connection.close()
 		raise
@@ -190,9 +190,9 @@ def _openReadOnlyDatabase(path: Path) -> sqlite3.Connection:
 	connection = sqlite3.connect(path, timeout=5, check_same_thread=False)
 	try:
 		connection.row_factory = sqlite3.Row
-		_ = connection.execute("PRAGMA query_only = ON")
-		_ = connection.execute("PRAGMA foreign_keys = ON")
-		_ = connection.execute("PRAGMA busy_timeout = 5000")
+		connection.execute("PRAGMA query_only = ON").close()
+		connection.execute("PRAGMA foreign_keys = ON").close()
+		connection.execute("PRAGMA busy_timeout = 5000").close()
 	except Exception:
 		connection.close()
 		raise
