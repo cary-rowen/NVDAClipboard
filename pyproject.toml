@@ -37,9 +37,10 @@ build = [
 	"scons==4.10.1",
 	"Markdown==3.10",
 ]
-# Match the Pillow version bundled with NVDA for image codec checks.
+# Match the Pillow and l2m4m versions bundled with NVDA.
 test = [
 	"Pillow==12.2.0",
+	"l2m4m==1.0.4",
 ]
 # Translations management
 l10n = [
