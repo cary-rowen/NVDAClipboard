@@ -3,7 +3,7 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Run one cancellable calculation in a background thread and publish its progress."""
+"""Run cancellable calculations in background threads and queue work onto wx's GUI thread."""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ from threading import Event, Lock, Thread
 from typing import ClassVar, Self
 
 from logHandler import log
+import wx
 
 
-__all__ = ["BackgroundCalculation"]
+__all__ = ["BackgroundCalculation", "queueMainThread"]
 
 
 class BackgroundCalculation[ProgressT]:
@@ -86,3 +87,24 @@ class BackgroundCalculation[ProgressT]:
 	def _publishStartFailure(self) -> None:
 		"""Publish a completed progress snapshot after the worker thread failed to start."""
 		raise NotImplementedError
+
+
+def queueMainThread(
+	callback: Callable[..., object],
+	*args: object,
+	onFailure: Callable[[], bool],
+	failureMessage: str,
+) -> bool:
+	"""Queue a callback on wx's GUI thread and return whether wx accepted it.
+
+	wx raises :class:`RuntimeError` once it no longer accepts work, typically during shutdown.
+	In that case ``onFailure`` releases any caller state and returns whether the owner is still
+	active, and ``failureMessage`` is logged as a debug warning only for an active owner.
+	"""
+	try:
+		wx.CallAfter(callback, *args)
+	except RuntimeError:
+		if onFailure():
+			log.debugWarning(failureMessage, exc_info=True)
+		return False
+	return True

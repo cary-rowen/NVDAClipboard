@@ -31,7 +31,7 @@ from logHandler import log
 import NVDAState
 import requests
 
-from .mainThread import queueMainThread
+from .background import queueMainThread
 from .oneDriveProtocol import (
 	MAX_ITEM_FILE_BYTES,
 	MAX_MANIFEST_BYTES,

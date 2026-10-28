@@ -17,7 +17,7 @@ from typing import Any, override
 
 from logHandler import log
 
-from .backgroundCalculation import BackgroundCalculation
+from .background import BackgroundCalculation
 
 
 __all__ = [

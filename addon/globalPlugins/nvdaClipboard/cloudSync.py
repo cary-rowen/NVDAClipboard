@@ -3,12 +3,13 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Coordinate ClipDataCloud operations with local clipboard changes."""
+"""Probe the ClipDataCloud SDK and coordinate its operations with local clipboard changes."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from threading import Lock, Thread
 
 import addonHandler
@@ -30,7 +31,7 @@ from .cloudClipboard import (
 	validateUploadText,
 )
 from .configuration import getSection
-from .mainThread import queueMainThread
+from .background import queueMainThread
 
 
 addonHandler.initTranslation()
@@ -743,3 +744,34 @@ class CloudSyncManager:
 				self._onStateChanged()
 			except Exception:
 				log.exception("CloudSyncManager state callback failed.")
+
+
+@dataclass(frozen=True, slots=True)
+class TiantanSupportState:
+	"""Describe whether Tiantan Cloud Clipboard can be loaded and hold the loaded SDK."""
+
+	sdk: CloudClipboardSdk | None
+	statusMessage: str
+
+	@property
+	def isAvailable(self) -> bool:
+		"""Return whether the ClipDataCloud SDK was loaded successfully."""
+		return self.sdk is not None
+
+
+# Translators: Error shown when the native cloud clipboard library cannot be used.
+_SDK_UNAVAILABLE_MESSAGE = _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
+
+
+@cache
+def getTiantanSupportState() -> TiantanSupportState:
+	"""Load the ClipDataCloud SDK on first use and return the cached support state."""
+	try:
+		sdk = CloudClipboardSdk()
+	except CloudClipboardError as error:
+		log.debugWarning("ClipDataCloud SDK is unavailable.", exc_info=error)
+		return TiantanSupportState(None, _SDK_UNAVAILABLE_MESSAGE)
+	except Exception:
+		log.exception("Unexpected ClipDataCloud SDK probe failure.")
+		return TiantanSupportState(None, _SDK_UNAVAILABLE_MESSAGE)
+	return TiantanSupportState(sdk, "")

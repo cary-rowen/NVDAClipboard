@@ -28,6 +28,7 @@ fileSize = loadAddonModule(
 	injectedModules={
 		"logHandler": SimpleNamespace(log=SimpleNamespace(exception=lambda *_args, **_kwargs: None)),
 		"winBindings": _WIN_BINDINGS,
+		"wx": SimpleNamespace(CallAfter=lambda *_args: None),
 	},
 )
 

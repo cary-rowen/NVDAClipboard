@@ -141,3 +141,40 @@ class CloudSyncTests(unittest.TestCase):
 			cloudSync.validateUploadText(withinLimit + "a")
 		self.assertEqual(context.exception.code, cloudSync.INVALID_ARGUMENT)
 		self.assertEqual(context.exception.message, cloudSync.TEXT_EXCEEDS_MAX_BYTES_ERROR)
+
+
+class TiantanSupportTests(unittest.TestCase):
+	"""Verify Tiantan support probing without loading the native SDK unexpectedly."""
+
+	def setUp(self) -> None:
+		"""Clear the cached probe state before each test."""
+		cloudSync.getTiantanSupportState.cache_clear()
+		cloudSync.log.reset_mock()
+
+	def testSdkLoadFailureReportsUnavailable(self) -> None:
+		"""Return an unavailable state when the native SDK cannot be loaded."""
+		error = cloudSync.CloudClipboardError(None, "load failed")
+		with patch.object(cloudSync, "CloudClipboardSdk", side_effect=error):
+			state = cloudSync.getTiantanSupportState()
+
+		self.assertFalse(state.isAvailable)
+		self.assertIsNone(state.sdk)
+		self.assertEqual(
+			state.statusMessage,
+			"Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.",
+		)
+		cloudSync.log.debugWarning.assert_called_once_with(
+			"ClipDataCloud SDK is unavailable.",
+			exc_info=error,
+		)
+
+	def testSdkIsLoadedOnceAndReturned(self) -> None:
+		"""Load the native SDK only once and expose the loaded instance."""
+		with patch.object(cloudSync, "CloudClipboardSdk") as sdkClass:
+			state = cloudSync.getTiantanSupportState()
+			self.assertIs(cloudSync.getTiantanSupportState(), state)
+
+		self.assertTrue(state.isAvailable)
+		self.assertIs(state.sdk, sdkClass.return_value)
+		self.assertEqual(state.statusMessage, "")
+		sdkClass.assert_called_once_with()

@@ -21,7 +21,10 @@ _PACKAGE_NAME = "nvdaClipboardTextStatsTests"
 createAddonPackage(_PACKAGE_NAME)
 textStats = loadAddonModule(
 	f"{_PACKAGE_NAME}.textStats",
-	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
+	injectedModules={
+		"logHandler": SimpleNamespace(log=Mock()),
+		"wx": SimpleNamespace(CallAfter=Mock()),
+	},
 )
 
 

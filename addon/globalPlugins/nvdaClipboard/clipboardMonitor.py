@@ -38,7 +38,7 @@ from .imageCodec import (
 	isPngImageDecodable,
 	pngToPackedDib,
 )
-from .mainThread import queueMainThread
+from .background import queueMainThread
 
 __all__ = [
 	"ClipboardContentType",

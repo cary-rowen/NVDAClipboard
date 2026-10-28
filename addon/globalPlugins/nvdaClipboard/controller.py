@@ -29,6 +29,7 @@ import gui
 from keyboardHandler import KeyboardInputGesture
 from logHandler import log
 import speech
+from speech import CHUNK_SEPARATOR
 import textInfos
 import ui
 import winUser
@@ -54,8 +55,7 @@ from .imageCodec import (
 	pngToPackedDib,
 )
 from .fileSize import FileSizeCalculation
-from . import lastSpoken
-from .cloudSync import CloudClipboardWriteError, CloudSyncManager
+from .cloudSync import CloudClipboardWriteError, CloudSyncManager, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
 from .oneDriveSync import OneDriveSyncManager
 from .search import matchesSearchKeywords, normalizeSearchText
@@ -65,7 +65,6 @@ from .images import (
 	captureNavigatorObjectPng,
 	savePngImage,
 )
-from .tiantanSupport import getTiantanSupportState
 from .storage import (
 	CategoryExistsError,
 	CategoryNameError,
@@ -185,6 +184,19 @@ def _getTextOrCharacterCount(text: str, maxLength: int = 1024) -> str:
 		return text
 	# Translators: Presented instead of lengthy text in clipboard feedback.
 	return ngettext("%d character", "%d characters", textLength) % textLength
+
+
+def _getLastSpokenText() -> str | None:
+	"""Return the text from NVDA's most recent speech sequence."""
+	# NVDA 2026.3 private record: (speechSequence, symbolLevel).
+	try:
+		lastSpeech = getattr(speech.speech, "_lastSpeech")
+	except AttributeError:
+		log.debugWarning("NVDA's last speech record is unavailable.", exc_info=True)
+		return None
+	if lastSpeech is None:
+		return None
+	return CHUNK_SEPARATOR.join(item for item in lastSpeech[0] if isinstance(item, str))
 
 
 class _ClipboardChangeSource(Enum):
@@ -1747,7 +1759,7 @@ class ClipboardController:
 		return replace(snapshot, imageFormat=None, imageData=None), False
 
 	def _requireLastSpokenText(self) -> str:
-		text = lastSpoken.getText()
+		text = _getLastSpokenText()
 		if not text:
 			# Translators: Error shown when a last-spoken command has no captured speech text.
 			raise ValueError(_("No spoken text is available"))
