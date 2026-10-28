@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import ctypes
-from ctypes import WinError, create_unicode_buffer, memmove, string_at, windll
+from ctypes import WinError, memmove, string_at, windll
 import ctypes.wintypes as w
 from dataclasses import dataclass, replace
 from functools import partial
@@ -106,7 +106,6 @@ CF_HDROP = 0xF
 CF_DIBV5 = 0x11
 WM_CLIPBOARDUPDATE = 0x031D
 HWND_MESSAGE = -3
-DRAG_QUERY_FILE_COUNT = 0xFFFFFFFF
 
 _OPEN_RETRIES = 10
 _OPEN_RETRY_INTERVAL = 0.05
@@ -115,6 +114,9 @@ _OPEN_CLIPBOARD_ERROR = "OpenClipboard failed"
 
 _MAX_FILE_COUNT = 10_000
 _MAX_FILE_PATH_CHARACTERS = 1_000_000
+# Codec for non-wide DROPFILES path lists: the Windows ANSI code page, as DragQueryFileW assumes.
+# Tests on hosts without the Windows-only "mbcs" codec override this constant.
+_ANSI_PATH_ENCODING = "mbcs"
 _SUPPORTED_DIB_HEADER_SIZES = frozenset((12, 40, 52, 56, 108, 124))
 _SUPPORTED_DIB_BIT_DEPTHS = frozenset((1, 4, 8, 16, 24, 32))
 _BI_RGB = 0
@@ -193,7 +195,6 @@ class _BITMAP(ctypes.Structure):
 
 _user32 = windll.user32
 _kernel32 = windll.kernel32
-_shell32 = windll.shell32
 _gdi32 = windll.gdi32
 
 _addClipboardFormatListener = _user32.AddClipboardFormatListener
@@ -243,10 +244,6 @@ _globalFree = kernel32.GlobalFree
 _getObject = _gdi32.GetObjectW
 _getObject.argtypes = (w.HANDLE, ctypes.c_int, w.LPVOID)
 _getObject.restype = ctypes.c_int
-
-_dragQueryFile = _shell32.DragQueryFileW
-_dragQueryFile.argtypes = (w.HANDLE, w.UINT, w.LPWSTR, w.UINT)
-_dragQueryFile.restype = w.UINT
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,6 +420,58 @@ def _isValidDropFilesData(data: bytes) -> bool:
 			terminatorOffset = pathData.find(b"\0\0\0\0", terminatorOffset + 1)
 		return False
 	return b"\0\0" in pathData
+
+
+def _splitDropFilesPaths(pathData: bytes, isWide: bool) -> list[bytes]:
+	"""Split a terminated DROPFILES path list into raw paths, stopping at the first empty path."""
+	unitSize = 2 if isWide else 1
+	nul = b"\0" * unitSize
+	paths: list[bytes] = []
+	start = 0
+	while True:
+		end = pathData.find(nul, start)
+		# Wide paths end only at a NUL code unit, so skip matches straddling two code units.
+		while end >= 0 and (end - start) % unitSize:
+			end = pathData.find(nul, end + 1)
+		if end < 0:
+			raise ValueError("Unterminated clipboard file list")
+		if end == start:
+			return paths
+		paths.append(pathData[start:end])
+		start = end + unitSize
+
+
+def _parseDropFilesPaths(data: bytes) -> list[str]:
+	"""Return the paths in bounded CF_HDROP data, or an empty list when the data is malformed.
+
+	Mirror DragQueryFileW: count UTF-16 code units, decode non-wide lists with the ANSI code page,
+	and replace undecodable data. Raise :class:`_ClipboardDataLimitError` when the list exceeds
+	the file count or total path length limits.
+	"""
+	if not _isValidDropFilesData(data):
+		return []
+	header = _DROPFILES.from_buffer_copy(data[: ctypes.sizeof(_DROPFILES)])
+	isWide = bool(header.fWide)
+	try:
+		rawPaths = _splitDropFilesPaths(data[int(header.pFiles) :], isWide)
+	except ValueError:
+		return []
+	if len(rawPaths) > _MAX_FILE_COUNT:
+		raise _ClipboardDataLimitError(len(rawPaths))
+	files: list[str] = []
+	totalCharacters = 0
+	for rawPath in rawPaths:
+		if isWide:
+			path = rawPath.decode("utf-16-le", errors="replace")
+			fileNameLength = len(rawPath) // 2
+		else:
+			path = rawPath.decode(_ANSI_PATH_ENCODING, errors="replace")
+			fileNameLength = len(path.encode("utf-16-le", errors="surrogatepass")) // 2
+		totalCharacters += fileNameLength
+		if totalCharacters > _MAX_FILE_PATH_CHARACTERS:
+			raise _ClipboardDataLimitError(totalCharacters)
+		files.append(path)
+	return files
 
 
 class ClipboardMonitor:
@@ -1042,36 +1091,10 @@ class ClipboardMonitor:
 	def _readFilesFromOpenClipboard(self) -> list[str]:
 		"""Read bounded CF_HDROP file-system paths while the clipboard is open."""
 		try:
-			handle = _getClipboardData(CF_HDROP)
-			if not handle:
-				raise WinError()
 			data = self._readGlobalData(CF_HDROP, _MAX_DROPFILES_BYTES)
 		except (_ClipboardDataLimitError, OSError):
 			return []
-		if not _isValidDropFilesData(data):
-			return []
-		fileCount = int(_dragQueryFile(handle, DRAG_QUERY_FILE_COUNT, None, 0))
-		if fileCount > _MAX_FILE_COUNT:
-			raise _ClipboardDataLimitError(fileCount)
-		files: list[str] = []
-		totalCharacters = 0
-		for index in range(fileCount):
-			fileNameLength = int(_dragQueryFile(handle, index, None, 0))
-			if fileNameLength <= 0:
-				return []
-			totalCharacters += fileNameLength
-			if totalCharacters > _MAX_FILE_PATH_CHARACTERS:
-				raise _ClipboardDataLimitError(totalCharacters)
-			buffer = create_unicode_buffer(fileNameLength + 1)
-			if int(_dragQueryFile(handle, index, buffer, len(buffer))) != fileNameLength:
-				return []
-			files.append(
-				buffer.value.encode("utf-16-le", errors="surrogatepass").decode(
-					"utf-16-le",
-					errors="replace",
-				),
-			)
-		return files
+		return _parseDropFilesPaths(data)
 
 	def _buildWritableImageFormats(
 		self,

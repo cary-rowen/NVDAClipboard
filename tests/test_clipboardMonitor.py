@@ -52,6 +52,13 @@ def _buildDibV5() -> bytes:
 	return bytes(data)
 
 
+def _buildRawDropFilesData(pathData: bytes, *, isWide: bool, offset: int = 0) -> bytes:
+	"""Build CF_HDROP data with an arbitrary path list placed ``offset`` bytes after the header."""
+	headerSize = ctypes.sizeof(clipboardMonitor._DROPFILES)
+	header = clipboardMonitor._DROPFILES(pFiles=headerSize + offset, ptX=0, ptY=0, fNC=False, fWide=isWide)
+	return bytes(header) + pathData
+
+
 class ClipboardMonitorTests(unittest.TestCase):
 	"""Verify best-effort clipboard transaction snapshots."""
 
@@ -431,19 +438,10 @@ class ClipboardMonitorTests(unittest.TestCase):
 			header = clipboardMonitor._DROPFILES.from_buffer_copy(data)
 			self.assertEqual(files, tuple(data[header.pFiles :].decode("utf-16-le").split("\0")[:-2]))
 
-			def queryFile(_handle, index, buffer, _length):
-				if index == clipboardMonitor.DRAG_QUERY_FILE_COUNT:
-					return len(files)
-				if buffer is not None:
-					buffer.value = files[index]
-				return 5
-
 			for limit in (9, 10, 11):
 				with (
 					self.subTest(files=files, limit=limit),
 					patch.object(clipboardMonitor, "_MAX_FILE_PATH_CHARACTERS", limit),
-					patch.object(clipboardMonitor, "_getClipboardData", return_value=1),
-					patch.object(clipboardMonitor, "_dragQueryFile", side_effect=queryFile),
 				):
 					if limit < 10:
 						with self.assertRaises(ValueError):
@@ -453,6 +451,89 @@ class ClipboardMonitorTests(unittest.TestCase):
 					else:
 						self.assertEqual(data, clipboardMonitor._buildDropFilesData(files))
 						self.assertEqual(list(files), monitor._readFilesFromOpenClipboard())
+
+	def testReadFilesReadsClipboardDataOnce(self) -> None:
+		"""Read CF_HDROP through one bounded global-data copy."""
+		files = (r"C:\one.txt", r"D:\two.txt")
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._readGlobalData = Mock(return_value=clipboardMonitor._buildDropFilesData(files))
+		with patch.object(clipboardMonitor, "_getClipboardData") as getClipboardData:
+			self.assertEqual(list(files), monitor._readFilesFromOpenClipboard())
+		getClipboardData.assert_not_called()
+		monitor._readGlobalData.assert_called_once_with(
+			clipboardMonitor.CF_HDROP,
+			clipboardMonitor._MAX_DROPFILES_BYTES,
+		)
+
+	def testReadFilesReturnsEmptyListWhenGlobalDataIsUnavailable(self) -> None:
+		"""Treat unreadable or oversized CF_HDROP data as an empty file list."""
+		for error in (OSError(), clipboardMonitor._ClipboardDataLimitError(1)):
+			with self.subTest(error=type(error).__name__):
+				monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+				monitor._readGlobalData = Mock(side_effect=error)
+				self.assertEqual([], monitor._readFilesFromOpenClipboard())
+
+	def testParseDropFilesReadsWidePathsInOrder(self) -> None:
+		"""Decode Unicode path lists in order, replacing lone surrogates like the old UTF-16 round trip."""
+		files = (r"C:\b.txt", r"D:\😀\a.txt", r"\\server\share\é")
+		self.assertEqual(
+			list(files), clipboardMonitor._parseDropFilesPaths(clipboardMonitor._buildDropFilesData(files))
+		)
+		data = _buildRawDropFilesData(
+			"C:\\x\ud800y\0\0".encode("utf-16-le", errors="surrogatepass"), isWide=True
+		)
+		self.assertEqual(["C:\\x\ufffdy"], clipboardMonitor._parseDropFilesPaths(data))
+
+	def testParseDropFilesDecodesAnsiPathsWithTheAnsiCodePage(self) -> None:
+		"""Decode non-wide path lists with the ANSI codec and count their UTF-16 lengths."""
+		data = _buildRawDropFilesData(b"C:\\caf\xe9\0D:\\\x81x\0\0", isWide=False)
+		with patch.object(clipboardMonitor, "_ANSI_PATH_ENCODING", "cp1252"):
+			self.assertEqual(["C:\\café", "D:\\\ufffdx"], clipboardMonitor._parseDropFilesPaths(data))
+			with patch.object(clipboardMonitor, "_MAX_FILE_PATH_CHARACTERS", 11):
+				with self.assertRaises(clipboardMonitor._ClipboardDataLimitError):
+					clipboardMonitor._parseDropFilesPaths(data)
+			with patch.object(clipboardMonitor, "_MAX_FILE_PATH_CHARACTERS", 12):
+				self.assertEqual(2, len(clipboardMonitor._parseDropFilesPaths(data)))
+
+	def testParseDropFilesReturnsNoPathsForAnEmptyList(self) -> None:
+		"""Stop at an immediate list terminator, as DragQueryFileW reports zero files."""
+		self.assertEqual(
+			[], clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0\0\0", isWide=True))
+		)
+		with patch.object(clipboardMonitor, "_ANSI_PATH_ENCODING", "cp1252"):
+			self.assertEqual(
+				[], clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0", isWide=False))
+			)
+		data = _buildRawDropFilesData("a\0\0\0b\0\0".encode("utf-16-le"), isWide=True)
+		self.assertEqual(["a"], clipboardMonitor._parseDropFilesPaths(data))
+
+	def testParseDropFilesRejectsMalformedData(self) -> None:
+		"""Reject truncated headers, bad offsets, and unterminated or misaligned path lists."""
+		valid = clipboardMonitor._buildDropFilesData((r"C:\a",))
+		headerSize = ctypes.sizeof(clipboardMonitor._DROPFILES)
+		cases = {
+			"truncatedHeader": valid[: headerSize - 1],
+			"unterminatedWide": valid[:-2],
+			"misalignedWideTerminator": _buildRawDropFilesData(b"a\0\0\0\0b", isWide=True),
+			"unterminatedAnsi": _buildRawDropFilesData(b"C:\\a\0", isWide=False),
+			"offsetBeforeHeader": _buildRawDropFilesData(valid[headerSize:], isWide=True, offset=-2),
+			"oddWideOffset": _buildRawDropFilesData(
+				b"\0" + "a\0\0".encode("utf-16-le"), isWide=True, offset=1
+			),
+			"offsetPastEnd": _buildRawDropFilesData(b"\0\0\0\0", isWide=True, offset=8),
+		}
+		for name, data in cases.items():
+			with self.subTest(name=name):
+				self.assertEqual([], clipboardMonitor._parseDropFilesPaths(data))
+
+	def testParseDropFilesEnforcesTheFileCountLimit(self) -> None:
+		"""Raise the clipboard limit error before decoding an oversized file list."""
+		data = clipboardMonitor._buildDropFilesData(("a", "b", "c"))
+		with patch.object(clipboardMonitor, "_MAX_FILE_COUNT", 2):
+			with self.assertRaises(clipboardMonitor._ClipboardDataLimitError):
+				clipboardMonitor._parseDropFilesPaths(data)
+		with patch.object(clipboardMonitor, "_MAX_FILE_COUNT", 3):
+			self.assertEqual(["a", "b", "c"], clipboardMonitor._parseDropFilesPaths(data))
 
 	def testInvalidDropFilesErrorDoesNotContainPaths(self) -> None:
 		"""Keep rejected clipboard file paths out of exception chains."""
