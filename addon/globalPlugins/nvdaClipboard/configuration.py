@@ -5,7 +5,10 @@
 
 """Define and access NVDA Clipboard configuration."""
 
+from __future__ import annotations
+
 from enum import StrEnum
+from typing import cast
 
 import config
 
@@ -20,33 +23,24 @@ class NavigationSplitMode(StrEnum):
 MIN_PAGE_LINE_COUNT = 1
 MAX_PAGE_LINE_COUNT = 150
 
-_CONFIG_SECTION = "nvdaClipboard"
-_CONFIG_PAGE_LINE_COUNT = "pageLineCount"
-_CONFIG_NAVIGATION_SPLIT_MODE = "navigationSplitMode"
-_CONFIG_SPLIT_CAMEL_CASE = "splitCamelCase"
-_CONFIG_SEPARATE_PUNCTUATION = "separatePunctuation"
-_CONFIG_TIANTAN_ENABLED = "tiantanEnabled"
-_CONFIG_CONFIRM_ON_CLOSE = "confirmOnClose"
-_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT = "showClipboardContentAsPlainText"
-_CONFIG_MANAGER_WINDOW = "managerWindow"
 _DEFAULT_PAGE_LINE_COUNT = 10
 
-_sectionSpec = config.conf.spec.setdefault(_CONFIG_SECTION, {})
-_sectionSpec.update(
+config.conf.spec.setdefault("nvdaClipboard", {}).update(
 	{
-		_CONFIG_PAGE_LINE_COUNT: (
+		"pageLineCount": (
 			f"integer(default={_DEFAULT_PAGE_LINE_COUNT}, min={MIN_PAGE_LINE_COUNT}, max={MAX_PAGE_LINE_COUNT})"
 		),
-		_CONFIG_NAVIGATION_SPLIT_MODE: (
+		"navigationSplitMode": (
 			f'option("{NavigationSplitMode.WINDOWS_WORD.value}", "{NavigationSplitMode.PUNCTUATION.value}", '
 			f'default="{NavigationSplitMode.WINDOWS_WORD.value}")'
 		),
-		_CONFIG_SPLIT_CAMEL_CASE: "boolean(default=true)",
-		_CONFIG_SEPARATE_PUNCTUATION: "boolean(default=false)",
-		_CONFIG_TIANTAN_ENABLED: "boolean(default=false)",
-		_CONFIG_CONFIRM_ON_CLOSE: "boolean(default=true)",
-		_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT: "boolean(default=false)",
-		_CONFIG_MANAGER_WINDOW: {
+		"splitCamelCase": "boolean(default=true)",
+		"separatePunctuation": "boolean(default=false)",
+		"tiantanEnabled": "boolean(default=false)",
+		"autoSyncTiantan": "boolean(default=true)",
+		"confirmOnClose": "boolean(default=true)",
+		"showClipboardContentAsPlainText": "boolean(default=false)",
+		"managerWindow": {
 			# Positions use desktop coordinates; sizes use DPI-independent pixels.
 			"x": "integer(default=0)",
 			"y": "integer(default=0)",
@@ -59,56 +53,41 @@ _sectionSpec.update(
 )
 
 
+def getSection() -> config.AggregatedSection:
+	"""Return the NVDA Clipboard section of NVDA's active configuration."""
+	return cast(config.AggregatedSection, config.conf["nvdaClipboard"])
+
+
 def getPageLineCount() -> int:
 	"""Return the configured number of lines moved by clipboard page commands."""
-	return int(config.conf[_CONFIG_SECTION][_CONFIG_PAGE_LINE_COUNT])
+	return int(cast(int, getSection()["pageLineCount"]))
 
 
 def getNavigationSplitSettings() -> tuple[NavigationSplitMode, bool, bool]:
 	"""Return the configured navigation split mode and modifiers."""
-	section = config.conf[_CONFIG_SECTION]
+	section = getSection()
 	return (
-		NavigationSplitMode(str(section[_CONFIG_NAVIGATION_SPLIT_MODE])),
-		bool(section[_CONFIG_SPLIT_CAMEL_CASE]),
-		bool(section[_CONFIG_SEPARATE_PUNCTUATION]),
+		NavigationSplitMode(str(section["navigationSplitMode"])),
+		bool(section["splitCamelCase"]),
+		bool(section["separatePunctuation"]),
 	)
 
 
 def getTiantanEnabled() -> bool:
 	"""Return whether Tiantan cloud synchronization is enabled."""
-	return bool(config.conf[_CONFIG_SECTION][_CONFIG_TIANTAN_ENABLED])
+	return bool(getSection()["tiantanEnabled"])
 
 
 def getConfirmOnClose() -> bool:
 	"""Return whether the manager should prompt before closing with unsaved edits."""
-	return bool(config.conf[_CONFIG_SECTION][_CONFIG_CONFIRM_ON_CLOSE])
+	return bool(getSection()["confirmOnClose"])
 
 
 def getShowClipboardContentAsPlainText() -> bool:
 	"""Return whether browse mode should show clipboard content without rendering."""
-	return bool(config.conf[_CONFIG_SECTION][_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT])
+	return bool(getSection()["showClipboardContentAsPlainText"])
 
 
 def getManagerWindowState() -> config.AggregatedSection:
-	return config.conf[_CONFIG_SECTION][_CONFIG_MANAGER_WINDOW]
-
-
-def saveSettings(
-	*,
-	pageLineCount: int,
-	navigationSplitMode: NavigationSplitMode,
-	splitCamelCase: bool,
-	separatePunctuation: bool,
-	tiantanEnabled: bool,
-	confirmOnClose: bool,
-	showClipboardContentAsPlainText: bool,
-) -> None:
-	"""Save settings from the NVDA Clipboard settings panel."""
-	section = config.conf[_CONFIG_SECTION]
-	section[_CONFIG_PAGE_LINE_COUNT] = pageLineCount
-	section[_CONFIG_NAVIGATION_SPLIT_MODE] = navigationSplitMode.value
-	section[_CONFIG_SPLIT_CAMEL_CASE] = splitCamelCase
-	section[_CONFIG_SEPARATE_PUNCTUATION] = separatePunctuation
-	section[_CONFIG_TIANTAN_ENABLED] = tiantanEnabled
-	section[_CONFIG_CONFIRM_ON_CLOSE] = confirmOnClose
-	section[_CONFIG_SHOW_CLIPBOARD_CONTENT_AS_PLAIN_TEXT] = showClipboardContentAsPlainText
+	"""Return the persisted manager window geometry section."""
+	return cast(config.AggregatedSection, getSection()["managerWindow"])

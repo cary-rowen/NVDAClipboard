@@ -16,7 +16,7 @@ from functools import partial
 from pathlib import Path
 from threading import BoundedSemaphore, Event, Thread
 from time import monotonic
-from typing import TYPE_CHECKING, Never
+from typing import TYPE_CHECKING, Literal, Never
 
 import addonHandler
 import api
@@ -137,6 +137,16 @@ type _SummaryCalculation = FileSizeCalculation | TextStatisticsCalculation
 
 _HISTORY_CATEGORY_ID = _BuiltinCategory.HISTORY
 
+# Content types whose snapshots or stored items carry navigable clipboard text.
+_TEXT_CONTENT_TYPES = frozenset(
+	{ClipboardContentType.TEXT, ClipboardContentType.FORMATTED_TEXT, ClipboardContentType.TEXT_AND_IMAGE},
+)
+_TEXT_ITEM_TYPES = frozenset(
+	{ClipboardItemType.PLAIN_TEXT, ClipboardItemType.FORMATTED_TEXT, ClipboardItemType.TEXT_AND_IMAGE},
+)
+# Content types whose snapshots carry an image.
+_IMAGE_CONTENT_TYPES = frozenset({ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE})
+
 
 def _waitForTriggerKeysReleased(
 	triggerKeyCodes: frozenset[int],
@@ -150,6 +160,18 @@ def _waitForTriggerKeysReleased(
 		return False
 	callLater(_PASTE_KEY_RELEASE_POLL_INTERVAL_MS, retry)
 	return None
+
+
+@contextmanager
+def _popup(mainFrame: gui.MainFrame | None) -> Iterator[None]:
+	"""Bracket showing an add-on window with NVDA's main frame popup notifications, if available."""
+	if mainFrame is not None:
+		mainFrame.prePopup()
+	try:
+		yield
+	finally:
+		if mainFrame is not None:
+			mainFrame.postPopup()
 
 
 def _normalizeUnicodeText(text: str) -> str:
@@ -485,87 +507,83 @@ class ClipboardController:
 		mainFrame = gui.mainFrame
 		if mainFrame is None:
 			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		mainFrame.prePopup()
-		try:
+		with _popup(mainFrame):
 			if self.manager is None:
 				from .manager import ClipboardManagerFrame
 
 				self.manager = ClipboardManagerFrame(mainFrame, self)
 			self.manager.showManager(self._resolveStoredItemCategory(), self._storedItemIndex)
-		finally:
-			mainFrame.postPopup()
+
+	def _showSingletonDialog(
+		self,
+		attributeName: Literal["cloudDialog", "oneDriveDialog"],
+		parent: wx.Window | None,
+		createDialog: Callable[[wx.Window], wx.Dialog],
+	) -> None:
+		"""Raise the dialog stored in ``attributeName``, or create, store, and show a new one."""
+		existingDialog: wx.Dialog | None = getattr(self, attributeName)
+		if existingDialog is not None:
+			try:
+				existingDialog.Raise()
+				existingDialog.SetFocus()
+				return
+			except RuntimeError:
+				setattr(self, attributeName, None)
+		mainFrame = gui.mainFrame
+		dialogParent = parent if parent is not None else mainFrame
+		if dialogParent is None:
+			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
+		dialog = createDialog(dialogParent)
+		setattr(self, attributeName, dialog)
+		with _popup(mainFrame):
+			dialog.Show()
+			dialog.Raise()
 
 	def showCloudDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the Tiantan Cloud Clipboard account dialog."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getAvailableCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
-		if self.cloudDialog is not None:
-			try:
-				self.cloudDialog.Raise()
-				self.cloudDialog.SetFocus()
-				return
-			except RuntimeError:
-				self.cloudDialog = None
-		mainFrame = gui.mainFrame
-		dialogParent = parent if parent is not None else mainFrame
-		if dialogParent is None:
-			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
 		from .cloudDialog import CloudClipboardDialog
 
-		self.cloudDialog = CloudClipboardDialog(
-			dialogParent,
-			cloudSync,
-			self._clearCloudDialog,
+		self._showSingletonDialog(
+			"cloudDialog",
+			parent,
+			lambda dialogParent: CloudClipboardDialog(dialogParent, cloudSync, self._clearCloudDialog),
 		)
-		if mainFrame is not None:
-			mainFrame.prePopup()
-		try:
-			self.cloudDialog.Show()
-			self.cloudDialog.Raise()
-		finally:
-			if mainFrame is not None:
-				mainFrame.postPopup()
 
 	def showOneDriveDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the OneDrive history synchronization dialog."""
-		if self.oneDriveDialog is not None:
-			try:
-				self.oneDriveDialog.Raise()
-				self.oneDriveDialog.SetFocus()
-				return
-			except RuntimeError:
-				self.oneDriveDialog = None
-		mainFrame = gui.mainFrame
-		dialogParent = parent if parent is not None else mainFrame
-		if dialogParent is None:
-			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
 		from .oneDriveDialog import OneDriveSyncDialog
 
-		self.oneDriveDialog = OneDriveSyncDialog(
-			dialogParent,
-			self.oneDriveSync,
-			self._clearOneDriveDialog,
+		self._showSingletonDialog(
+			"oneDriveDialog",
+			parent,
+			lambda dialogParent: OneDriveSyncDialog(
+				dialogParent, self.oneDriveSync, self._clearOneDriveDialog
+			),
 		)
-		if mainFrame is not None:
-			mainFrame.prePopup()
-		try:
-			self.oneDriveDialog.Show()
-			self.oneDriveDialog.Raise()
-		finally:
-			if mainFrame is not None:
-				mainFrame.postPopup()
 
-	def pasteCloudText(self, triggerKeyCodes: frozenset[int]) -> None:
-		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
+	def _getAvailableCloudSync(self) -> CloudSyncManager | None:
+		"""Return the Tiantan Cloud Clipboard manager, or report why it is unavailable."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-			return
-		if self._cloudFetchInProgress:
+		return cloudSync
+
+	def _getIdleCloudSync(self) -> CloudSyncManager | None:
+		"""Return the Tiantan Cloud Clipboard manager only when no receive is already running."""
+		cloudSync = self._getAvailableCloudSync()
+		if cloudSync is not None and self._cloudFetchInProgress:
 			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
 			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
+			return None
+		return cloudSync
+
+	def pasteCloudText(self, triggerKeyCodes: frozenset[int]) -> None:
+		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
+		cloudSync = self._getIdleCloudSync()
+		if cloudSync is None:
 			return
 		focusObject = self._getFocusObject()
 		if focusObject is None:
@@ -602,21 +620,15 @@ class ClipboardController:
 
 	def sendToTiantan(self) -> None:
 		"""Send the current allowed clipboard text to Tiantan Cloud Clipboard."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getAvailableCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		cloudSync.uploadCurrentText(self._getCurrentCloudUploadText())
 
 	def receiveFromTiantan(self) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard without pasting it."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getIdleCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-			return
-		if self._cloudFetchInProgress:
-			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
-			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
 			return
 		self._cloudFetchInProgress = True
 
@@ -951,11 +963,8 @@ class ClipboardController:
 		mainFrame = gui.mainFrame
 		if mainFrame is None:
 			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		mainFrame.prePopup()
-		try:
+		with _popup(mainFrame):
 			self._saveCurrentClipboardImage(mainFrame)
-		finally:
-			mainFrame.postPopup()
 
 	def cycleStoredItemCategory(self) -> None:
 		"""Select and report the next category of stored clipboard items."""
@@ -1060,11 +1069,7 @@ class ClipboardController:
 					if visibleSummary is None:
 						continue
 					fields = [visibleSummary]
-					if item.contentType in (
-						ClipboardItemType.PLAIN_TEXT,
-						ClipboardItemType.FORMATTED_TEXT,
-						ClipboardItemType.TEXT_AND_IMAGE,
-					):
+					if item.contentType in _TEXT_ITEM_TYPES:
 						fields.append(item.text)
 					elif item.contentType == ClipboardItemType.FILES:
 						fields.extend(item.files)
@@ -1081,11 +1086,7 @@ class ClipboardController:
 	def getItemDetails(self, category: CategoryId, itemId: int) -> ClipboardItemDetails:
 		"""Load the selected entry only and describe it for the manager content control."""
 		item = self._getStoredItemContentById(category, itemId)
-		if item.contentType in (
-			ClipboardItemType.PLAIN_TEXT,
-			ClipboardItemType.FORMATTED_TEXT,
-			ClipboardItemType.TEXT_AND_IMAGE,
-		):
+		if item.contentType in _TEXT_ITEM_TYPES:
 			content = item.text
 		elif item.contentType == ClipboardItemType.FILES:
 			content = "\n".join(item.files)
@@ -1095,12 +1096,7 @@ class ClipboardController:
 			key=item.itemId,
 			kind=item.contentType,
 			content=content,
-			isEditable=item.contentType
-			in (
-				ClipboardItemType.PLAIN_TEXT,
-				ClipboardItemType.FORMATTED_TEXT,
-				ClipboardItemType.TEXT_AND_IMAGE,
-			),
+			isEditable=item.contentType in _TEXT_ITEM_TYPES,
 			hasImage=item.hasImage,
 			canUpload=item.canUpload,
 		)
@@ -1109,12 +1105,7 @@ class ClipboardController:
 		"""Return the navigation offset only when text is still the current clipboard text."""
 		if not (
 			text
-			and self._contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
+			and self._contentType in _TEXT_CONTENT_TYPES
 			and text == self._text
 			and self._lastAppliedSequenceNumber
 			and self.monitor.getSequenceNumber() == self._lastAppliedSequenceNumber
@@ -1411,7 +1402,7 @@ class ClipboardController:
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when the current clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
-		if snapshot.contentType not in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
 			# Translators: Message shown when no clipboard image is available to save.
 			ui.message(_("There is no clipboard image to save"))
 			return
@@ -1461,7 +1452,7 @@ class ClipboardController:
 			return
 		if self._consumePendingWrite(snapshot):
 			self._awaitingInitialSnapshot = False
-			if snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
 				self._summary = self._formatCurrentSummary(snapshot)
 				if snapshot.contentType == ClipboardContentType.IMAGE:
 					self.navigator.setText(self._summary)
@@ -1513,7 +1504,7 @@ class ClipboardController:
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 		self._applyCurrentSnapshot(snapshot)
 		if shouldRecord and snapshot.canIncludeInHistory:
-			if snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
 				self._queueImageHistorySnapshot(snapshot, pngIsDecodable=pngIsDecodable)
 			else:
 				item = self._clipboardItemFromSnapshot(snapshot)
@@ -1542,11 +1533,7 @@ class ClipboardController:
 		"""Return the idle background calculation that summarizes a clipboard snapshot, if any."""
 		if snapshot.contentType == ClipboardContentType.FILES:
 			return FileSizeCalculation(snapshot.files) if snapshot.files else None
-		if snapshot.text and snapshot.contentType in (
-			ClipboardContentType.TEXT,
-			ClipboardContentType.FORMATTED_TEXT,
-			ClipboardContentType.TEXT_AND_IMAGE,
-		):
+		if snapshot.text and snapshot.contentType in _TEXT_CONTENT_TYPES:
 			return TextStatisticsCalculation(snapshot.text)
 		return None
 
@@ -1560,15 +1547,7 @@ class ClipboardController:
 		self._text = snapshot.text
 		self._canUpload = snapshot.canUpload
 		self._summary = self._formatCurrentSummary(snapshot)
-		if (
-			snapshot.contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
-			and snapshot.text
-		):
+		if snapshot.contentType in _TEXT_CONTENT_TYPES and snapshot.text:
 			navigationText = snapshot.text
 		elif snapshot.contentType == ClipboardContentType.FILES:
 			navigationText = self._formatFileNavigationText(snapshot.files)
@@ -1791,7 +1770,7 @@ class ClipboardController:
 		allowBitmapFallback: bool = True,
 	) -> tuple[ClipboardSnapshot, bool]:
 		"""Return a PNG-backed snapshot and whether normalization exceeded the byte limit."""
-		if snapshot.contentType not in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
 			return snapshot, False
 		canDecodeSafely = isImageSizeSafe(
 			snapshot.imageWidth,
@@ -1868,12 +1847,7 @@ class ClipboardController:
 			self._pendingWrites.clear()
 			self._awaitingInitialSnapshot = False
 			self._applySnapshot(snapshot, _ClipboardChangeSource.EXTERNAL)
-		textContentTypes = (
-			ClipboardContentType.TEXT,
-			ClipboardContentType.FORMATTED_TEXT,
-			ClipboardContentType.TEXT_AND_IMAGE,
-		)
-		clipboardText = snapshot.text if snapshot.contentType in textContentTypes else ""
+		clipboardText = snapshot.text if snapshot.contentType in _TEXT_CONTENT_TYPES else ""
 		separator = "\n" if clipboardText and not clipboardText.endswith(("\r", "\n")) else ""
 		self._writeClipboardText(
 			f"{clipboardText}{separator}{text}",
@@ -2223,10 +2197,7 @@ class ClipboardController:
 		snapshot = self.monitor.readNow(decodePng=True)
 		sequenceNumber = snapshot.sequenceNumber or self.monitor.getSequenceNumber()
 		imageNormalizationFailed = False
-		if (
-			snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE)
-			and snapshot.imageData is None
-		):
+		if snapshot.contentType in _IMAGE_CONTENT_TYPES and snapshot.imageData is None:
 			try:
 				snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
 			except Exception:
@@ -2699,11 +2670,7 @@ class ClipboardController:
 
 	def _formatItemSummary(self, item: ClipboardItemSummary) -> str:
 		"""Return a concise content summary without a type prefix."""
-		if item.contentType in (
-			ClipboardItemType.PLAIN_TEXT,
-			ClipboardItemType.FORMATTED_TEXT,
-			ClipboardItemType.TEXT_AND_IMAGE,
-		):
+		if item.contentType in _TEXT_ITEM_TYPES:
 			if item.textPreview:
 				return item.textPreview
 			# Translators: Clipboard list summary when text contains no visible characters.

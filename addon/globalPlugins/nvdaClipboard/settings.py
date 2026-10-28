@@ -24,8 +24,8 @@ from .configuration import (
 	getPageLineCount,
 	getConfirmOnClose,
 	getShowClipboardContentAsPlainText,
+	getSection,
 	getTiantanEnabled,
-	saveSettings,
 )
 from .tiantanSupport import getTiantanSupportState
 
@@ -140,15 +140,16 @@ class NVDAClipboardSettingsPanel(SettingsPanel):
 	@override
 	def onSave(self) -> None:
 		"""Save the configured clipboard navigation settings."""
-		saveSettings(
-			pageLineCount=self.pageLineCountSpin.GetValue(),
-			navigationSplitMode=_NAVIGATION_SPLIT_MODES[self.navigationSplitChoice.GetSelection()],
-			splitCamelCase=self.splitCamelCaseCheckBox.GetValue(),
-			separatePunctuation=self.separatePunctuationCheckBox.GetValue(),
-			tiantanEnabled=self.tiantanEnabledCheckBox.GetValue(),
-			confirmOnClose=self.confirmOnCloseCheckBox.GetValue(),
-			showClipboardContentAsPlainText=self.showClipboardContentAsPlainTextCheckBox.GetValue(),
-		)
+		section = getSection()
+		section["pageLineCount"] = self.pageLineCountSpin.GetValue()
+		section["navigationSplitMode"] = _NAVIGATION_SPLIT_MODES[
+			self.navigationSplitChoice.GetSelection()
+		].value
+		section["splitCamelCase"] = self.splitCamelCaseCheckBox.GetValue()
+		section["separatePunctuation"] = self.separatePunctuationCheckBox.GetValue()
+		section["tiantanEnabled"] = self.tiantanEnabledCheckBox.GetValue()
+		section["confirmOnClose"] = self.confirmOnCloseCheckBox.GetValue()
+		section["showClipboardContentAsPlainText"] = self.showClipboardContentAsPlainTextCheckBox.GetValue()
 
 	@override
 	def postSave(self) -> None:

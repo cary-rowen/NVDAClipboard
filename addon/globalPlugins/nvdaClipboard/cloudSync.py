@@ -29,6 +29,7 @@ from .cloudClipboard import (
 	CloudLoginResult,
 	validateUploadText,
 )
+from .configuration import getSection
 from .mainThread import queueMainThread
 
 
@@ -37,11 +38,6 @@ addonHandler.initTranslation()
 CompletionCallback = Callable[[bool, str], None]
 ClipboardWriter = Callable[[str], None]
 StateChangedCallback = Callable[[], None]
-
-_CONFIG_SECTION = "nvdaClipboard"
-_CONFIG_AUTO_SYNC_TIANTAN = "autoSyncTiantan"
-
-config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "boolean(default=true)"
 
 
 class CloudClipboardWriteError(Exception):
@@ -107,11 +103,11 @@ class CloudSyncManager:
 
 	def isAutoSyncEnabled(self) -> bool:
 		"""Return whether automatic Tiantan Cloud Clipboard synchronization is configured."""
-		return bool(config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN])
+		return bool(getSection()["autoSyncTiantan"])
 
 	def setAutoSyncEnabled(self, enabled: bool) -> None:
 		"""Persist and immediately apply automatic Tiantan Cloud Clipboard synchronization."""
-		config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN] = enabled
+		getSection()["autoSyncTiantan"] = enabled
 		self._applyAutoSyncSetting()
 
 	def getLoginStatusText(self) -> str:

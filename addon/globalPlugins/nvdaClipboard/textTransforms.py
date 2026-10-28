@@ -12,10 +12,10 @@ import ctypes
 from itertools import groupby
 
 import textUtils
+import winUser
 
 from .clipboardData import normalizeNewlinesForWin32
 
-_EM_SETSEL = 0x00B1
 _EM_REPLACESEL = 0x00C2
 
 
@@ -157,18 +157,11 @@ def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replaceme
 		handle = int(getHandle())
 	except (TypeError, ValueError):
 		return False
-	if not handle or not hasattr(ctypes, "windll"):
+	if not handle or not winUser.isWindow(handle):
 		return False
-	user32 = ctypes.windll.user32
-	if not user32.IsWindow(handle):
-		return False
-	user32.SendMessageW(handle, _EM_SETSEL, start, end)
-	user32.SendMessageW(
-		handle,
-		_EM_REPLACESEL,
-		True,
-		ctypes.c_wchar_p(normalizeNewlinesForWin32(replacementText)),
-	)
+	winUser.sendMessage(handle, winUser.EM_SETSEL, start, end)
+	replacementBuffer = ctypes.create_unicode_buffer(normalizeNewlinesForWin32(replacementText))
+	winUser.sendMessage(handle, _EM_REPLACESEL, True, ctypes.addressof(replacementBuffer))
 	return True
 
 
