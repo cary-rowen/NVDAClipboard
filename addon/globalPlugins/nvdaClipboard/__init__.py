@@ -330,9 +330,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		description=_("Receives and pastes from Tiantan Cloud Clipboard"),
 		speakOnDemand=True,
 	)
-	def script_pasteCloudClipboard(self, gesture: inputCore.InputGesture) -> None:
+	def script_pasteTiantanClipboard(self, gesture: inputCore.InputGesture) -> None:
 		"""Receive and paste Tiantan Cloud Clipboard text."""
-		self._runAction(self.controller.pasteCloudText, _getKeyboardGestureVkCodes(gesture))
+		self._runAction(self.controller.pasteTiantanText, _getKeyboardGestureVkCodes(gesture))
 
 	@script(
 		# Translators: Input help description for copying a navigator object screenshot.

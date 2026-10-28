@@ -126,7 +126,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 			"_restoreClipboardAfterTemporaryPaste",
 			"_restoreOriginalClipboardAfterTemporaryPaste",
 			"_captureOriginalClipboardForTemporaryPaste",
-			"_getCurrentCloudUploadText",
+			"_getCurrentTiantanUploadText",
 			"getCurrentNavigationOffsetForText",
 			"_applyLeftoverClipboardContent",
 			"_distrustRegisteredClipboardState",
@@ -193,7 +193,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 		namespace["_consumePendingWrite"],
 		namespace["_ClipboardChangeSource"],
 		namespace["_captureOriginalClipboardForTemporaryPaste"],
-		namespace["_getCurrentCloudUploadText"],
+		namespace["_getCurrentTiantanUploadText"],
 		namespace["getCurrentNavigationOffsetForText"],
 		namespace["_applyLeftoverClipboardContent"],
 		namespace["_distrustRegisteredClipboardState"],
@@ -222,7 +222,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 	_consumePendingWrite,
 	_ClipboardChangeSource,
 	_captureOriginalClipboardForTemporaryPaste,
-	_getCurrentCloudUploadText,
+	_getCurrentTiantanUploadText,
 	_getCurrentNavigationOffsetForText,
 	_applyLeftoverClipboardContent,
 	_distrustRegisteredClipboardState,
@@ -750,18 +750,18 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 			KeyboardInputGesture=Mock(),
 			ui=Mock(),
 		):
-			self.assertEqual("abcdef", _getCurrentCloudUploadText(controller))
+			self.assertEqual("abcdef", _getCurrentTiantanUploadText(controller))
 			self.assertEqual(3, _getCurrentNavigationOffsetForText(controller, "abcdef"))
 			_pasteTextTemporarily(controller, "temporary", frozenset())
 			# Temporary content is written without upload permission, exactly as before this change.
 			with self.assertRaisesRegex(ValueError, "protected from cloud upload"):
-				_getCurrentCloudUploadText(controller)
+				_getCurrentTiantanUploadText(controller)
 			self.assertIsNone(_getCurrentNavigationOffsetForText(controller, "abcdef"))
 			self.assertIsNone(_getCurrentNavigationOffsetForText(controller, "temporary"))
 			_delay, restore, state = schedule.call_args.args
 			restore(state)
 
-		self.assertEqual("abcdef", _getCurrentCloudUploadText(controller))
+		self.assertEqual("abcdef", _getCurrentTiantanUploadText(controller))
 		self.assertEqual(3, _getCurrentNavigationOffsetForText(controller, "abcdef"))
 
 	def testLeftoverTemporaryContentIsAppliedWithoutRereading(self) -> None:

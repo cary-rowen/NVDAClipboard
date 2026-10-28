@@ -490,14 +490,14 @@ class ClipboardManagerFrame(wx.Frame):
 		self.sendToTiantanItem: wx.MenuItem | None = None
 		self.receiveFromTiantanItem: wx.MenuItem | None = None
 		self.autoSyncTiantanItem: wx.MenuItem | None = None
-		cloudSync = self.controller.cloudSync
-		if cloudSync is not None:
-			cloudItem = cloudMenu.Append(
+		tiantanSync = self.controller.tiantanSync
+		if tiantanSync is not None:
+			tiantanItem = cloudMenu.Append(
 				wx.ID_ANY,
 				# Translators: Menu command to open the Tiantan Cloud Clipboard account dialog.
 				_("&Tiantan Cloud Clipboard..."),
 			)
-			self.Bind(wx.EVT_MENU, self._onCloudSync, cloudItem)
+			self.Bind(wx.EVT_MENU, self._onTiantanSync, tiantanItem)
 			self.autoSyncTiantanItem = cloudMenu.AppendCheckItem(
 				wx.ID_ANY,
 				# Translators: Checkable menu command to automatically send clipboard text to Tiantan Cloud Clipboard.
@@ -649,17 +649,17 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def refreshCloudMenuState(self) -> None:
 		"""Enable Cloud menu actions supported by the current account states."""
-		cloudSync = self.controller.cloudSync
-		if cloudSync is not None:
-			cloudState = cloudSync.getState()
+		tiantanSync = self.controller.tiantanSync
+		if tiantanSync is not None:
+			tiantanState = tiantanSync.getState()
 			if self.autoSyncTiantanItem is not None:
-				self.autoSyncTiantanItem.Check(cloudState.isAutoSyncEnabled)
+				self.autoSyncTiantanItem.Check(tiantanState.isAutoSyncEnabled)
 			if self.sendToTiantanItem is not None:
 				self.sendToTiantanItem.Enable(
-					cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
+					tiantanState.isLoggedIn and not tiantanState.isManualSendInProgress,
 				)
 			if self.receiveFromTiantanItem is not None:
-				self.receiveFromTiantanItem.Enable(cloudState.isLoggedIn)
+				self.receiveFromTiantanItem.Enable(tiantanState.isLoggedIn)
 		oneDriveState = self.controller.oneDriveSync.getState()
 		self.syncOneDriveItem.Enable(
 			oneDriveState.isAvailable
@@ -2329,9 +2329,9 @@ class ClipboardManagerFrame(wx.Frame):
 			return
 		textTransforms.applyEditorTextTransform(self.editor, transform)
 
-	def _onCloudSync(self, event: wx.CommandEvent) -> None:
+	def _onTiantanSync(self, event: wx.CommandEvent) -> None:
 		"""Open the Tiantan Cloud Clipboard account dialog."""
-		self._runSafely(self.controller.showCloudDialog, self)
+		self._runSafely(self.controller.showTiantanDialog, self)
 
 	def _onOneDriveSync(self, event: wx.CommandEvent) -> None:
 		"""Open the OneDrive account dialog."""
@@ -2343,9 +2343,9 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onAutoSyncTiantan(self, event: wx.CommandEvent) -> None:
 		"""Toggle automatic Tiantan Cloud Clipboard synchronization."""
-		cloudSync = self.controller.cloudSync
-		if self.autoSyncTiantanItem is not None and cloudSync is not None:
-			cloudSync.setAutoSyncEnabled(self.autoSyncTiantanItem.IsChecked())
+		tiantanSync = self.controller.tiantanSync
+		if self.autoSyncTiantanItem is not None and tiantanSync is not None:
+			tiantanSync.setAutoSyncEnabled(self.autoSyncTiantanItem.IsChecked())
 
 	def _onReceiveFromTiantan(self, event: wx.CommandEvent) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard."""
