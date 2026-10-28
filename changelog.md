@@ -1,4 +1,4 @@
-### 0.4.8
+### 0.5.0
 
-- Removed temporary diagnostic logging.
-- Updated the Chinese documentation.
+- Refactored the codebase.
+- Fixed various bugs.
