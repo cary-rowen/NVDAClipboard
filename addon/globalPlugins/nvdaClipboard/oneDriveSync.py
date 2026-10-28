@@ -7,46 +7,50 @@
 
 from __future__ import annotations
 
-from base64 import b64decode
-import binascii
 from collections.abc import Callable, Mapping
-import ctypes
-from ctypes import wintypes
 from dataclasses import dataclass, replace
 from functools import partial
 from hashlib import sha1
-import json
 from pathlib import Path
-import re
 from tempfile import TemporaryDirectory
 from threading import Event, Lock, Thread, Timer
 from time import monotonic
-from typing import Any, cast
-from urllib.parse import quote
 
 import addonHandler
-import fileUtils
 from gui.message import MessageDialog, ReturnCode
 from logHandler import log
 import NVDAState
 import requests
 
 from .background import queueMainThread
+from .oneDriveAuth import (
+	ERROR_AUTH_UNAVAILABLE,
+	TOKEN_CACHE_FILE_NAME,
+	AccountToken,
+	AuthenticationUnavailableError,
+	AuthManager,
+)
+from .oneDriveGraph import (
+	ERROR_SIGN_IN_EXPIRED,
+	GraphClient,
+	ManifestConflictError,
+	OperationCancelledError,
+	RemoteItemFile,
+	RemoteManifest,
+	remoteItemMatches,
+)
 from .oneDriveProtocol import (
 	MAX_ITEM_FILE_BYTES,
-	MAX_MANIFEST_BYTES,
 	OneDriveError,
 	_ItemSizeLimitError,
 	_ManifestSizeLimitError,
-	_INVALID_SYNC_DATA_MESSAGE,
+	INVALID_SYNC_DATA_MESSAGE,
 	_MAX_SYNC_CLOCK,
 	_applyNormalization,
 	_cleanSnapshot,
 	_cloudSnapshot,
 	_compactSnapshot,
 	_decodeItem,
-	_decodeManifest,
-	_emptySnapshot,
 	_encodeItem,
 	_encodeManifest,
 	_generationRebaseStates,
@@ -73,40 +77,14 @@ from .storageModels import (
 
 addonHandler.initTranslation()
 
-CLIENT_ID = "99ce63cb-1d1e-436c-85d8-e78073d3e2d0"
-AUTHORITY = "https://login.microsoftonline.com/common"
-SCOPES = ["Files.ReadWrite.AppFolder"]
-MANIFEST_FILE_NAME = "nvdaClipboard.sync.manifest.json"
-ITEM_FILE_PREFIX = "nvdaClipboard.sync.item."
-ITEM_FILE_SUFFIX = ".json"
 _SYNC_DEBOUNCE_SECONDS = 30
 _SYNC_POLL_SECONDS = 5 * 60
 # ponytail: hourly full scans bound payload repair; use Graph delta tokens only if this scan cost matters.
 _SYNC_FULL_SCAN_INTERVAL_SECONDS = 60 * 60
 _PROGRESS_UPDATE_SECONDS = 2.0
-_HTTP_TIMEOUT = (10, 30)
-_MAX_RETRY_AFTER_SECONDS = 30
 _MANIFEST_RETRIES = 3
 _MAX_TOMBSTONES_BEFORE_COMPACTION = 4096
-_MAX_ORPHAN_DELETIONS_PER_SYNC = 100
-_QUICK_XOR_HASH_BYTES = 20
-_QUICK_XOR_SHIFT = 11
-_QUICK_XOR_BLOCK_BYTES = _QUICK_XOR_HASH_BYTES * 8 * _QUICK_XOR_SHIFT
-_TOKEN_CACHE_FILE_NAME = "nvdaClipboard.oneDriveTokenCache.dat"
-_ITEM_FILE_RE = re.compile(
-	rf"^{re.escape(ITEM_FILE_PREFIX)}[0-9a-f]{{64}}{re.escape(ITEM_FILE_SUFFIX)}$",
-)
 
-# Translators: Error shown when bundled Microsoft sign-in support cannot load.
-_ERROR_AUTH_UNAVAILABLE = _("Microsoft sign-in support is unavailable")
-# Translators: Error shown when a downloaded OneDrive manifest or item file is too large.
-_ERROR_FILE_TOO_LARGE = _("A OneDrive synchronization file exceeds the supported size")
-# Translators: Error shown when OneDrive returns malformed app-folder file-list data.
-_ERROR_INVALID_FILE_LIST = _("OneDrive returned an invalid file list")
-# Translators: Error used when another device changes the OneDrive manifest during synchronization.
-_ERROR_MANIFEST_CHANGED = _("The OneDrive synchronization data changed on another device")
-# Translators: Error shown when Microsoft sign-in can no longer authorize OneDrive.
-_ERROR_SIGN_IN_EXPIRED = _("Sign in expired")
 # Translators: Generic error shown when Microsoft sign-in fails.
 _ERROR_SIGN_IN_FAILED = _("Sign in failed")
 # Translators: Error shown when OneDrive synchronization is requested without signing in.
@@ -127,18 +105,6 @@ _CompletionCallback = Callable[[bool, str], None]
 _DeviceCodeCallback = Callable[[str, str], None]
 
 
-class _ManifestConflictError(OneDriveError):
-	"""Report that another client changed the OneDrive manifest."""
-
-
-class _AuthenticationUnavailableError(OneDriveError):
-	"""Report that bundled Microsoft authentication support cannot load."""
-
-
-class _OperationCancelledError(OneDriveError):
-	"""Report an expected user cancellation without logging it as a failure."""
-
-
 @dataclass(frozen=True, slots=True)
 class OneDriveSyncState:
 	"""Describe the current OneDrive state for user interfaces."""
@@ -149,34 +115,6 @@ class OneDriveSyncState:
 	isSigningOut: bool
 	accountName: str
 	statusMessage: str
-
-
-@dataclass(frozen=True, slots=True)
-class _AccountToken:
-	"""Pair an access token with its MSAL account metadata."""
-
-	accessToken: str
-	accountId: str
-	accountName: str
-	account: Mapping[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class _RemoteManifest:
-	"""Pair a decoded cloud snapshot with the current file ETag."""
-
-	snapshot: OneDriveSyncSnapshot
-	etag: str | None
-	isMissing: bool
-
-
-@dataclass(frozen=True, slots=True)
-class _RemoteItemFile:
-	"""Describe one content-addressed file listed in the OneDrive app folder."""
-
-	size: int | None
-	sha1Hash: str | None
-	quickXorHash: bytes | None = None
 
 
 class _ItemStage:
@@ -223,692 +161,6 @@ class _SyncResult:
 	manifestEtag: str | None
 
 
-class _DATA_BLOB(ctypes.Structure):
-	"""Describe a byte buffer passed to the Windows data protection API."""
-
-	_fields_ = [
-		("cbData", wintypes.DWORD),
-		("pbData", ctypes.POINTER(ctypes.c_ubyte)),
-	]
-
-
-_crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-_crypt32.CryptProtectData.argtypes = (
-	ctypes.POINTER(_DATA_BLOB),
-	wintypes.LPCWSTR,
-	ctypes.POINTER(_DATA_BLOB),
-	ctypes.c_void_p,
-	ctypes.c_void_p,
-	wintypes.DWORD,
-	ctypes.POINTER(_DATA_BLOB),
-)
-_crypt32.CryptProtectData.restype = wintypes.BOOL
-_crypt32.CryptUnprotectData.argtypes = (
-	ctypes.POINTER(_DATA_BLOB),
-	ctypes.POINTER(wintypes.LPWSTR),
-	ctypes.POINTER(_DATA_BLOB),
-	ctypes.c_void_p,
-	ctypes.c_void_p,
-	wintypes.DWORD,
-	ctypes.POINTER(_DATA_BLOB),
-)
-_crypt32.CryptUnprotectData.restype = wintypes.BOOL
-_kernel32.LocalFree.argtypes = (ctypes.c_void_p,)
-_kernel32.LocalFree.restype = ctypes.c_void_p
-_CRYPTPROTECT_UI_FORBIDDEN = 0x1
-_TOKEN_CACHE_ENTROPY = b"nvdaClipboard.oneDriveTokenCache.v1"
-
-
-def _dataBlob(data: bytes) -> tuple[_DATA_BLOB, ctypes.Array[ctypes.c_ubyte]]:
-	"""Return a DATA_BLOB and the buffer that keeps its memory alive."""
-	buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
-	return _DATA_BLOB(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte))), buffer
-
-
-def _protectData(data: bytes) -> bytes:
-	"""Encrypt bytes for the current Windows user with DPAPI."""
-	inputBlob, inputBuffer = _dataBlob(data)
-	entropyBlob, entropyBuffer = _dataBlob(_TOKEN_CACHE_ENTROPY)
-	outputBlob = _DATA_BLOB()
-	if not _crypt32.CryptProtectData(
-		ctypes.byref(inputBlob),
-		"NVDA Clipboard OneDrive token cache",
-		ctypes.byref(entropyBlob),
-		None,
-		None,
-		_CRYPTPROTECT_UI_FORBIDDEN,
-		ctypes.byref(outputBlob),
-	):
-		raise ctypes.WinError(ctypes.get_last_error())
-	try:
-		return ctypes.string_at(outputBlob.pbData, outputBlob.cbData)
-	finally:
-		_kernel32.LocalFree(outputBlob.pbData)
-		del inputBuffer, entropyBuffer
-
-
-def _unprotectData(data: bytes) -> bytes:
-	"""Decrypt bytes protected for the current Windows user with DPAPI."""
-	inputBlob, inputBuffer = _dataBlob(data)
-	entropyBlob, entropyBuffer = _dataBlob(_TOKEN_CACHE_ENTROPY)
-	outputBlob = _DATA_BLOB()
-	if not _crypt32.CryptUnprotectData(
-		ctypes.byref(inputBlob),
-		None,
-		ctypes.byref(entropyBlob),
-		None,
-		None,
-		_CRYPTPROTECT_UI_FORBIDDEN,
-		ctypes.byref(outputBlob),
-	):
-		raise ctypes.WinError(ctypes.get_last_error())
-	try:
-		return ctypes.string_at(outputBlob.pbData, outputBlob.cbData)
-	finally:
-		_kernel32.LocalFree(outputBlob.pbData)
-		del inputBuffer, entropyBuffer
-
-
-class _AuthManager:
-	"""Acquire Microsoft tokens and persist the MSAL cache with DPAPI."""
-
-	def __init__(self, cachePath: Path) -> None:
-		"""Create an MSAL client backed by the encrypted token cache."""
-		try:
-			from ._vendor import msal
-			from ._vendor.msal.oauth2cli import AuthCodeReceiver
-		except Exception as error:
-			raise _AuthenticationUnavailableError(_ERROR_AUTH_UNAVAILABLE) from error
-		self.cachePath = cachePath
-		self._msal = msal
-		self._authCodeReceiver = AuthCodeReceiver
-		self.cache = msal.SerializableTokenCache()
-		self._activeDeviceFlow: dict[str, Any] | None = None
-		self._deviceFlowCancelled = False
-		self._loadCache()
-		self.app = msal.PublicClientApplication(
-			client_id=CLIENT_ID,
-			authority=AUTHORITY,
-			token_cache=self.cache,
-			app_name="clipboard-enhancement",
-			timeout=_HTTP_TIMEOUT,
-		)
-
-	def _loadCache(self) -> None:
-		"""Load and decrypt a persisted token cache, discarding invalid data."""
-		if not self.cachePath.exists():
-			return
-		try:
-			serialized = _unprotectData(self.cachePath.read_bytes()).decode("utf-8")
-			self.cache.deserialize(serialized)
-		except (OSError, UnicodeError, json.JSONDecodeError) as error:
-			log.warning(f"Discarding an unreadable OneDrive token cache after {type(error).__name__}.")
-			if NVDAState.shouldWriteToDisk():
-				try:
-					self.cachePath.unlink(missing_ok=True)
-				except OSError:
-					log.debugWarning("Could not remove an unreadable OneDrive token cache.", exc_info=True)
-
-	def _saveCache(self) -> None:
-		"""Atomically encrypt and save changed MSAL cache data."""
-		if not self.cache.has_state_changed or not NVDAState.shouldWriteToDisk():
-			return
-		temporaryPath: Path | None = None
-		try:
-			self.cachePath.parent.mkdir(parents=True, exist_ok=True)
-			data = _protectData(self.cache.serialize().encode("utf-8"))
-			with fileUtils.FaultTolerantFile(str(self.cachePath)) as cacheFile:
-				temporaryPath = Path(cacheFile.name)
-				cacheFile.write(data)
-		except OSError as error:
-			self.cache.has_state_changed = True
-			if temporaryPath is not None:
-				try:
-					temporaryPath.unlink(missing_ok=True)
-				except OSError:
-					log.debugWarning("Could not remove a temporary OneDrive token cache.", exc_info=True)
-			raise OneDriveError(
-				# Translators: Error when Microsoft sign-in succeeded but its encrypted cache could not be saved.
-				_("Could not save Microsoft sign-in data"),
-			) from error
-
-	def _accountToken(self, result: Mapping[str, Any], account: Mapping[str, Any]) -> _AccountToken:
-		"""Build a stable account/token result from MSAL values."""
-		accessToken = result.get("access_token")
-		accountId = account.get("home_account_id")
-		if not isinstance(accessToken, str) or not accessToken or not isinstance(accountId, str):
-			raise OneDriveError(
-				# Translators: Error shown when Microsoft sign-in did not return a usable account.
-				_("Microsoft sign-in did not return a usable account"),
-			)
-		accountName = account.get("name") or account.get("username") or accountId
-		return _AccountToken(accessToken, accountId, str(accountName), account)
-
-	def _findResultAccount(self, result: Mapping[str, Any]) -> Mapping[str, Any]:
-		"""Find the cached account created or refreshed by a token result."""
-		claims = result.get("id_token_claims")
-		if isinstance(claims, Mapping):
-			objectId = claims.get("oid")
-			tenantId = claims.get("tid")
-			if isinstance(objectId, str) and isinstance(tenantId, str):
-				expectedAccountId = f"{objectId}.{tenantId}".casefold()
-				for account in self.app.get_accounts():
-					accountId = account.get("home_account_id")
-					if isinstance(accountId, str) and accountId.casefold() == expectedAccountId:
-						return cast(Mapping[str, Any], account)
-		username = claims.get("preferred_username") if isinstance(claims, Mapping) else None
-		accounts = (
-			self.app.get_accounts(username=username)
-			if isinstance(username, str) and username
-			else self.app.get_accounts()
-		)
-		if len(accounts) != 1:
-			raise OneDriveError(
-				# Translators: Error shown when Microsoft sign-in did not retain an account.
-				_("Microsoft sign-in did not retain the selected account"),
-			)
-		return cast(Mapping[str, Any], accounts[0])
-
-	def getCachedToken(
-		self,
-		accountId: str | None = None,
-		*,
-		forceRefresh: bool = False,
-	) -> _AccountToken | None:
-		"""Return a silent token for the requested or sole cached account."""
-		accounts = cast(list[Mapping[str, Any]], self.app.get_accounts())
-		if accountId is None:
-			if len(accounts) != 1:
-				return None
-		else:
-			accounts = [account for account in accounts if account.get("home_account_id") == accountId]
-		for account in accounts:
-			result = self.app.acquire_token_silent(
-				SCOPES,
-				account=account,
-				force_refresh=forceRefresh,
-			)
-			self._saveCache()
-			if isinstance(result, Mapping) and "access_token" in result:
-				return self._accountToken(result, account)
-		return None
-
-	def loginInteractive(self, parentWindowHandle: int | None) -> _AccountToken:
-		"""Open the system browser and complete Microsoft interactive sign-in."""
-		with self._authCodeReceiver(port=0) as receiver:
-			# NVDA's global socket timeout must not shorten MSAL's local callback wait to 10 seconds.
-			receiver._server.socket.settimeout(None)
-			try:
-				result = self.app.acquire_token_interactive(
-					SCOPES,
-					prompt="select_account",
-					timeout=300,
-					port=receiver.get_port(),
-					parent_window_handle=parentWindowHandle,
-					auth_code_receiver=receiver,
-				)
-			except self._msal.BrowserInteractionTimeoutError as error:
-				raise OneDriveError(
-					# Translators: Error when browser-based Microsoft sign-in is not completed in time.
-					_("Microsoft sign-in timed out before it was completed"),
-				) from error
-		self._saveCache()
-		if not isinstance(result, Mapping) or "access_token" not in result:
-			raise self._authError(result)
-		account = self._findResultAccount(result)
-		return self._accountToken(result, account)
-
-	def initiateDeviceFlow(self) -> tuple[dict[str, Any], str, str]:
-		"""Start device-code authentication and return its user instructions."""
-		flow = self.app.initiate_device_flow(scopes=SCOPES)
-		if not isinstance(flow, dict) or not isinstance(flow.get("user_code"), str):
-			raise self._authError(flow)
-		verificationUrl = flow.get("verification_uri") or flow.get("verification_url")
-		if not isinstance(verificationUrl, str) or not verificationUrl:
-			raise OneDriveError(
-				# Translators: Error shown when Microsoft device-code sign-in cannot start.
-				_("Microsoft did not provide a device sign-in address"),
-			)
-		self._activeDeviceFlow = flow
-		self._deviceFlowCancelled = False
-		return flow, cast(str, flow["user_code"]), verificationUrl
-
-	def completeDeviceFlow(self, flow: dict[str, Any]) -> _AccountToken:
-		"""Wait for the user to complete a previously initiated device flow."""
-		cacheWasChanged = self.cache.has_state_changed
-		cacheState = self.cache.serialize()
-		self.cache.has_state_changed = cacheWasChanged
-		try:
-			result = self.app.acquire_token_by_device_flow(flow)
-		finally:
-			wasCancelled = self._deviceFlowCancelled
-			self._activeDeviceFlow = None
-			self._deviceFlowCancelled = False
-			if wasCancelled:
-				self.cache.deserialize(cacheState)
-				self.cache.has_state_changed = cacheWasChanged
-			self._saveCache()
-		if wasCancelled:
-			raise OneDriveError(
-				# Translators: Status after the user cancels Microsoft device-code sign-in.
-				_("Microsoft sign-in was canceled"),
-			)
-		if not isinstance(result, Mapping) or "access_token" not in result:
-			raise self._authError(result)
-		account = self._findResultAccount(result)
-		return self._accountToken(result, account)
-
-	def cancelDeviceFlow(self) -> None:
-		"""Cause the active device flow to return without waiting for expiry."""
-		self._deviceFlowCancelled = True
-		if self._activeDeviceFlow is not None:
-			self._activeDeviceFlow["expires_at"] = 0
-
-	def removeAccount(self, account: Mapping[str, Any]) -> None:
-		"""Remove one newly selected account from the token cache."""
-		self.app.remove_account(account)
-		self._saveCache()
-
-	def signOut(self) -> None:
-		"""Remove every cached Microsoft account and persistent token."""
-		for account in self.app.get_accounts():
-			self.app.remove_account(account)
-		if NVDAState.shouldWriteToDisk():
-			try:
-				self.cachePath.unlink(missing_ok=True)
-			except OSError as error:
-				raise OneDriveError(
-					# Translators: Error when locally saved Microsoft sign-in data cannot be removed.
-					_("Could not remove Microsoft sign-in data"),
-				) from error
-
-	def _authError(self, result: object) -> OneDriveError:
-		"""Convert an MSAL result to a localized message without token material."""
-		if isinstance(result, Mapping):
-			code = result.get("error")
-			description = result.get("error_description")
-			if code or description:
-				return OneDriveError(
-					# Translators: Microsoft authentication failure. {error} is a Microsoft description or code.
-					_("Sign in failed: {error}").format(error=description or code),
-				)
-		return OneDriveError(
-			# Translators: Generic Microsoft authentication failure.
-			_("Sign in failed"),
-		)
-
-
-class _GraphClient:
-	"""Perform bounded Microsoft Graph operations in the OneDrive app folder."""
-
-	_ROOT = "https://graph.microsoft.com/v1.0/me/drive/special/approot"
-
-	def __init__(self, accessToken: str, cancelEvent: Event, session: requests.Session) -> None:
-		"""Create a Graph client for one cancellable synchronization operation."""
-		self.accessToken = accessToken
-		self.cancelEvent = cancelEvent
-		self.session = session
-
-	def ensureAppFolder(self) -> None:
-		"""Ensure the app folder exists and is accessible."""
-		self._request("GET", self._ROOT, expected=(200,))
-
-	def getManifest(self) -> _RemoteManifest:
-		"""Download the versioned sync manifest or return an empty cloud state."""
-		etag = self._getEtag(MANIFEST_FILE_NAME)
-		if etag is None:
-			return _RemoteManifest(_emptySnapshot(), None, True)
-		response = self._request(
-			"GET",
-			self._contentUrl(MANIFEST_FILE_NAME),
-			expected=(200, 404),
-			stream=True,
-		)
-		if response.status_code == 404:
-			response.close()
-			raise _ManifestConflictError(
-				_ERROR_MANIFEST_CHANGED,
-				statusCode=412,
-			)
-		data = self._readBoundedResponse(response, MAX_MANIFEST_BYTES)
-		return _RemoteManifest(_decodeManifest(data), etag, False)
-
-	def isManifestUnchanged(self, etag: str) -> bool:
-		"""Return whether a conditional manifest metadata request reports no change."""
-		if not etag or "\r" in etag or "\n" in etag:
-			raise ValueError(etag)
-		response = self._request(
-			"GET",
-			f"{self._itemUrl(MANIFEST_FILE_NAME)}?$select=eTag",
-			expected=(200, 304, 404),
-			headers={"If-None-Match": etag},
-		)
-		try:
-			return response.status_code == 304
-		finally:
-			response.close()
-
-	def putManifest(self, data: bytes, remote: _RemoteManifest) -> str:
-		"""Conditionally replace or create the synchronization manifest."""
-		headers = {"Content-Type": "application/json; charset=utf-8"}
-		if remote.etag:
-			headers["If-Match"] = remote.etag
-		elif remote.isMissing:
-			headers["If-None-Match"] = "*"
-		else:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
-		try:
-			response = self._request(
-				"PUT",
-				self._contentUrl(MANIFEST_FILE_NAME),
-				expected=(200, 201),
-				headers=headers,
-				data=data,
-				stream=True,
-			)
-		except OneDriveError as error:
-			if error.statusCode == 412:
-				raise _ManifestConflictError(str(error), statusCode=412) from error
-			raise
-		try:
-			payload = json.loads(self._readBoundedResponse(response, MAX_MANIFEST_BYTES))
-		except (UnicodeDecodeError, json.JSONDecodeError) as error:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
-		etag = payload.get("eTag") if isinstance(payload, Mapping) else None
-		if not isinstance(etag, str) or not etag or "\r" in etag or "\n" in etag:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
-		return etag
-
-	def getItemData(self, payloadHash: bytes) -> bytes:
-		"""Download one bounded content-addressed clipboard item file."""
-		response = self._request(
-			"GET",
-			self._contentUrl(_itemFileName(payloadHash)),
-			expected=(200,),
-			stream=True,
-		)
-		return self._readBoundedResponse(response, MAX_ITEM_FILE_BYTES)
-
-	def putItemData(self, payloadHash: bytes, data: bytes) -> None:
-		"""Upload one immutable content-addressed clipboard item."""
-		self._request(
-			"PUT",
-			self._contentUrl(_itemFileName(payloadHash)),
-			expected=(200, 201),
-			headers={"Content-Type": "application/json; charset=utf-8"},
-			data=data,
-		)
-
-	def listItemFiles(
-		self,
-		relevantPayloads: set[bytes],
-	) -> tuple[dict[bytes, _RemoteItemFile], tuple[tuple[bytes, str], ...]]:
-		"""List relevant item metadata and a bounded batch of unreferenced files."""
-		url = f"{self._ROOT}/children?$select=name,size,file,eTag&$top=1000"
-		result: dict[bytes, _RemoteItemFile] = {}
-		orphans: list[tuple[bytes, str]] = []
-		seenUrls: set[str] = set()
-		while url:
-			if url in seenUrls:
-				raise OneDriveError(_ERROR_INVALID_FILE_LIST)
-			seenUrls.add(url)
-			response = self._request("GET", url, expected=(200,))
-			try:
-				payload = response.json()
-			except ValueError as error:
-				raise OneDriveError(_ERROR_INVALID_FILE_LIST) from error
-			finally:
-				response.close()
-			if not isinstance(payload, Mapping) or not isinstance(payload.get("value"), list):
-				raise OneDriveError(_ERROR_INVALID_FILE_LIST)
-			for child in payload["value"]:
-				name = child.get("name") if isinstance(child, Mapping) else None
-				if not isinstance(name, str) or not _ITEM_FILE_RE.fullmatch(name):
-					continue
-				payloadHash = bytes.fromhex(name[len(ITEM_FILE_PREFIX) : -len(ITEM_FILE_SUFFIX)])
-				fileValue = child.get("file")
-				if not isinstance(fileValue, Mapping):
-					continue
-				sizeValue = child.get("size")
-				size = sizeValue if isinstance(sizeValue, int) and not isinstance(sizeValue, bool) else None
-				hashes = fileValue.get("hashes")
-				sha1Value = hashes.get("sha1Hash") if isinstance(hashes, Mapping) else None
-				quickXorValue = hashes.get("quickXorHash") if isinstance(hashes, Mapping) else None
-				if sha1Value is not None and not (
-					isinstance(sha1Value, str) and re.fullmatch(r"[0-9A-Fa-f]{40}", sha1Value)
-				):
-					sha1Value = None
-				etagValue = child.get("eTag")
-				etag = (
-					etagValue
-					if isinstance(etagValue, str)
-					and etagValue
-					and "\r" not in etagValue
-					and "\n" not in etagValue
-					else None
-				)
-				itemFile = _RemoteItemFile(
-					size=size,
-					sha1Hash=sha1Value.lower() if isinstance(sha1Value, str) else None,
-					quickXorHash=_quickXorHashFromGraph(quickXorValue),
-				)
-				if payloadHash in relevantPayloads:
-					result[payloadHash] = itemFile
-				elif etag is not None and len(orphans) < _MAX_ORPHAN_DELETIONS_PER_SYNC:
-					orphans.append((payloadHash, etag))
-			nextUrl = payload.get("@odata.nextLink")
-			if nextUrl is None:
-				url = ""
-			elif isinstance(nextUrl, str) and nextUrl.startswith("https://graph.microsoft.com/v1.0/"):
-				url = nextUrl
-			else:
-				raise OneDriveError(_ERROR_INVALID_FILE_LIST)
-		return result, tuple(orphans)
-
-	def deleteItemData(self, payloadHash: bytes, etag: str) -> None:
-		"""Delete one still-unreferenced item without racing a concurrent reuse."""
-		try:
-			response = self._request(
-				"DELETE",
-				self._itemUrl(_itemFileName(payloadHash)),
-				expected=(204, 404),
-				headers={"If-Match": etag},
-			)
-		except OneDriveError as error:
-			if error.statusCode == 412:
-				return
-			raise
-		response.close()
-
-	def _getEtag(self, fileName: str) -> str | None:
-		"""Fetch an existing file's ETag, or return ``None`` when it is absent."""
-		response = self._request(
-			"GET",
-			f"{self._itemUrl(fileName)}?$select=eTag",
-			expected=(200, 404),
-		)
-		if response.status_code == 404:
-			response.close()
-			return None
-		try:
-			payload = response.json()
-		except ValueError as error:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
-		finally:
-			response.close()
-		etag = payload.get("eTag") if isinstance(payload, Mapping) else None
-		if not isinstance(etag, str) or not etag or "\r" in etag or "\n" in etag:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
-		return etag
-
-	def _contentUrl(self, fileName: str) -> str:
-		"""Return a Graph content URL for one app-folder file."""
-		return f"{self._ROOT}:/{quote(fileName)}:/content"
-
-	def _itemUrl(self, fileName: str) -> str:
-		"""Return a Graph item URL for one app-folder file."""
-		return f"{self._ROOT}:/{quote(fileName)}"
-
-	def _request(
-		self,
-		method: str,
-		url: str,
-		*,
-		expected: tuple[int, ...],
-		headers: Mapping[str, str] | None = None,
-		**kwargs: Any,
-	) -> requests.Response:
-		"""Send one authenticated Graph request with finite timeouts."""
-		requestHeaders = dict(headers or {})
-		requestHeaders["Authorization"] = f"Bearer {self.accessToken}"
-		requestHeaders.setdefault("Accept", "application/json")
-		retried = False
-		while True:
-			self._checkCancelled()
-			try:
-				response = self.session.request(
-					method,
-					url,
-					headers=requestHeaders,
-					timeout=_HTTP_TIMEOUT,
-					**kwargs,
-				)
-			except requests.RequestException as error:
-				raise OneDriveError(
-					# Translators: Error shown when OneDrive cannot be reached.
-					_("Could not connect to OneDrive"),
-				) from error
-			if self.cancelEvent.is_set():
-				response.close()
-				self._checkCancelled()
-			if response.status_code in expected:
-				return response
-			error = _graphError(response)
-			response.close()
-			if not retried and response.status_code in (429, 503) and error.retryAfter is not None:
-				retried = True
-				# ponytail: retry once with a bounded delay; add cancellable backoff if throttling is common.
-				if self.cancelEvent.wait(min(error.retryAfter, _MAX_RETRY_AFTER_SECONDS)):
-					self._checkCancelled()
-				continue
-			raise error
-
-	def _checkCancelled(self) -> None:
-		"""Abort a Graph operation after the user requests sign-out."""
-		if self.cancelEvent.is_set():
-			raise _OperationCancelledError("")
-
-	def _readBoundedResponse(self, response: requests.Response, limit: int) -> bytes:
-		"""Read a streamed response without accepting an oversized body."""
-		try:
-			contentLength = response.headers.get("Content-Length")
-			try:
-				contentLengthValue = (
-					int(contentLength) if contentLength and contentLength.isdecimal() else None
-				)
-			except ValueError:
-				contentLengthValue = None
-			if contentLengthValue is not None and contentLengthValue > limit:
-				raise OneDriveError(_ERROR_FILE_TOO_LARGE)
-			data = bytearray()
-			for chunk in response.iter_content(64 * 1024):
-				self._checkCancelled()
-				data.extend(chunk)
-				if len(data) > limit:
-					raise OneDriveError(_ERROR_FILE_TOO_LARGE)
-			return bytes(data)
-		except requests.RequestException as error:
-			raise OneDriveError(
-				# Translators: Error shown when OneDrive cannot be reached.
-				_("Could not connect to OneDrive"),
-			) from error
-		finally:
-			response.close()
-
-
-def _graphError(response: requests.Response) -> OneDriveError:
-	"""Convert a Graph response to a localized error without exposing content."""
-	errorCode = ""
-	try:
-		payload = response.json()
-		error = payload.get("error") if isinstance(payload, Mapping) else None
-		if isinstance(error, Mapping) and isinstance(error.get("code"), str):
-			errorCode = cast(str, error["code"])
-	except ValueError:
-		pass
-	retryAfterValue = response.headers.get("Retry-After")
-	try:
-		retryAfter = int(retryAfterValue) if retryAfterValue and retryAfterValue.isdecimal() else None
-	except ValueError:
-		retryAfter = None
-	if response.status_code == 401:
-		message = _ERROR_SIGN_IN_EXPIRED
-	elif response.status_code == 403:
-		# Translators: Error shown when the Microsoft account denies OneDrive app-folder access.
-		message = _("Microsoft denied access to the OneDrive application folder")
-	elif response.status_code == 404:
-		# Translators: Error shown when a file referenced by the OneDrive manifest is missing.
-		message = _("OneDrive synchronization data is incomplete")
-	elif response.status_code == 412:
-		message = _ERROR_MANIFEST_CHANGED
-	elif response.status_code == 429:
-		# Translators: Error shown when Microsoft asks the add-on to reduce request frequency.
-		message = _("OneDrive is temporarily limiting synchronization requests")
-	elif response.status_code in (507,):
-		# Translators: Error shown when the user's OneDrive has insufficient storage.
-		message = _("OneDrive does not have enough free storage")
-	else:
-		# Translators: Generic Microsoft Graph failure. {status} is an HTTP status and {code} a safe code.
-		message = _("OneDrive request failed ({status}{code})").format(
-			status=response.status_code,
-			code=f", {errorCode}" if errorCode else "",
-		)
-	return OneDriveError(message, statusCode=response.status_code, retryAfter=retryAfter)
-
-
-def _itemFileName(payloadHash: bytes) -> str:
-	"""Return the deterministic OneDrive filename for a payload hash."""
-	if len(payloadHash) != 32:
-		raise ValueError(payloadHash)
-	return f"{ITEM_FILE_PREFIX}{payloadHash.hex()}{ITEM_FILE_SUFFIX}"
-
-
-def _quickXorHash(data: bytes) -> bytes:
-	"""Return Microsoft OneDrive's 160-bit QuickXorHash for immutable file data."""
-	widthInBits = _QUICK_XOR_HASH_BYTES * 8
-	mask = (1 << widthInBits) - 1
-	foldedData = 0
-	for offset in range(0, len(data), _QUICK_XOR_BLOCK_BYTES):
-		foldedData ^= int.from_bytes(data[offset : offset + _QUICK_XOR_BLOCK_BYTES], "little")
-	result = 0
-	for index, value in enumerate(foldedData.to_bytes(_QUICK_XOR_BLOCK_BYTES, "little")):
-		shift = index * _QUICK_XOR_SHIFT % widthInBits
-		result ^= ((value << shift) | (value >> (widthInBits - shift))) & mask
-	result ^= len(data) << ((_QUICK_XOR_HASH_BYTES - 8) * 8)
-	return (result & mask).to_bytes(_QUICK_XOR_HASH_BYTES, "little")
-
-
-def _quickXorHashFromGraph(value: object) -> bytes | None:
-	"""Decode a strict Graph QuickXorHash, or return ``None`` when unavailable."""
-	if not isinstance(value, str):
-		return None
-	try:
-		decoded = b64decode(value, validate=True)
-	except (ValueError, binascii.Error):
-		return None
-	return decoded if len(decoded) == _QUICK_XOR_HASH_BYTES else None
-
-
-def _remoteItemMatches(itemFile: _RemoteItemFile, data: bytes) -> bool:
-	"""Return whether listed size and an available content hash verify canonical item data."""
-	if itemFile.size != len(data):
-		return False
-	if itemFile.sha1Hash is not None:
-		return itemFile.sha1Hash == sha1(data).hexdigest()
-	return itemFile.quickXorHash is not None and itemFile.quickXorHash == _quickXorHash(data)
-
-
 class OneDriveSyncManager:
 	"""Coordinate Microsoft sign-in and serialized background synchronization."""
 
@@ -921,12 +173,12 @@ class OneDriveSyncManager:
 	) -> None:
 		"""Create a manager around one clipboard database and Microsoft account."""
 		self._storage = storage
-		self._cachePath = storage.path.with_name(_TOKEN_CACHE_FILE_NAME)
+		self._cachePath = storage.path.with_name(TOKEN_CACHE_FILE_NAME)
 		self._onStateChanged = onStateChanged
 		self._onDataChanged = onDataChanged
 		self._lock = Lock()
-		self._auth: _AuthManager | None = None
-		self._accountToken: _AccountToken | None = None
+		self._auth: AuthManager | None = None
+		self._accountToken: AccountToken | None = None
 		self._debounceTimer: Timer | None = None
 		self._debounceGeneration = 0
 		self._pollTimer: Timer | None = None
@@ -1134,7 +386,7 @@ class OneDriveSyncManager:
 		self._requestSync(onDone=None, isAutomatic=True)
 		return _STATUS_SYNCHRONIZING, False
 
-	def _finishLogin(self, token: _AccountToken) -> tuple[str, bool]:
+	def _finishLogin(self, token: AccountToken) -> tuple[str, bool]:
 		"""Confirm any account switch, bind it locally, and synchronize."""
 		self._ensureActive()
 		currentAccountId = self._storage.getOneDriveSnapshot().accountId
@@ -1156,7 +408,7 @@ class OneDriveSyncManager:
 				except Exception:
 					log.debugWarning("Could not remove the unselected Microsoft account.", exc_info=True)
 				# Translators: Status after canceling a OneDrive account switch.
-				raise _OperationCancelledError(_("OneDrive account switch was canceled"))
+				raise OperationCancelledError(_("OneDrive account switch was canceled"))
 		self._ensureActive()
 		self._storage.bindOneDriveAccount(token.accountId, reset=isSwitch)
 		self._setAccountToken(token)
@@ -1225,12 +477,12 @@ class OneDriveSyncManager:
 		"""Synchronize with one normal and at most one forced silent token refresh."""
 		token = self._getAccountToken()
 		if token is None:
-			raise OneDriveError(_ERROR_SIGN_IN_EXPIRED, statusCode=401)
+			raise OneDriveError(ERROR_SIGN_IN_EXPIRED, statusCode=401)
 		auth = self._getAuth()
 		cachedToken = auth.getCachedToken(token.accountId)
 		if cachedToken is None:
 			self._setAccountToken(None)
-			raise OneDriveError(_ERROR_SIGN_IN_EXPIRED, statusCode=401)
+			raise OneDriveError(ERROR_SIGN_IN_EXPIRED, statusCode=401)
 		self._setAccountToken(cachedToken)
 		try:
 			return self._synchronize(cachedToken, isPoll=isPoll)
@@ -1240,7 +492,7 @@ class OneDriveSyncManager:
 		refreshedToken = auth.getCachedToken(cachedToken.accountId, forceRefresh=True)
 		if refreshedToken is None:
 			self._setAccountToken(None)
-			raise OneDriveError(_ERROR_SIGN_IN_EXPIRED, statusCode=401)
+			raise OneDriveError(ERROR_SIGN_IN_EXPIRED, statusCode=401)
 		self._setAccountToken(refreshedToken)
 		try:
 			return self._synchronize(refreshedToken, isPoll=isPoll)
@@ -1249,11 +501,11 @@ class OneDriveSyncManager:
 				self._setAccountToken(None)
 			raise
 
-	def _synchronize(self, token: _AccountToken, *, isPoll: bool = False) -> _SyncResult:
+	def _synchronize(self, token: AccountToken, *, isPoll: bool = False) -> _SyncResult:
 		"""Merge, transfer, commit, and apply one account's synchronized state."""
 		self._storage.excludeIneligibleOneDriveItems()
 		with requests.Session() as session:
-			graph = _GraphClient(token.accessToken, self._operationCancelEvent, session)
+			graph = GraphClient(token.accessToken, self._operationCancelEvent, session)
 			with self._lock:
 				manifestEtag = self._lastManifestEtag
 				lastFullSyncAt = self._lastFullSyncAt
@@ -1278,8 +530,8 @@ class OneDriveSyncManager:
 
 	def _synchronizeStaged(
 		self,
-		token: _AccountToken,
-		graph: _GraphClient,
+		token: AccountToken,
+		graph: GraphClient,
 		stage: _ItemStage,
 	) -> _SyncResult:
 		"""Synchronize while retaining downloaded payloads only on temporary storage."""
@@ -1325,7 +577,7 @@ class OneDriveSyncManager:
 				# while newer writers claim reused payloads by changing their file ETags.
 				if remote.isMissing or remote.snapshot != _cloudSnapshot(merged) or orphanFiles:
 					manifestEtag = graph.putManifest(manifestData, remote)
-			except _ManifestConflictError:
+			except ManifestConflictError:
 				continue
 			self._ensureActive()
 			# Translators: OneDrive synchronization phase while merged data is saved on this device.
@@ -1350,14 +602,14 @@ class OneDriveSyncManager:
 
 	def _readAndMergeSnapshots(
 		self,
-		token: _AccountToken,
-		graph: _GraphClient,
+		token: AccountToken,
+		graph: GraphClient,
 	) -> (
 		tuple[
 			OneDriveSyncSnapshot,
-			_RemoteManifest,
+			RemoteManifest,
 			OneDriveSyncSnapshot,
-			dict[bytes, _RemoteItemFile],
+			dict[bytes, RemoteItemFile],
 			tuple[tuple[bytes, str], ...],
 		]
 		| None
@@ -1368,7 +620,7 @@ class OneDriveSyncManager:
 			raise OneDriveAccountMismatchError(local.accountId, token.accountId)
 		try:
 			remote = graph.getManifest()
-		except _ManifestConflictError:
+		except ManifestConflictError:
 			return None
 		try:
 			self._storage.reserveOneDriveVersions(local, _maximumClock(remote.snapshot), 0)
@@ -1382,7 +634,7 @@ class OneDriveSyncManager:
 			rebaseCount = sum(len(states) for states in rebaseStates)
 			minimumClock = _maximumClock(remote.snapshot)
 			if minimumClock + rebaseCount >= _MAX_SYNC_CLOCK:
-				raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+				raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 			try:
 				versions = self._storage.reserveOneDriveVersions(local, minimumClock, rebaseCount)
 			except OneDriveLocalChangeError:
@@ -1402,7 +654,7 @@ class OneDriveSyncManager:
 
 	def _downloadMissingPayloads(
 		self,
-		graph: _GraphClient,
+		graph: GraphClient,
 		stage: _ItemStage,
 		remoteSnapshot: OneDriveSyncSnapshot,
 		merged: OneDriveSyncSnapshot,
@@ -1458,7 +710,7 @@ class OneDriveSyncManager:
 		tombstoneCount = len(historyKeys) + len(categoryItemKeys)
 		minimumClock = _maximumClock(merged)
 		if minimumClock + tombstoneCount >= _MAX_SYNC_CLOCK:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		try:
 			versions = self._storage.reserveOneDriveVersions(local, minimumClock, tombstoneCount)
 		except OneDriveLocalChangeError:
@@ -1488,7 +740,7 @@ class OneDriveSyncManager:
 	) -> OneDriveSyncSnapshot:
 		"""Compact a manifest after reserving one successor generation."""
 		if _maximumClock(merged) >= _MAX_SYNC_CLOCK:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		generation = self._storage.reserveOneDriveVersions(
 			local,
 			_maximumClock(merged),
@@ -1498,11 +750,11 @@ class OneDriveSyncManager:
 
 	def _uploadOrReusePayloads(
 		self,
-		graph: _GraphClient,
+		graph: GraphClient,
 		stage: _ItemStage,
 		remoteSnapshot: OneDriveSyncSnapshot,
 		merged: OneDriveSyncSnapshot,
-		itemFiles: dict[bytes, _RemoteItemFile],
+		itemFiles: dict[bytes, RemoteItemFile],
 	) -> tuple[set[bytes], tuple[bytes, ...], bool]:
 		"""Upload live payloads or reuse matching remote files for one attempt."""
 		uploadedHashes: set[bytes] = set()
@@ -1532,11 +784,11 @@ class OneDriveSyncManager:
 			if (
 				itemFile is None
 				or payloadHash not in remotePayloads
-				or not _remoteItemMatches(itemFile, itemData)
+				or not remoteItemMatches(itemFile, itemData)
 			):
 				graph.putItemData(payloadHash, itemData)
 				uploadedHashes.add(payloadHash)
-				itemFiles[payloadHash] = _RemoteItemFile(
+				itemFiles[payloadHash] = RemoteItemFile(
 					size=len(itemData),
 					sha1Hash=sha1(itemData).hexdigest(),
 				)
@@ -1550,7 +802,7 @@ class OneDriveSyncManager:
 
 	def _cleanupOrphanFiles(
 		self,
-		graph: _GraphClient,
+		graph: GraphClient,
 		orphanFiles: tuple[tuple[bytes, str], ...],
 	) -> None:
 		"""Best-effort delete unreferenced OneDrive payload files."""
@@ -1567,7 +819,7 @@ class OneDriveSyncManager:
 					cleanupMessage.format(current=current, total=cleanupTotal),
 					force=current == cleanupTotal,
 				)
-		except _OperationCancelledError:
+		except OperationCancelledError:
 			pass
 		except OneDriveError as error:
 			log.debugWarning(
@@ -1636,12 +888,12 @@ class OneDriveSyncManager:
 		"""Run one operation and translate all failures before returning to wx."""
 		try:
 			message, dataChanged = work()
-		except _OperationCancelledError as error:
+		except OperationCancelledError as error:
 			self._finishOperation(False, str(error), False, onDone)
 			return
 		except Exception as error:
 			message = self._formatFailure(error, failureMessage)
-			if isinstance(error, _AuthenticationUnavailableError):
+			if isinstance(error, AuthenticationUnavailableError):
 				log.exception("Bundled Microsoft authentication support could not be loaded.", exc_info=error)
 			elif isinstance(error, OneDriveError):
 				log.debugWarning(
@@ -1708,41 +960,41 @@ class OneDriveSyncManager:
 			# Translators: Error when downloaded OneDrive images cannot fit in local storage.
 			return _("OneDrive image data cannot fit in the 256 MB local storage limit")
 		if isinstance(error, StorageFormatError):
-			return _INVALID_SYNC_DATA_MESSAGE
+			return INVALID_SYNC_DATA_MESSAGE
 		if isinstance(error, StorageError):
 			# Translators: Error when synchronized data cannot be saved locally.
 			return _("Could not update local clipboard storage")
 		return fallback
 
-	def _getAuth(self) -> _AuthManager:
+	def _getAuth(self) -> AuthManager:
 		"""Create the single MSAL manager lazily on a worker thread."""
 		with self._lock:
 			auth = self._auth
 		if auth is not None:
 			return auth
 		try:
-			newAuth = _AuthManager(self._cachePath)
-		except _AuthenticationUnavailableError:
+			newAuth = AuthManager(self._cachePath)
+		except AuthenticationUnavailableError:
 			with self._lock:
 				self._state = replace(
 					self._state,
 					isAvailable=False,
-					statusMessage=_ERROR_AUTH_UNAVAILABLE,
+					statusMessage=ERROR_AUTH_UNAVAILABLE,
 				)
 			raise
 		with self._lock:
 			if self._isTerminated:
-				raise _OperationCancelledError("")
+				raise OperationCancelledError("")
 			if self._auth is None:
 				self._auth = newAuth
 			return self._auth
 
-	def _getAccountToken(self) -> _AccountToken | None:
+	def _getAccountToken(self) -> AccountToken | None:
 		"""Return the current runtime account token under the state lock."""
 		with self._lock:
 			return self._accountToken
 
-	def _setAccountToken(self, token: _AccountToken | None) -> None:
+	def _setAccountToken(self, token: AccountToken | None) -> None:
 		"""Atomically update runtime account identity and public login state."""
 		with self._lock:
 			if token is None or self._accountToken is None or self._accountToken.accountId != token.accountId:
@@ -1759,7 +1011,7 @@ class OneDriveSyncManager:
 		"""Abort work before it touches local state after manager termination."""
 		with self._lock:
 			if self._isTerminated or self._operationCancelEvent.is_set():
-				raise _OperationCancelledError("")
+				raise OperationCancelledError("")
 
 	def _updateProgress(self, message: str, *, force: bool = False) -> None:
 		"""Publish one throttled synchronization phase or item count."""
