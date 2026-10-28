@@ -7,50 +7,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from functools import partial
 from types import MethodType, SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from _manager_method_loader import loadManagerClassMethods
-
-
-def _loadFileGroupMethods() -> tuple[
-	Callable[..., tuple[int, ...]],
-	Callable[..., None],
-	Callable[..., None],
-	Callable[..., None],
-]:
-	"""Load file-group menu methods without importing manager GUI dependencies."""
-	namespace = loadManagerClassMethods(
-		{
-			"_getSelectedFileGroupKeys",
-			"_showItemContextMenu",
-			"_onRemoveMissingFiles",
-			"_finishRemoveMissingFiles",
-		},
-		{
-			"ClipboardItemType": SimpleNamespace(FILES="files"),
-			"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
-			"partial": partial,
-			"_": lambda message: message,
-		},
-	)
-	return (
-		namespace["_getSelectedFileGroupKeys"],
-		namespace["_showItemContextMenu"],
-		namespace["_onRemoveMissingFiles"],
-		namespace["_finishRemoveMissingFiles"],
-	)
+from tests._manager_loader import loadManagerModule
 
 
-(
-	_getSelectedFileGroupKeys,
-	_showItemContextMenu,
-	_onRemoveMissingFiles,
-	_finishRemoveMissingFiles,
-) = _loadFileGroupMethods()
+_MANAGER_MODULE = loadManagerModule("nvdaClipboardManagerFileGroupTests")
+ClipboardManagerFrame = _MANAGER_MODULE.ClipboardManagerFrame
+_getSelectedFileGroupKeys = ClipboardManagerFrame._getSelectedFileGroupKeys
+_showItemContextMenu = ClipboardManagerFrame._showItemContextMenu
+_onRemoveMissingFiles = ClipboardManagerFrame._onRemoveMissingFiles
+_finishRemoveMissingFiles = ClipboardManagerFrame._finishRemoveMissingFiles
 
 
 def _menuLabels(menu: Mock) -> list[str]:
@@ -76,7 +45,9 @@ class ManagerFileGroupTests(unittest.TestCase):
 			Menu=Mock(return_value=menu),
 			NOT_FOUND=-1,
 		)
-		_showItemContextMenu.__globals__["wx"] = fakeWx
+		wxPatcher = patch.object(_MANAGER_MODULE, "wx", fakeWx)
+		wxPatcher.start()
+		self.addCleanup(wxPatcher.stop)
 		itemList = Mock()
 		itemList.GetFirstSelected.return_value = 0
 		itemList.GetNextSelected.return_value = -1
@@ -110,7 +81,9 @@ class ManagerFileGroupTests(unittest.TestCase):
 			Menu=Mock(return_value=menu),
 			NOT_FOUND=-1,
 		)
-		_showItemContextMenu.__globals__["wx"] = fakeWx
+		wxPatcher = patch.object(_MANAGER_MODULE, "wx", fakeWx)
+		wxPatcher.start()
+		self.addCleanup(wxPatcher.stop)
 		itemList = Mock()
 		itemList.GetFirstSelected.return_value = 0
 		itemList.GetNextSelected.return_value = -1

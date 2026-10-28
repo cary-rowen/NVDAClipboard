@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from types import ModuleType
@@ -20,19 +19,15 @@ import unittest
 from unittest.mock import Mock, patch
 from uuid import UUID
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardStorageTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
 storageModule = loadAddonModule(
 	f"{_PACKAGE_NAME}.storage",
-	_MODULE_DIRECTORY / "storage.py",
 	injectedModules={"logHandler": _LOG_HANDLER},
 )
 for _name, _value in vars(storageModule).items():

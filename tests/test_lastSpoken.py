@@ -5,12 +5,15 @@
 
 """Tests for reading NVDA's last speech record."""
 
-from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
+
+
+_PACKAGE_NAME = "nvdaClipboardLastSpokenTests"
+createAddonPackage(_PACKAGE_NAME)
 
 
 class LastSpokenTests(unittest.TestCase):
@@ -18,8 +21,7 @@ class LastSpokenTests(unittest.TestCase):
 		speech = SimpleNamespace(_lastSpeech=None)
 		log = Mock()
 		lastSpoken = loadAddonModule(
-			"nvdaClipboardLastSpoken",
-			Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "lastSpoken.py",
+			f"{_PACKAGE_NAME}.lastSpoken",
 			injectedModules={
 				"speech": SimpleNamespace(CHUNK_SEPARATOR="  ", speech=speech),
 				"logHandler": SimpleNamespace(log=log),

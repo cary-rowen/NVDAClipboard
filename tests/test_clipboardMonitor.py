@@ -9,21 +9,17 @@ from __future__ import annotations
 
 import ast
 import ctypes
-from pathlib import Path
 import struct
 import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import addonSourcePath, createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardClipboardMonitorTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 _WX = SimpleNamespace()
 
 with (
@@ -41,7 +37,6 @@ with (
 ):
 	clipboardMonitor = loadAddonModule(
 		f"{_PACKAGE_NAME}.clipboardMonitor",
-		_MODULE_DIRECTORY / "clipboardMonitor.py",
 	)
 
 
@@ -785,7 +780,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 
 	def testControllerTranslatesOversizedTextAndResynchronizesMonitor(self) -> None:
 		"""Translate a rejected text write and resume clipboard monitoring."""
-		controllerPath = _MODULE_DIRECTORY / "controller.py"
+		controllerPath = addonSourcePath("controller")
 		tree = ast.parse(controllerPath.read_text(encoding="utf-8"))
 		controllerClass = next(
 			node

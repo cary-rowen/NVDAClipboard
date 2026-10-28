@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "clipboardViewer.py"
+_PACKAGE_NAME = "nvdaClipboardClipboardViewerTests"
+createAddonPackage(_PACKAGE_NAME)
 
 try:
 	import markdown  # noqa: F401
@@ -24,14 +24,13 @@ try:
 except ImportError:
 	clipboardViewer = None
 else:
-	clipboardMonitor = ModuleType("tests.clipboardMonitor")
+	clipboardMonitor = ModuleType(f"{_PACKAGE_NAME}.clipboardMonitor")
 	clipboardMonitor.ClipboardSnapshot = object
 	clipboardViewer = loadAddonModule(
-		"tests.clipboardViewer",
-		_MODULE_PATH,
+		f"{_PACKAGE_NAME}.clipboardViewer",
 		injectedModules={
 			"logHandler": SimpleNamespace(log=Mock()),
-			"tests.clipboardMonitor": clipboardMonitor,
+			f"{_PACKAGE_NAME}.clipboardMonitor": clipboardMonitor,
 		},
 	)
 

@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import struct
 import unittest
 import zlib
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "clipboardData.py"
-clipboardData = loadAddonModule("nvdaClipboardClipboardData", _MODULE_PATH)
+_PACKAGE_NAME = "nvdaClipboardClipboardDataTests"
+createAddonPackage(_PACKAGE_NAME)
+clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboardData")
 
 
 def _buildChunk(chunkType: bytes, payload: bytes) -> bytes:

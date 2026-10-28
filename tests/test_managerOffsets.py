@@ -7,21 +7,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from itertools import product
-from typing import cast
 import unittest
 
-from _manager_method_loader import loadManagerTopLevelFunctions
+from tests._manager_loader import loadManagerModule
 
 
-def _loadOffsetFunction() -> Callable[[str, int], int]:
-	"""Load the pure helper without importing manager GUI dependencies."""
-	namespace = loadManagerTopLevelFunctions({"_sourceToEditorOffset"})
-	return cast(Callable[[str, int], int], namespace["_sourceToEditorOffset"])
-
-
-_sourceToEditorOffset = _loadOffsetFunction()
+_sourceToEditorOffset = loadManagerModule("nvdaClipboardManagerOffsetTests")._sourceToEditorOffset
 
 
 class ManagerOffsetTests(unittest.TestCase):

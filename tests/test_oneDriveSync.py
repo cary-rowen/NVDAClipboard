@@ -20,15 +20,12 @@ from unittest.mock import call, MagicMock, Mock, patch
 from uuid import UUID
 import zlib
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardOneDriveSyncTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
-storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels", _MODULE_DIRECTORY / "storageModels.py")
+createAddonPackage(_PACKAGE_NAME)
+storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels")
 
 
 def _translate(message: str) -> str:
@@ -134,7 +131,6 @@ _STORAGE.isOneDriveSyncItem = _isOneDriveSyncItem
 with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True):
 	oneDriveSync = loadAddonModule(
 		f"{_PACKAGE_NAME}.oneDriveSync",
-		_MODULE_DIRECTORY / "oneDriveSync.py",
 		injectedModules={
 			"addonHandler": _ADDON_HANDLER,
 			"gui": _GUI,

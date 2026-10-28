@@ -7,15 +7,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "navigationUnits.py"
-navigationUnits = loadAddonModule("nvdaClipboardNavigationUnits", _MODULE_PATH)
+_PACKAGE_NAME = "nvdaClipboardNavigationUnitsTests"
+createAddonPackage(_PACKAGE_NAME)
+navigationUnits = loadAddonModule(f"{_PACKAGE_NAME}.navigationUnits")
 
 
 class NavigationUnitOffsetTests(unittest.TestCase):

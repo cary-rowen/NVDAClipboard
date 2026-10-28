@@ -7,23 +7,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from types import MethodType, SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from _manager_method_loader import loadManagerClassMethods
+from tests._manager_loader import loadManagerModule
 
 
-def _loadManagerMethods(
-	fakeWx: SimpleNamespace,
-) -> tuple[Callable[..., bool], Callable[..., None]]:
-	"""Load category methods without importing manager GUI dependencies."""
-	namespace = loadManagerClassMethods(
-		{"_selectCategory", "_onCategoryContextMenu"},
-		{"wx": fakeWx, "_": lambda message: message},
-	)
-	return namespace["_selectCategory"], namespace["_onCategoryContextMenu"]
+_MANAGER_MODULE = loadManagerModule("nvdaClipboardManagerCategoryTests")
+ClipboardManagerFrame = _MANAGER_MODULE.ClipboardManagerFrame
 
 
 class ManagerCategoryContextMenuTests(unittest.TestCase):
@@ -43,7 +35,6 @@ class ManagerCategoryContextMenuTests(unittest.TestCase):
 			Menu=Mock(return_value=menu),
 			NOT_FOUND=-1,
 		)
-		selectCategory, showContextMenu = _loadManagerMethods(fakeWx)
 		categoryList = Mock()
 		categoryList.HitTest.return_value = 1
 		controller = SimpleNamespace(isHistoryCategory=Mock(return_value=False))
@@ -63,11 +54,12 @@ class ManagerCategoryContextMenuTests(unittest.TestCase):
 			controller=controller,
 		)
 		manager._getSelectedCategory = lambda: manager._selectedCategory
-		manager._selectCategory = MethodType(selectCategory, manager)
+		manager._selectCategory = MethodType(ClipboardManagerFrame._selectCategory, manager)
 		event = Mock()
 		event.GetPosition.return_value = position
 
-		showContextMenu(manager, event)
+		with patch.object(_MANAGER_MODULE, "wx", fakeWx):
+			ClipboardManagerFrame._onCategoryContextMenu(manager, event)
 
 		categoryList.HitTest.assert_called_once_with(categoryList.ScreenToClient.return_value)
 		categoryList.SetSelection.assert_called_once_with(1)

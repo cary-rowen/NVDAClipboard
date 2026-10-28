@@ -9,17 +9,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call
 
-from _manager_method_loader import loadManagerClassMethods
+from tests._manager_loader import loadManagerModule
 
 
-_beginSearchSession = loadManagerClassMethods({"_beginSearchSession"})["_beginSearchSession"]
-_onSearchTextChanged = loadManagerClassMethods(
-	{"_onSearchTextChanged"},
-	{
-		"normalizeSearchText": lambda value: value,
-		"splitSearchKeywords": lambda value: (value,) if value else (),
-	},
-)["_onSearchTextChanged"]
+ClipboardManagerFrame = loadManagerModule("nvdaClipboardManagerSearchTests").ClipboardManagerFrame
+_beginSearchSession = ClipboardManagerFrame._beginSearchSession
+_exitSearch = ClipboardManagerFrame._exitSearch
+_onSearchTextChanged = ClipboardManagerFrame._onSearchTextChanged
 
 
 class ManagerSearchTests(unittest.TestCase):
@@ -52,7 +48,6 @@ class ManagerSearchTests(unittest.TestCase):
 
 	def testExitSearchRestoresEditorEditability(self) -> None:
 		"""Restore editing when the pre-search stored item becomes active again."""
-		exitSearch = loadManagerClassMethods({"_exitSearch"})["_exitSearch"]
 		editor = Mock()
 		manager = SimpleNamespace(
 			_isSearchSessionActive=True,
@@ -68,7 +63,7 @@ class ManagerSearchTests(unittest.TestCase):
 			itemList=Mock(),
 		)
 
-		self.assertTrue(exitSearch(manager))
+		self.assertTrue(_exitSearch(manager))
 		editor.SetEditable.assert_has_calls([call(False), call(True)])
 
 	def testSearchClearsQueryWhileContentIsNotReady(self) -> None:

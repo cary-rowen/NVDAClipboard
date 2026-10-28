@@ -7,53 +7,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from _manager_method_loader import loadManagerClassMethods, loadManagerTopLevelFunctions
+from tests._manager_loader import loadManagerModule
 
 
-def _loadDraftMethods() -> tuple[
-	Callable[..., None],
-	Callable[..., None],
-	Callable[..., None],
-	Callable[..., None],
-	Callable[..., None],
-]:
-	"""Load draft methods without importing manager GUI dependencies."""
-	helpers = loadManagerTopLevelFunctions({"_sourceToEditorOffset"})
-	namespace = loadManagerClassMethods(
-		{
-			"refreshFromController",
-			"_restoreEditorOffsetFromClipboardNavigation",
-			"_startPlainTextDraft",
-			"_markSystemClipboardTextSaved",
-			"_onNewEntry",
-		},
-		{
-			"_sourceToEditorOffset": helpers["_sourceToEditorOffset"],
-			"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="plainText"),
-			"wx": SimpleNamespace(CommandEvent=object),
-		},
-	)
-	return (
-		namespace["refreshFromController"],
-		namespace["_restoreEditorOffsetFromClipboardNavigation"],
-		namespace["_startPlainTextDraft"],
-		namespace["_markSystemClipboardTextSaved"],
-		namespace["_onNewEntry"],
-	)
-
-
-(
-	_refreshFromController,
-	_restoreEditorOffsetFromClipboardNavigation,
-	_startPlainTextDraft,
-	_markSystemClipboardTextSaved,
-	_onNewEntry,
-) = _loadDraftMethods()
+ClipboardManagerFrame = loadManagerModule("nvdaClipboardManagerDraftTests").ClipboardManagerFrame
+_refreshFromController = ClipboardManagerFrame.refreshFromController
+_restoreEditorOffsetFromClipboardNavigation = (
+	ClipboardManagerFrame._restoreEditorOffsetFromClipboardNavigation
+)
+_startPlainTextDraft = ClipboardManagerFrame._startPlainTextDraft
+_markSystemClipboardTextSaved = ClipboardManagerFrame._markSystemClipboardTextSaved
+_onNewEntry = ClipboardManagerFrame._onNewEntry
 
 
 class ManagerDraftTests(unittest.TestCase):

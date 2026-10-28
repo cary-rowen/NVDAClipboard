@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, replace
-from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
+from tests._module_loader import addonSourcePath
 from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
-_CONTROLLER_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
+_CONTROLLER_PATH = addonSourcePath("controller")
 
 
 def _loadTemporaryPasteHelpers() -> tuple[object, ...]:

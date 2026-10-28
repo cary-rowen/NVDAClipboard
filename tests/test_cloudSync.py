@@ -7,21 +7,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 from threading import Lock
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardCloudSyncTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 
 
 def _translate(message: str) -> str:
@@ -47,7 +43,6 @@ _WX = ModuleType("wx")
 _WX.CallAfter = Mock()
 cloudSync = loadAddonModule(
 	f"{_PACKAGE_NAME}.cloudSync",
-	_MODULE_DIRECTORY / "cloudSync.py",
 	injectedModules={
 		"addonHandler": _ADDON_HANDLER,
 		"config": _CONFIG,

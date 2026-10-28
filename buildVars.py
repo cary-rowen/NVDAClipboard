@@ -6,6 +6,8 @@
 # Build customizations
 # Change this file instead of sconstruct or manifest files, whenever possible.
 
+from pathlib import Path
+
 from site_scons.site_tools.NVDATool.typings import (
 	AddonInfo,
 	BrailleTables,
@@ -64,6 +66,22 @@ Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."
 	addon_licenseURL="https://www.gnu.org/licenses/gpl-2.0.html",
 )
 
+
+def _pluginPythonSources() -> list[str]:
+	"""Return every global plugin Python file, including sub-packages, except the vendored tree.
+
+	SCons globs here are matched one pattern at a time and cannot exclude paths,
+	so the recursive list is computed explicitly. Paths are relative to this file.
+	"""
+	root = Path(__file__).resolve().parent
+	pluginDir = root / "addon" / "globalPlugins" / "nvdaClipboard"
+	return sorted(
+		path.relative_to(root).as_posix()
+		for path in pluginDir.rglob("*.py")
+		if not {"_vendor", "__pycache__"} & set(path.relative_to(pluginDir).parts)
+	)
+
+
 # Define the python files that are the sources of your add-on.
 # You can either list every file (using ""/") as a path separator,
 # or use glob expressions.
@@ -74,7 +92,7 @@ Optional Tiantan Clipboard synchronization uploads only permitted Unicode text."
 # https://scons.org/doc/production/HTML/scons-user/apd.html
 pythonSources: list[str] = [
 	"addon/installTasks.py",
-	"addon/globalPlugins/nvdaClipboard/*.py",
+	*_pluginPythonSources(),
 ]
 
 # Vendored runtime dependencies are packaged as source but do not contain add-on translations.

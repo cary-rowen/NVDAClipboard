@@ -6,17 +6,17 @@
 """Tests for shared clipboard append behavior without loading NVDA."""
 
 import ast
-from pathlib import Path
 from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from tests._module_loader import addonSourcePath
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
 class AppendTextTests(unittest.TestCase):
 	def testBothCommandsAppendTextOrReplaceNonText(self) -> None:
-		path = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
+		path = addonSourcePath("controller")
 		tree = ast.parse(path.read_text(encoding="utf-8"))
 		controllerClass = next(
 			node

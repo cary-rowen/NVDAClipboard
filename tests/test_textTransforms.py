@@ -8,20 +8,16 @@
 from __future__ import annotations
 
 import ctypes
-from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "textTransforms.py"
 _PACKAGE_NAME = "nvdaClipboardTextTransformsTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_PATH.parent)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 
 
 class _IdentityOffsetConverter:
@@ -97,7 +93,6 @@ def _makeTextUtilsPackage() -> dict[str, ModuleType]:
 
 textTransforms = loadAddonModule(
 	f"{_PACKAGE_NAME}.textTransforms",
-	_MODULE_PATH,
 	injectedModules={
 		"textUtils": SimpleNamespace(WideStringOffsetConverter=_IdentityOffsetConverter),
 		"winUser": ModuleType("winUser"),
