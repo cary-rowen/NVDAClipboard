@@ -56,7 +56,7 @@ from .clipboard.imageCodec import (
 	pngToPackedDib,
 )
 from .summary.fileSize import FileSizeCalculation
-from .tiantan.sync import CloudClipboardWriteError, CloudSyncManager, getTiantanSupportState
+from .tiantan.sync import TiantanSyncManager, TiantanWriteError, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
 from .oneDrive.sync import OneDriveSyncManager
 from .textSearch import matchesSearchKeywords, normalizeSearchText
@@ -83,7 +83,7 @@ from .storage.models import ClipboardItem, ClipboardItemContent, ClipboardItemSu
 from .summary.textStats import TextStatistics, TextStatisticsCalculation
 
 if TYPE_CHECKING:
-	from .tiantan.dialog import CloudClipboardDialog
+	from .tiantan.dialog import TiantanDialog
 	from .manager.window import ClipboardManagerFrame
 	from .oneDrive.dialog import OneDriveSyncDialog
 
@@ -403,14 +403,14 @@ class ClipboardController:
 		self._tiantanUnavailableMessage = ""
 		try:
 			self.navigator = ClipboardNavigator()
-			self.cloudSync = None
+			self.tiantanSync = None
 			if tiantanEnabled:
 				tiantanSupportState = getTiantanSupportState()
 				self._tiantanUnavailableMessage = tiantanSupportState.statusMessage
 				if tiantanSupportState.sdk is not None:
-					self.cloudSync = CloudSyncManager(
+					self.tiantanSync = TiantanSyncManager(
 						tiantanSupportState.sdk,
-						onStateChanged=self._onCloudStateChanged,
+						onStateChanged=self._onTiantanStateChanged,
 					)
 			self.oneDriveSync = OneDriveSyncManager(
 				self.storage,
@@ -427,13 +427,13 @@ class ClipboardController:
 			oneDriveSync = getattr(self, "oneDriveSync", None)
 			if oneDriveSync is not None:
 				oneDriveSync.terminate()
-			cloudSync = getattr(self, "cloudSync", None)
-			if cloudSync is not None:
-				cloudSync.terminate()
+			tiantanSync = getattr(self, "tiantanSync", None)
+			if tiantanSync is not None:
+				tiantanSync.terminate()
 			self.storage.close()
 			raise
 		self.manager: ClipboardManagerFrame | None = None
-		self.cloudDialog: CloudClipboardDialog | None = None
+		self.tiantanDialog: TiantanDialog | None = None
 		self.oneDriveDialog: OneDriveSyncDialog | None = None
 		self._contentType = ClipboardContentType.EMPTY
 		self._text = ""
@@ -451,7 +451,7 @@ class ClipboardController:
 		self._awaitingInitialSnapshot = False
 		self._lastAppliedSequenceNumber = 0
 		self._historySaveFailureReported = False
-		self._cloudFetchInProgress = False
+		self._tiantanFetchInProgress = False
 		self._temporaryPasteInProgress = False
 		self._shouldRestoreTemporaryPasteSelection = False
 		self._temporaryPasteState: _TemporaryPasteState | None = None
@@ -464,9 +464,9 @@ class ClipboardController:
 			return
 		self._isStarted = True
 		try:
-			cloudSync = self.cloudSync
-			if cloudSync is not None:
-				cloudSync.initialize()
+			tiantanSync = self.tiantanSync
+			if tiantanSync is not None:
+				tiantanSync.initialize()
 			self.oneDriveSync.initialize()
 			self._awaitingInitialSnapshot = True
 			self.monitor.start()
@@ -485,7 +485,7 @@ class ClipboardController:
 		self._pendingWrites.clear()
 		self._cancelPendingPngClipboardWrite()
 		self._cancelPendingTemporaryPngPaste()
-		self._cloudFetchInProgress = False
+		self._tiantanFetchInProgress = False
 		self._temporaryPasteInProgress = False
 		self._temporaryPasteState = None
 		self._pendingSummaryReport = None
@@ -496,12 +496,12 @@ class ClipboardController:
 			self.monitor.stop()
 		except Exception:
 			log.debugWarning("Failed to stop clipboard monitoring.", exc_info=True)
-		cloudSync = self.cloudSync
-		if cloudSync is not None:
-			cloudSync.terminate()
-		if self.cloudDialog is not None:
-			self.cloudDialog.Destroy()
-			self.cloudDialog = None
+		tiantanSync = self.tiantanSync
+		if tiantanSync is not None:
+			tiantanSync.terminate()
+		if self.tiantanDialog is not None:
+			self.tiantanDialog.Destroy()
+			self.tiantanDialog = None
 		oneDriveDialog = self.oneDriveDialog
 		self.oneDriveDialog = None
 		if oneDriveDialog is not None:
@@ -528,7 +528,7 @@ class ClipboardController:
 
 	def _showSingletonDialog(
 		self,
-		attributeName: Literal["cloudDialog", "oneDriveDialog"],
+		attributeName: Literal["tiantanDialog", "oneDriveDialog"],
 		parent: wx.Window | None,
 		createDialog: Callable[[wx.Window], wx.Dialog],
 	) -> None:
@@ -551,17 +551,17 @@ class ClipboardController:
 			dialog.Show()
 			dialog.Raise()
 
-	def showCloudDialog(self, parent: wx.Window | None = None) -> None:
+	def showTiantanDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the Tiantan Cloud Clipboard account dialog."""
-		cloudSync = self._getAvailableCloudSync()
-		if cloudSync is None:
+		tiantanSync = self._getAvailableTiantanSync()
+		if tiantanSync is None:
 			return
-		from .tiantan.dialog import CloudClipboardDialog
+		from .tiantan.dialog import TiantanDialog
 
 		self._showSingletonDialog(
-			"cloudDialog",
+			"tiantanDialog",
 			parent,
-			lambda dialogParent: CloudClipboardDialog(dialogParent, cloudSync, self._clearCloudDialog),
+			lambda dialogParent: TiantanDialog(dialogParent, tiantanSync, self._clearTiantanDialog),
 		)
 
 	def showOneDriveDialog(self, parent: wx.Window | None = None) -> None:
@@ -578,26 +578,26 @@ class ClipboardController:
 			),
 		)
 
-	def _getAvailableCloudSync(self) -> CloudSyncManager | None:
+	def _getAvailableTiantanSync(self) -> TiantanSyncManager | None:
 		"""Return the Tiantan Cloud Clipboard manager, or report why it is unavailable."""
-		cloudSync = self.cloudSync
-		if cloudSync is None:
+		tiantanSync = self.tiantanSync
+		if tiantanSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-		return cloudSync
+		return tiantanSync
 
-	def _getIdleCloudSync(self) -> CloudSyncManager | None:
+	def _getIdleTiantanSync(self) -> TiantanSyncManager | None:
 		"""Return the Tiantan Cloud Clipboard manager only when no receive is already running."""
-		cloudSync = self._getAvailableCloudSync()
-		if cloudSync is not None and self._cloudFetchInProgress:
+		tiantanSync = self._getAvailableTiantanSync()
+		if tiantanSync is not None and self._tiantanFetchInProgress:
 			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
 			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
 			return None
-		return cloudSync
+		return tiantanSync
 
-	def pasteCloudText(self, triggerKeyCodes: frozenset[int]) -> None:
+	def pasteTiantanText(self, triggerKeyCodes: frozenset[int]) -> None:
 		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
-		cloudSync = self._getIdleCloudSync()
-		if cloudSync is None:
+		tiantanSync = self._getIdleTiantanSync()
+		if tiantanSync is None:
 			return
 		focusObject = self._getFocusObject()
 		if focusObject is None:
@@ -606,19 +606,19 @@ class ClipboardController:
 				_("Keyboard focus could not be identified. Tiantan Cloud Clipboard paste was cancelled."),
 			)
 			return
-		self._cloudFetchInProgress = True
+		self._tiantanFetchInProgress = True
 
 		def writeFetchedText(text: str) -> None:
 			"""Write downloaded text only while keyboard focus remains unchanged."""
 			if not self._isSameFocus(focusObject):
 				# Translators: Cloud paste cancellation because focus changed while downloading.
-				raise CloudClipboardWriteError(
+				raise TiantanWriteError(
 					_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."),
 				)
 			sequenceNumber = self._writeClipboardText(text, _ClipboardChangeSource.CLOUD_FETCH)
 			callLater(
 				_PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
-				self._sendCloudPasteGesture,
+				self._sendTiantanPasteGesture,
 				focusObject,
 				sequenceNumber,
 				text,
@@ -626,34 +626,34 @@ class ClipboardController:
 				monotonic() + _PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
 			)
 
-		cloudSync.fetchToClipboard(
+		tiantanSync.fetchToClipboard(
 			writeFetchedText,
-			onDone=self._onCloudFetchDone,
-			onDispatchFailed=self._abandonCloudFetch,
+			onDone=self._onTiantanFetchDone,
+			onDispatchFailed=self._abandonTiantanFetch,
 		)
 
 	def sendToTiantan(self) -> None:
 		"""Send the current allowed clipboard text to Tiantan Cloud Clipboard."""
-		cloudSync = self._getAvailableCloudSync()
-		if cloudSync is None:
+		tiantanSync = self._getAvailableTiantanSync()
+		if tiantanSync is None:
 			return
-		cloudSync.uploadCurrentText(self._getCurrentCloudUploadText())
+		tiantanSync.uploadCurrentText(self._getCurrentTiantanUploadText())
 
 	def receiveFromTiantan(self) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard without pasting it."""
-		cloudSync = self._getIdleCloudSync()
-		if cloudSync is None:
+		tiantanSync = self._getIdleTiantanSync()
+		if tiantanSync is None:
 			return
-		self._cloudFetchInProgress = True
+		self._tiantanFetchInProgress = True
 
 		def writeFetchedText(text: str) -> None:
 			"""Write received Tiantan Cloud Clipboard text without recording or resending it."""
 			self._writeClipboardText(text, _ClipboardChangeSource.CLOUD_FETCH)
 
-		cloudSync.fetchToClipboard(
+		tiantanSync.fetchToClipboard(
 			writeFetchedText,
 			onDone=self._onTiantanReceiveDone,
-			onDispatchFailed=self._abandonCloudFetch,
+			onDispatchFailed=self._abandonTiantanFetch,
 		)
 
 	def syncOneDrive(self) -> None:
@@ -1533,9 +1533,9 @@ class ClipboardController:
 						else None,
 					)
 		if shouldRecord and snapshot.canUpload and snapshot.text:
-			cloudSync = self.cloudSync
-			if cloudSync is not None:
-				cloudSync.onClipboardTextChanged(snapshot.text)
+			tiantanSync = self.tiantanSync
+			if tiantanSync is not None:
+				tiantanSync.onClipboardTextChanged(snapshot.text)
 		if shouldRecord and snapshot.canIncludeInHistory and snapshot.richFormatsDropped and snapshot.text:
 			# Translators: Message shown when oversized rich formats are omitted from a history entry.
 			ui.message(_("Some text formatting was too large and was not saved in history"))
@@ -3019,15 +3019,15 @@ class ClipboardController:
 					expectedText=expectedText,
 				)
 
-	def _clearCloudDialog(self) -> None:
-		self.cloudDialog = None
+	def _clearTiantanDialog(self) -> None:
+		self.tiantanDialog = None
 
 	def _clearOneDriveDialog(self, dialog: OneDriveSyncDialog) -> None:
 		"""Clear the controller's OneDrive dialog reference after destruction."""
 		if self.oneDriveDialog is dialog:
 			self.oneDriveDialog = None
 
-	def _getCurrentCloudUploadText(self) -> str:
+	def _getCurrentTiantanUploadText(self) -> str:
 		"""Return current allowed clipboard text for an explicit cloud upload."""
 		text = self._text
 		canUpload = self._canUpload
@@ -3043,11 +3043,11 @@ class ClipboardController:
 			raise ValueError(_("The current clipboard content is protected from cloud upload"))
 		return text
 
-	def _onCloudStateChanged(self) -> None:
-		if self.cloudSync is None:
+	def _onTiantanStateChanged(self) -> None:
+		if self.tiantanSync is None:
 			return
-		if self.cloudDialog is not None:
-			self.cloudDialog.refreshFromManager()
+		if self.tiantanDialog is not None:
+			self.tiantanDialog.refreshFromManager()
 		if self.manager is not None:
 			self.manager.refreshCloudMenuState()
 
@@ -3089,24 +3089,24 @@ class ClipboardController:
 			log.debugWarning("Failed to compare keyboard focus.", exc_info=True)
 			return False
 
-	def _onCloudFetchDone(self, success: bool, message: str) -> None:
+	def _onTiantanFetchDone(self, success: bool, message: str) -> None:
 		if success:
 			return
-		self._cloudFetchInProgress = False
+		self._tiantanFetchInProgress = False
 		if message:
 			ui.message(message)
 
-	def _abandonCloudFetch(self) -> None:
+	def _abandonTiantanFetch(self) -> None:
 		"""Release the receive guard when wx rejects a worker completion."""
-		self._cloudFetchInProgress = False
+		self._tiantanFetchInProgress = False
 
 	def _onTiantanReceiveDone(self, success: bool, message: str) -> None:
 		"""Finish a menu-initiated Tiantan Cloud Clipboard receive and announce its result."""
-		self._cloudFetchInProgress = False
+		self._tiantanFetchInProgress = False
 		if message:
 			ui.message(message)
 
-	def _sendCloudPasteGesture(
+	def _sendTiantanPasteGesture(
 		self,
 		expectedFocus: object,
 		expectedSequenceNumber: int,
@@ -3130,7 +3130,7 @@ class ClipboardController:
 			keyReleaseState = _waitForTriggerKeysReleased(
 				triggerKeyCodes,
 				keyReleaseDeadline,
-				lambda: self._sendCloudPasteGesture(
+				lambda: self._sendTiantanPasteGesture(
 					expectedFocus,
 					expectedSequenceNumber,
 					expectedText,
@@ -3167,7 +3167,7 @@ class ClipboardController:
 			ui.message(_("Tiantan Cloud Clipboard paste failed"))
 		finally:
 			if not retryScheduled:
-				self._cloudFetchInProgress = False
+				self._tiantanFetchInProgress = False
 
 	def _getSelectionText(self) -> str | None:
 		"""Return selected text from the focused object or NVDA's review copy range."""

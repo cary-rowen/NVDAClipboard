@@ -13,7 +13,7 @@ from unittest.mock import patch
 from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_PACKAGE_NAME = "nvdaClipboardCloudClipboardTests"
+_PACKAGE_NAME = "nvdaClipboardTiantanSdkTests"
 createAddonPackage(_PACKAGE_NAME)
 
 
@@ -22,7 +22,7 @@ cloudClipboard = loadAddonModule(
 )
 
 
-class CloudClipboardTests(unittest.TestCase):
+class TiantanSdkTests(unittest.TestCase):
 	"""Verify the SDK loader picks the expected architecture-specific DLL."""
 
 	def testArm64SelectsArmSdkDll(self) -> None:

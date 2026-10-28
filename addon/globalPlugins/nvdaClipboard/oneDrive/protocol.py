@@ -49,7 +49,7 @@ MAX_ITEM_FILE_BYTES = 96 * 1024 * 1024
 _MAX_SYNC_CLOCK = (1 << 63) - 1
 
 # Translators: Error shown when OneDrive synchronization data fails validation.
-_INVALID_SYNC_DATA_MESSAGE = _("OneDrive synchronization data is invalid")
+INVALID_SYNC_DATA_MESSAGE = _("OneDrive synchronization data is invalid")
 
 
 class OneDriveError(RuntimeError):
@@ -94,7 +94,7 @@ def _versionToJson(version: SyncVersion) -> dict[str, object]:
 def _versionFromJson(value: object) -> SyncVersion:
 	"""Decode a synchronization version while retaining a local successor."""
 	if not isinstance(value, Mapping):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	clock = value.get("clock")
 	operationId = value.get("operationId")
 	if (
@@ -103,13 +103,13 @@ def _versionFromJson(value: object) -> SyncVersion:
 		or not 0 <= clock < _MAX_SYNC_CLOCK - 1
 		or not isinstance(operationId, str)
 	):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	try:
 		parsedOperationId = UUID(operationId)
 	except ValueError as error:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE) from error
 	if str(parsedOperationId) != operationId:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	return SyncVersion(clock=clock, operationId=operationId)
 
 
@@ -118,7 +118,7 @@ def _hashFromJson(value: object, *, optional: bool = False) -> bytes | None:
 	if value is None and optional:
 		return None
 	if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	return bytes.fromhex(value)
 
 
@@ -188,12 +188,12 @@ def _decodeManifest(data: bytes) -> OneDriveSyncSnapshot:
 	historyKeys: set[bytes] = set()
 	for value in historyValues:
 		if not isinstance(value, Mapping):
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		key = cast(bytes, _hashFromJson(value.get("key")))
 		deleted = value.get("deleted")
 		payloadHash = _hashFromJson(value.get("payload"), optional=True)
 		if not isinstance(deleted, bool) or deleted == (payloadHash is not None) or key in historyKeys:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		historyKeys.add(key)
 		history.append(
 			OneDriveHistoryState(
@@ -207,7 +207,7 @@ def _decodeManifest(data: bytes) -> OneDriveSyncSnapshot:
 	categoryKeys: set[str] = set()
 	for value in categoryValues:
 		if not isinstance(value, Mapping):
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		nameFolded = value.get("key")
 		name = value.get("name")
 		deleted = value.get("deleted")
@@ -220,12 +220,12 @@ def _decodeManifest(data: bytes) -> OneDriveSyncSnapshot:
 			or not isinstance(deleted, bool)
 			or nameFolded in categoryKeys
 		):
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		try:
 			nameFolded.encode("utf-8")
 			name.strip().encode("utf-8")
 		except UnicodeError as error:
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE) from error
 		categoryKeys.add(nameFolded)
 		categories.append(
 			OneDriveCategoryState(
@@ -240,7 +240,7 @@ def _decodeManifest(data: bytes) -> OneDriveSyncSnapshot:
 	categoryItemKeys: set[tuple[str, bytes]] = set()
 	for value in categoryItemValues:
 		if not isinstance(value, Mapping):
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		nameFolded = value.get("categoryKey")
 		payloadHash = cast(bytes, _hashFromJson(value.get("payload")))
 		deleted = value.get("deleted")
@@ -251,7 +251,7 @@ def _decodeManifest(data: bytes) -> OneDriveSyncSnapshot:
 			or not isinstance(deleted, bool)
 			or key in categoryItemKeys
 		):
-			raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+			raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 		categoryItemKeys.add(cast(tuple[str, bytes], key))
 		categoryItems.append(
 			OneDriveCategoryItemState(
@@ -274,7 +274,7 @@ def _manifestList(payload: Mapping[str, object], name: str) -> list[object]:
 	"""Return one required manifest array with a defensive record limit."""
 	value = payload.get(name)
 	if not isinstance(value, list) or len(value) > 100_000:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	return cast(list[object], value)
 
 
@@ -288,11 +288,11 @@ def _bytesFromJson(value: object) -> bytes | None:
 	if value is None:
 		return None
 	if not isinstance(value, str):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	try:
 		return b64decode(value, validate=True)
 	except ValueError as error:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE) from error
 
 
 def _encodeItem(item: ClipboardItem) -> bytes:
@@ -318,8 +318,12 @@ def _encodeItem(item: ClipboardItem) -> bytes:
 	return data
 
 
-def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
-	"""Decode one downloaded item and verify its content-addressed hash."""
+def _decodeItem(data: bytes, expectedHash: bytes, *, verifyImageDecodable: bool = True) -> ClipboardItem:
+	"""Decode one downloaded item and verify its content-addressed hash.
+
+	Pass ``verifyImageDecodable=False`` only when reloading bytes that already
+	passed a full decode in this operation; the hash and structure are still checked.
+	"""
 	try:
 		payload = json.loads(data.decode("utf-8"))
 	except (ValueError, UnicodeError, RecursionError) as error:
@@ -335,15 +339,15 @@ def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
 	try:
 		contentType = ClipboardItemType(payload.get("contentType"))
 	except (TypeError, ValueError) as error:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE) from error
 	text = payload.get("text")
 	if not isinstance(text, str):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	metadata = tuple(payload.get(name) for name in ("imageWidth", "imageHeight", "imageBitDepth"))
 	if any(
 		value is not None and (not isinstance(value, int) or isinstance(value, bool)) for value in metadata
 	):
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	item = ClipboardItem(
 		contentType=contentType,
 		text=text,
@@ -355,7 +359,7 @@ def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
 		imageBitDepth=cast(int | None, metadata[2]),
 		canUpload=True,
 	)
-	if _validateSyncItem(item) != expectedHash:
+	if _validateSyncItem(item, verifyImageDecodable=verifyImageDecodable) != expectedHash:
 		raise OneDriveError(
 			# Translators: Error shown when cloud item content does not match its manifest hash.
 			_("A OneDrive clipboard history item failed its integrity check"),
@@ -363,8 +367,12 @@ def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
 	return item
 
 
-def _validateSyncItem(item: ClipboardItem) -> bytes:
-	"""Validate one cloud item and return its payload hash."""
+def _validateSyncItem(item: ClipboardItem, *, verifyImageDecodable: bool = True) -> bytes:
+	"""Validate one cloud item and return its payload hash.
+
+	When ``verifyImageDecodable`` is false, image data is checked only through its
+	PNG header metadata and size limits, skipping the full pixel decode.
+	"""
 	try:
 		isSyncItem = isOneDriveSyncItem(item)
 		if not isSyncItem or item.files:
@@ -378,7 +386,7 @@ def _validateSyncItem(item: ClipboardItem) -> bytes:
 				info is None
 				or info != (item.imageWidth, item.imageHeight, item.imageBitDepth)
 				or not isImageSizeSafe(info[0], info[1], max(32, info[2]))
-				or not isPngImageDecodable(item.imageData, info)
+				or (verifyImageDecodable and not isPngImageDecodable(item.imageData, info))
 			):
 				raise OneDriveError(
 					# Translators: Error shown when a cloud image fails PNG validation.
@@ -387,7 +395,7 @@ def _validateSyncItem(item: ClipboardItem) -> bytes:
 		# The storage hash helper validates the fixed content-type field combinations.
 		return getItemPayloadHash(item)
 	except (StorageError, UnicodeError) as error:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE) from error
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE) from error
 
 
 def _cleanSnapshot(snapshot: OneDriveSyncSnapshot) -> OneDriveSyncSnapshot:
@@ -414,7 +422,7 @@ def _preferNewer(left: Any, right: Any) -> Any:
 	else:
 		isConsistent = replace(left, dirty=right.dirty) == right
 	if not isConsistent:
-		raise OneDriveError(_INVALID_SYNC_DATA_MESSAGE)
+		raise OneDriveError(INVALID_SYNC_DATA_MESSAGE)
 	return replace(left, dirty=False)
 
 

@@ -11,12 +11,14 @@ import ctypes
 from dataclasses import replace
 from hashlib import sha1, sha256
 from pathlib import Path
+import struct
 import sys
 from tempfile import TemporaryDirectory
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import call, MagicMock, Mock, patch
 from uuid import UUID
+import zlib
 
 from tests._module_loader import createAddonPackage, loadAddonModule
 
@@ -141,6 +143,30 @@ with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicM
 			f"{_PACKAGE_NAME}.storage.database": _STORAGE,
 		},
 	)
+oneDriveAuth = sys.modules[f"{_PACKAGE_NAME}.oneDrive.auth"]
+oneDriveGraph = sys.modules[f"{_PACKAGE_NAME}.oneDrive.graph"]
+oneDriveProtocol = sys.modules[f"{_PACKAGE_NAME}.oneDrive.protocol"]
+
+
+def _makeImageItem() -> storageModels.ClipboardItem:
+	"""Return one valid 1x1 PNG clipboard item for synchronization tests."""
+	png = bytearray(b"\x89PNG\r\n\x1a\n")
+	for chunkType, payload in (
+		(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)),
+		(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00")),
+		(b"IEND", b""),
+	):
+		png.extend(struct.pack(">I", len(payload)))
+		png.extend(chunkType)
+		png.extend(payload)
+		png.extend(struct.pack(">I", zlib.crc32(payload, zlib.crc32(chunkType)) & 0xFFFFFFFF))
+	return storageModels.ClipboardItem(
+		storageModels.ClipboardItemType.IMAGE,
+		imageData=bytes(png),
+		imageWidth=1,
+		imageHeight=1,
+		imageBitDepth=32,
+	)
 
 
 class _FakeStorage:
@@ -154,6 +180,7 @@ class _FakeStorage:
 		self.excludedPayloads: set[bytes] = set()
 		self.applyCalls = 0
 		self.failReservations = 0
+		self.missingPayloadApplies = 0
 		self.trace: list[str] | None = None
 		self._clock = 0
 		self._operationBase = operationBase
@@ -166,7 +193,12 @@ class _FakeStorage:
 
 	def addText(self, text: str) -> bytes:
 		"""Add one dirty local plain-text history item and return its payload hash."""
-		item = storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text)
+		return self.addItem(
+			storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text),
+		)
+
+	def addItem(self, item: storageModels.ClipboardItem) -> bytes:
+		"""Add one dirty local history item and return its payload hash."""
 		payloadHash = _getItemPayloadHash(item)
 		dedupKey = _getItemDedupKey(item)
 		state = storageModels.OneDriveHistoryState(
@@ -269,6 +301,10 @@ class _FakeStorage:
 	) -> bool:
 		"""Apply a committed snapshot and materialize downloaded payloads."""
 		self.applyCalls += 1
+		if self.missingPayloadApplies:
+			# Real storage raises this when a concurrent local deletion removed a reused payload row.
+			self.missingPayloadApplies -= 1
+			raise storageModels.ItemNotFoundError(b"payload")
 		if self.snapshot != expectedSnapshot:
 			raise oneDriveSync.OneDriveLocalChangeError
 		if self.trace is not None:
@@ -305,7 +341,7 @@ class _FakeGraph:
 
 	def __init__(self) -> None:
 		"""Create an empty fake OneDrive app folder."""
-		self.snapshot = oneDriveSync._emptySnapshot()
+		self.snapshot = oneDriveProtocol._emptySnapshot()
 		self.payloads: dict[bytes, bytes] = {}
 		self.etag: str | None = None
 		self.getManifestCalls = 0
@@ -317,20 +353,20 @@ class _FakeGraph:
 		self.cancelCleanup = False
 		self.events: list[str] = []
 
-	def getManifest(self) -> oneDriveSync._RemoteManifest:
+	def getManifest(self) -> oneDriveGraph.RemoteManifest:
 		"""Return current fake cloud metadata."""
 		self.getManifestCalls += 1
-		return oneDriveSync._RemoteManifest(self.snapshot, self.etag, self.etag is None)
+		return oneDriveGraph.RemoteManifest(self.snapshot, self.etag, self.etag is None)
 
 	def listItemFiles(
 		self,
 		relevantPayloads: set[bytes],
-	) -> tuple[dict[bytes, oneDriveSync._RemoteItemFile], tuple[tuple[bytes, str], ...]]:
+	) -> tuple[dict[bytes, oneDriveGraph.RemoteItemFile], tuple[tuple[bytes, str], ...]]:
 		"""Return relevant payload metadata and all fake orphan files."""
 		self.wasListed = True
 		self.events.append("list")
 		itemFiles = {
-			payloadHash: oneDriveSync._RemoteItemFile(
+			payloadHash: oneDriveGraph.RemoteItemFile(
 				size=len(data),
 				sha1Hash=sha1(data).hexdigest(),
 			)
@@ -354,16 +390,16 @@ class _FakeGraph:
 		self.events.append("putItem")
 		self.payloads[payloadHash] = data
 
-	def putManifest(self, data: bytes, _remote: oneDriveSync._RemoteManifest) -> str:
+	def putManifest(self, data: bytes, _remote: oneDriveGraph.RemoteManifest) -> str:
 		"""Conditionally commit fake cloud metadata."""
 		self.putManifestCalls += 1
 		self.events.append("putManifest")
 		if _remote.etag != self.etag or _remote.isMissing != (self.etag is None):
-			raise oneDriveSync._ManifestConflictError("stale manifest", statusCode=412)
+			raise oneDriveGraph.ManifestConflictError("stale manifest", statusCode=412)
 		if self.manifestConflicts:
 			self.manifestConflicts -= 1
-			raise oneDriveSync._ManifestConflictError("conflict", statusCode=412)
-		snapshot = oneDriveSync._decodeManifest(data)
+			raise oneDriveGraph.ManifestConflictError("conflict", statusCode=412)
+		snapshot = oneDriveProtocol._decodeManifest(data)
 		missingPayloads = oneDriveSync._livePayloadHashes(snapshot) - self.payloads.keys()
 		if missingPayloads:
 			raise AssertionError(missingPayloads)
@@ -375,7 +411,7 @@ class _FakeGraph:
 		"""Delete one fake orphan or inject cleanup cancellation."""
 		self.events.append("delete")
 		if self.cancelCleanup:
-			raise oneDriveSync._OperationCancelledError("cancelled")
+			raise oneDriveGraph.OperationCancelledError("cancelled")
 		self.payloads.pop(payloadHash, None)
 
 
@@ -403,7 +439,7 @@ class OneDriveSyncTests(unittest.TestCase):
 		"""Run one complete staged synchronization with a temporary payload stage."""
 		manager = manager or self._makeManager(storage)
 		storage.trace = graph.events
-		token = oneDriveSync._AccountToken("token", storage.accountId, "Account", {})
+		token = oneDriveAuth.AccountToken("token", storage.accountId, "Account", {})
 		with TemporaryDirectory() as temporaryDirectory:
 			return manager._synchronizeStaged(
 				token,
@@ -413,7 +449,7 @@ class OneDriveSyncTests(unittest.TestCase):
 
 	def testInterruptedResponseStreamClosesResponse(self) -> None:
 		"""Convert a mid-stream Graph disconnect and close its response."""
-		client = oneDriveSync._GraphClient("token", oneDriveSync.Event(), Mock())
+		client = oneDriveGraph.GraphClient("token", oneDriveSync.Event(), Mock())
 		response = Mock()
 		response.headers = {}
 
@@ -431,17 +467,17 @@ class OneDriveSyncTests(unittest.TestCase):
 	def testRemoteItemHashSelection(self) -> None:
 		"""Prefer SHA-1 while retaining QuickXorHash as a fallback."""
 		data = b"payload"
-		with patch.object(oneDriveSync, "_quickXorHash") as quickXorHash:
+		with patch.object(oneDriveGraph, "_quickXorHash") as quickXorHash:
 			self.assertTrue(
-				oneDriveSync._remoteItemMatches(
-					oneDriveSync._RemoteItemFile(len(data), sha1(data).hexdigest(), b"x" * 20),
+				oneDriveGraph.remoteItemMatches(
+					oneDriveGraph.RemoteItemFile(len(data), sha1(data).hexdigest(), b"x" * 20),
 					data,
 				),
 			)
 		quickXorHash.assert_not_called()
 		self.assertTrue(
-			oneDriveSync._remoteItemMatches(
-				oneDriveSync._RemoteItemFile(len(data), None, oneDriveSync._quickXorHash(data)),
+			oneDriveGraph.remoteItemMatches(
+				oneDriveGraph.RemoteItemFile(len(data), None, oneDriveGraph._quickXorHash(data)),
 				data,
 			),
 		)
@@ -449,13 +485,13 @@ class OneDriveSyncTests(unittest.TestCase):
 	def testHugeNumericResponseHeadersRemainBoundedAndClose(self) -> None:
 		"""Ignore unparseable numeric headers while enforcing bodies and closing responses."""
 		hugeNumber = "9" * 5000
-		client = oneDriveSync._GraphClient("token", oneDriveSync.Event(), Mock())
+		client = oneDriveGraph.GraphClient("token", oneDriveSync.Event(), Mock())
 		contentResponse = Mock()
 		contentResponse.headers = {"Content-Length": hugeNumber}
 		contentResponse.iter_content.return_value = (b"12345",)
 		with self.assertRaises(oneDriveSync.OneDriveError) as context:
 			client._readBoundedResponse(contentResponse, 4)
-		self.assertEqual(str(context.exception), oneDriveSync._ERROR_FILE_TOO_LARGE)
+		self.assertEqual(str(context.exception), oneDriveGraph._ERROR_FILE_TOO_LARGE)
 		contentResponse.iter_content.assert_called_once_with(64 * 1024)
 		contentResponse.close.assert_called_once_with()
 
@@ -465,7 +501,7 @@ class OneDriveSyncTests(unittest.TestCase):
 		retryResponse.json.return_value = {}
 		session = Mock()
 		session.request.return_value = retryResponse
-		client = oneDriveSync._GraphClient("token", oneDriveSync.Event(), session)
+		client = oneDriveGraph.GraphClient("token", oneDriveSync.Event(), session)
 		with self.assertRaises(oneDriveSync.OneDriveError) as context:
 			client._request("GET", "https://graph.microsoft.com/v1.0/test", expected=(200,))
 		self.assertIsNone(context.exception.retryAfter)
@@ -475,7 +511,7 @@ class OneDriveSyncTests(unittest.TestCase):
 	def testPeriodicPollSkipsThenForcesFullSynchronization(self) -> None:
 		"""Skip unchanged polls while retaining an hourly payload integrity pass."""
 		etag = '"manifest-1"'
-		token = oneDriveSync._AccountToken("token", "account", "Account", {})
+		token = oneDriveAuth.AccountToken("token", "account", "Account", {})
 		storage = Mock()
 		storage.hasPendingOneDriveChanges.return_value = False
 		manager = object.__new__(oneDriveSync.OneDriveSyncManager)
@@ -586,10 +622,10 @@ class OneDriveSyncTests(unittest.TestCase):
 		with TemporaryDirectory() as temporaryDirectory:
 			blockedParent = Path(temporaryDirectory) / "blocked"
 			blockedParent.write_bytes(b"")
-			auth = object.__new__(oneDriveSync._AuthManager)
+			auth = object.__new__(oneDriveAuth.AuthManager)
 			auth.cachePath = blockedParent / "cache.dat"
 			auth.cache = SimpleNamespace(has_state_changed=True)
-			with patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True):
+			with patch.object(oneDriveAuth.NVDAState, "shouldWriteToDisk", return_value=True):
 				with self.assertRaises(oneDriveSync.OneDriveError) as context:
 					auth._saveCache()
 			self.assertEqual(str(context.exception), "Could not save Microsoft sign-in data")
@@ -601,14 +637,14 @@ class OneDriveSyncTests(unittest.TestCase):
 			cacheFile = SimpleNamespace(name=str(cachePath.with_suffix(".tmp")), write=Mock())
 			faultTolerantFile = MagicMock()
 			faultTolerantFile.return_value.__enter__.return_value = cacheFile
-			auth = object.__new__(oneDriveSync._AuthManager)
+			auth = object.__new__(oneDriveAuth.AuthManager)
 			auth.cachePath = cachePath
 			auth.cache = SimpleNamespace(has_state_changed=True, serialize=Mock(return_value="cached"))
 
 			with (
-				patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True),
-				patch.object(oneDriveSync, "_protectData", return_value=b"encrypted"),
-				patch.object(oneDriveSync.fileUtils, "FaultTolerantFile", faultTolerantFile),
+				patch.object(oneDriveAuth.NVDAState, "shouldWriteToDisk", return_value=True),
+				patch.object(oneDriveAuth, "_protectData", return_value=b"encrypted"),
+				patch.object(oneDriveAuth.fileUtils, "FaultTolerantFile", faultTolerantFile),
 			):
 				auth._saveCache()
 
@@ -625,6 +661,9 @@ class OneDriveSyncTests(unittest.TestCase):
 		with patch.object(oneDriveSync, "_decodeItem", wraps=oneDriveSync._decodeItem) as decodeItem:
 			self.assertEqual(self._sync(second, graph).downloaded, 1)
 		self.assertEqual(decodeItem.call_count, 2)
+		# The download is fully validated once; reloading the staged copy skips the PNG decode.
+		self.assertEqual(decodeItem.call_args_list[0].kwargs, {})
+		self.assertEqual(decodeItem.call_args_list[1].kwargs, {"verifyImageDecodable": False})
 		self.assertEqual(second.liveTexts, {"first"})
 
 		first.addText("from first")
@@ -666,6 +705,17 @@ class OneDriveSyncTests(unittest.TestCase):
 		self.assertEqual(storage.applyCalls, 1)
 		self.assertEqual(storage.snapshot, replace(graph.snapshot, accountId=storage.accountId))
 
+	def testPayloadDeletedLocallyDuringSyncIsRetried(self) -> None:
+		"""Retry instead of failing when a local deletion removes a payload the merge reuses."""
+		graph = _FakeGraph()
+		storage = _FakeStorage(3)
+		storage.missingPayloadApplies = 1
+		storage.addText("deleted during sync")
+		result = self._sync(storage, graph)
+		self.assertEqual(storage.applyCalls, 2)
+		self.assertEqual(storage.snapshot, replace(graph.snapshot, accountId=storage.accountId))
+		self.assertEqual(result.manifestEtag, graph.etag)
+
 	def testCancellationBeforeCommitLeavesLocalStateUntouched(self) -> None:
 		"""Propagate cancellation after listing without committing or applying data."""
 		graph = _FakeGraph()
@@ -678,10 +728,10 @@ class OneDriveSyncTests(unittest.TestCase):
 		def ensureActive() -> None:
 			"""Raise after the fake Graph listing reaches the cancellation point."""
 			if graph.cancelAfterList and graph.wasListed:
-				raise oneDriveSync._OperationCancelledError("cancelled")
+				raise oneDriveGraph.OperationCancelledError("cancelled")
 
 		manager._ensureActive = ensureActive
-		with self.assertRaises(oneDriveSync._OperationCancelledError):
+		with self.assertRaises(oneDriveGraph.OperationCancelledError):
 			self._sync(storage, graph, manager)
 		self.assertEqual(graph.putManifestCalls, 0)
 		self.assertEqual(storage.applyCalls, 0)
@@ -722,3 +772,59 @@ class OneDriveSyncTests(unittest.TestCase):
 		self.assertIn(orphanHash, graph.payloads)
 		self.assertLess(graph.events.index("putManifest"), graph.events.index("apply"))
 		self.assertLess(graph.events.index("apply"), graph.events.index("delete"))
+
+	def testImagePayloadIsDecodedOncePerUploadAndDownload(self) -> None:
+		"""Fully decode local images before upload and each downloaded image exactly once."""
+		graph = _FakeGraph()
+		first = _FakeStorage(8)
+		payloadHash = first.addItem(_makeImageItem())
+		with patch.object(
+			oneDriveProtocol,
+			"isPngImageDecodable",
+			wraps=oneDriveProtocol.isPngImageDecodable,
+		) as pngCheck:
+			self.assertEqual(self._sync(first, graph).uploaded, 1)
+		pngCheck.assert_called_once()
+		self.assertIn(payloadHash, graph.payloads)
+
+		second = _FakeStorage(9)
+		with patch.object(
+			oneDriveProtocol,
+			"isPngImageDecodable",
+			wraps=oneDriveProtocol.isPngImageDecodable,
+		) as pngCheck:
+			self.assertEqual(self._sync(second, graph).downloaded, 1)
+		pngCheck.assert_called_once()
+		self.assertEqual(second.items[payloadHash], first.items[payloadHash])
+
+	def testUndecodableLocalImageIsNotUploaded(self) -> None:
+		"""Fail only the local synchronization when a stored image cannot be decoded."""
+		graph = _FakeGraph()
+		storage = _FakeStorage(12)
+		storage.addItem(_makeImageItem())
+		originalSnapshot = storage.snapshot
+		with patch.object(oneDriveProtocol, "isPngImageDecodable", return_value=False):
+			with self.assertRaises(oneDriveSync.OneDriveError) as context:
+				self._sync(storage, graph)
+		self.assertEqual(str(context.exception), "A OneDrive clipboard image is invalid")
+		self.assertEqual(graph.payloads, {})
+		self.assertEqual(graph.putManifestCalls, 0)
+		self.assertEqual(storage.applyCalls, 0)
+		self.assertEqual(storage.snapshot, originalSnapshot)
+
+	def testUndecodableRemoteImageIsRejected(self) -> None:
+		"""Reject a downloaded image whose PNG pixels cannot be decoded before applying anything."""
+		graph = _FakeGraph()
+		first = _FakeStorage(10)
+		first.addItem(_makeImageItem())
+		self._sync(first, graph)
+		second = _FakeStorage(11)
+		originalSnapshot = second.snapshot
+		with patch.object(oneDriveProtocol, "isPngImageDecodable", return_value=False) as pngCheck:
+			with self.assertRaises(oneDriveSync.OneDriveError) as context:
+				self._sync(second, graph)
+		pngCheck.assert_called_once()
+		self.assertEqual(str(context.exception), "A OneDrive clipboard image is invalid")
+		self.assertEqual(second.applyCalls, 0)
+		self.assertEqual(second.items, {})
+		self.assertEqual(second.snapshot, originalSnapshot)

@@ -3,7 +3,7 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Define immutable clipboard storage records without loading SQLite."""
+"""Define immutable clipboard storage records and errors without loading SQLite."""
 
 from __future__ import annotations
 
@@ -79,8 +79,8 @@ class SyncVersion:
 	operationId: str
 
 
-_ZERO_OPERATION_ID = "00000000-0000-0000-0000-000000000000"
-_ZERO_SYNC_VERSION = SyncVersion(0, _ZERO_OPERATION_ID)
+ZERO_OPERATION_ID = "00000000-0000-0000-0000-000000000000"
+_ZERO_SYNC_VERSION = SyncVersion(0, ZERO_OPERATION_ID)
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,3 +126,55 @@ class OneDriveSyncSnapshot:
 	categories: tuple[OneDriveCategoryState, ...]
 	categoryItems: tuple[OneDriveCategoryItemState, ...]
 	generation: SyncVersion = _ZERO_SYNC_VERSION
+
+
+class StorageError(Exception):
+	"""Base error for clipboard storage failures."""
+
+
+class StorageFormatError(StorageError):
+	"""Raised when persisted data does not have the expected structure."""
+
+
+class UnsupportedSchemaVersionError(StorageError):
+	"""Raised when a database uses an unsupported schema version."""
+
+
+class InvalidItemError(StorageError):
+	"""Raised when a clipboard entry has inconsistent fixed-format fields."""
+
+
+class ImageStorageLimitError(StorageError):
+	"""Raised when a category entry cannot fit within image storage limits."""
+
+
+class ItemNotFoundError(StorageError):
+	"""Raised when a stored clipboard entry no longer exists."""
+
+
+class CategoryNameError(StorageError):
+	"""Raised when a category name is empty after trimming whitespace."""
+
+
+class ReservedCategoryNameError(StorageError):
+	"""Raised when a category name is reserved for clipboard history."""
+
+
+class CategoryExistsError(StorageError):
+	"""Raised when a category name already exists case-insensitively."""
+
+
+class CategoryNotFoundError(StorageError):
+	"""Raised when a requested user category does not exist."""
+
+
+class CategoryNotEmptyError(StorageError):
+	"""Raised when deletion is requested for a non-empty category."""
+
+
+class OneDriveAccountMismatchError(StorageError):
+	"""Raised when synchronization targets a different bound account."""
+
+
+class OneDriveLocalChangeError(StorageError):
+	"""Raised when local synchronization state changed before version reservation."""

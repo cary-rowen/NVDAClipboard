@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from types import ModuleType
@@ -30,9 +31,11 @@ storageModule = loadAddonModule(
 	f"{_PACKAGE_NAME}.storage.database",
 	injectedModules={"logHandler": _LOG_HANDLER},
 )
-for _name, _value in vars(storageModule).items():
-	if not _name.startswith("__"):
-		globals()[_name] = _value
+syncStateModule = sys.modules[f"{_PACKAGE_NAME}.storage.syncState"]
+for _module in (syncStateModule, storageModule):
+	for _name, _value in vars(_module).items():
+		if not _name.startswith("__"):
+			globals()[_name] = _value
 
 
 def _expectRaises(
@@ -57,7 +60,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 	assert _mergeSynchronizedOrder(existingOrder, (4, 3, 1)) == (4, 3, 2, 1)
 	assert _mergeSynchronizedOrder(existingOrder, (3, 4, 1)) == (3, 2, 4, 1)
 	validationVersion = SyncVersion(1, "00000000-0000-0000-0000-000000000001")
-	_validateOneDriveSnapshot(
+	validateOneDriveSnapshot(
 		OneDriveSyncSnapshot(
 			accountId=None,
 			history=(),
@@ -214,8 +217,8 @@ def _runSelfCheck() -> None:  # noqa: C901
 		oversizedDedupKey = _dedupKey(oversizedItem)
 		oversizedPayloadHash = getItemPayloadHash(oversizedItem)
 		with version1Storage._transaction() as connection:
-			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
-			_recordCategoryItemState(
+			recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
+			recordCategoryItemState(
 				connection,
 				"local only",
 				oversizedPayloadHash,
@@ -248,8 +251,8 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert oversizedItemId in {item.itemId for item in version1Storage.getItems("Local only")}
 		assert version1Storage.getOneDriveItem(oversizedPayloadHash) is None
 		with version1Storage._transaction() as connection:
-			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
-			_recordCategoryItemState(
+			recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
+			recordCategoryItemState(
 				connection,
 				"local only",
 				oversizedPayloadHash,
@@ -312,7 +315,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		)
 		_expectRaises(
 			StorageFormatError,
-			lambda: _validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, _ZERO_OPERATION_ID)),
+			lambda: _validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, ZERO_OPERATION_ID)),
 			"A terminal synchronization clock was accepted",
 		)
 		generationStorage = ClipboardStorage(root / "generation.db", root / "missing-generation.json")
@@ -329,7 +332,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			for state in expectedGenerationSnapshot.categories
 			if state.nameFolded == "middle"
 		)
-		committedMiddleOrderVersion = SyncVersion(middleOrderVersion.clock, _ZERO_OPERATION_ID)
+		committedMiddleOrderVersion = SyncVersion(middleOrderVersion.clock, ZERO_OPERATION_ID)
 		concurrentGenerationItem = ClipboardItem(
 			ClipboardItemType.PLAIN_TEXT,
 			text="generation concurrent",
@@ -1023,3 +1026,55 @@ class StorageSelfCheckTests(unittest.TestCase):
 	def testStorageSelfCheck(self) -> None:
 		"""Require the complete storage self-check to succeed."""
 		_runSelfCheck()
+
+
+class _ResolvedWindowsPath(PureWindowsPath):
+	"""A Windows path whose resolve() returns itself, as for an existing path without links."""
+
+	def resolve(self, strict: bool = False) -> _ResolvedWindowsPath:
+		"""Return this already absolute path."""
+		return self
+
+
+class ReadOnlyConnectionTests(unittest.TestCase):
+	"""Open the reader connection for every location the writer connection supports."""
+
+	def testUncDatabasePathIsOpenedWithoutUriAuthority(self) -> None:
+		"""Pass a UNC path to SQLite as a plain filename instead of a file:// URI with an authority."""
+		uncPath = _ResolvedWindowsPath(r"\\fileserver\users$\alice\AppData\Roaming\nvda\nvdaClipboard.db")
+		with patch.object(storageModule.sqlite3, "connect", return_value=Mock()) as connect:
+			_ = storageModule._openReadOnlyDatabase(uncPath)
+		database = connect.call_args.args[0]
+		self.assertNotIn("file:", str(database))
+		self.assertFalse(connect.call_args.kwargs.get("uri", False))
+
+	def testReaderCanReadButNotWrite(self) -> None:
+		"""Keep the reader connection read-only."""
+		with TemporaryDirectory() as directory:
+			path = Path(directory) / "history.db"
+			storage = ClipboardStorage(path, Path(directory) / "missing-history.json")
+			reader = storageModule._openReadOnlyDatabase(path)
+			try:
+				self.assertEqual(0, reader.execute("SELECT COUNT(*) FROM items").fetchone()[0])
+				with self.assertRaises(storageModule.sqlite3.OperationalError):
+					reader.execute("CREATE TABLE extra (value INTEGER)")
+			finally:
+				reader.close()
+				storage.close()
+
+
+class TextPreviewTests(unittest.TestCase):
+	"""Store summary previews that describe the visible text."""
+
+	def testPreviewSkipsLongLeadingWhitespace(self) -> None:
+		"""Preview visible text even when it follows more whitespace than the preview scan window."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+			try:
+				storage.addHistory(
+					ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="\r\n" * 200 + "visible text"),
+				)
+				self.assertEqual("visible text", storage.history[0].textPreview)
+			finally:
+				storage.close()

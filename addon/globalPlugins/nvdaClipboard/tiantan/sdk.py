@@ -36,14 +36,14 @@ TEXT_INVALID_UTF8_ERROR = "Text is not valid UTF-8."
 
 
 @dataclass(frozen=True)
-class CloudLoginResult:
+class TiantanLoginResult:
 	"""Result returned by a successful ClipDataCloud login."""
 
 	nickname: str
 	isVip: bool
 
 
-class CloudClipboardError(Exception):
+class TiantanError(Exception):
 	"""Error raised when the ClipDataCloud SDK reports a failed operation."""
 
 	def __init__(self, code: int | None, message: str) -> None:
@@ -55,12 +55,12 @@ class CloudClipboardError(Exception):
 def validateUploadText(text: str) -> bytes:
 	"""Return UTF-8 bytes for upload after validating C API text constraints."""
 	if not text:
-		raise CloudClipboardError(INVALID_ARGUMENT, TEXT_EMPTY_ERROR)
+		raise TiantanError(INVALID_ARGUMENT, TEXT_EMPTY_ERROR)
 	if "\0" in text:
-		raise CloudClipboardError(INVALID_ARGUMENT, TEXT_CONTAINS_NUL_ERROR)
+		raise TiantanError(INVALID_ARGUMENT, TEXT_CONTAINS_NUL_ERROR)
 	textBytes = _encodeUtf8(text)
 	if len(textBytes) > MAX_TEXT_BYTES:
-		raise CloudClipboardError(INVALID_ARGUMENT, TEXT_EXCEEDS_MAX_BYTES_ERROR)
+		raise TiantanError(INVALID_ARGUMENT, TEXT_EXCEEDS_MAX_BYTES_ERROR)
 	return textBytes
 
 
@@ -69,31 +69,31 @@ def _encodeUtf8(text: str) -> bytes:
 	try:
 		return text.encode("utf-8")
 	except UnicodeEncodeError as error:
-		raise CloudClipboardError(INVALID_ARGUMENT, TEXT_INVALID_UTF8_ERROR) from error
+		raise TiantanError(INVALID_ARGUMENT, TEXT_INVALID_UTF8_ERROR) from error
 
 
 def _encodeCStringArgument(text: str) -> bytes:
 	"""Return UTF-8 bytes for a NUL-terminated C API input string."""
 	if "\0" in text:
-		raise CloudClipboardError(INVALID_ARGUMENT, C_STRING_CONTAINS_NUL_ERROR)
+		raise TiantanError(INVALID_ARGUMENT, C_STRING_CONTAINS_NUL_ERROR)
 	return _encodeUtf8(text)
 
 
-class CloudClipboardSdk:
+class TiantanSdk:
 	"""Thin ctypes wrapper around the ClipDataCloud native SDK exports."""
 
 	def __init__(self) -> None:
 		dllPath = getNativeFilePath(_getSdkDllName())
 		if not dllPath.exists():
-			raise CloudClipboardError(None, f"SDK DLL not found: {dllPath}") from None
+			raise TiantanError(None, f"SDK DLL not found: {dllPath}") from None
 		try:
 			self._sdk = CDLL(str(dllPath))
 		except OSError as error:
-			raise CloudClipboardError(None, f"SDK DLL load failed: {dllPath}: {error}") from error
+			raise TiantanError(None, f"SDK DLL load failed: {dllPath}: {error}") from error
 		try:
 			self._configureFunctions()
 		except AttributeError as error:
-			raise CloudClipboardError(None, f"SDK DLL missing required export: {error}") from error
+			raise TiantanError(None, f"SDK DLL missing required export: {error}") from error
 		self._lock = Lock()
 
 	def _configureFunctions(self) -> None:
@@ -118,7 +118,7 @@ class CloudClipboardSdk:
 		self._sdk.IsUserLoggedIn.argtypes = []
 		self._sdk.IsUserLoggedIn.restype = c_int
 
-	def login(self, phone: str, password: str) -> CloudLoginResult:
+	def login(self, phone: str, password: str) -> TiantanLoginResult:
 		"""Log in with a phone number and password."""
 		errorBuffer = create_string_buffer(ERROR_BUFFER_SIZE)
 		tokenBuffer = create_string_buffer(TOKEN_BUFFER_SIZE)
@@ -139,7 +139,7 @@ class CloudClipboardSdk:
 				len(errorBuffer),
 			)
 		self._raiseForError(code, errorBuffer)
-		return CloudLoginResult(
+		return TiantanLoginResult(
 			nickname=nicknameBuffer.value.decode("utf-8", errors="replace"),
 			isVip=svip.value > 0,
 		)
@@ -177,7 +177,7 @@ class CloudClipboardSdk:
 		if code == SUCCESS:
 			return
 		message = errorBuffer.value.decode("utf-8", errors="replace")
-		raise CloudClipboardError(code, message)
+		raise TiantanError(code, message)
 
 
 def _getSdkDllName() -> str:

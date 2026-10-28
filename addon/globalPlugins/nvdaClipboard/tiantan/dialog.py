@@ -14,19 +14,19 @@ import addonHandler
 import wx
 
 if TYPE_CHECKING:
-	from .sync import CloudSyncManager
+	from .sync import TiantanSyncManager
 
 
 addonHandler.initTranslation()
 
 
-class CloudClipboardDialog(wx.Dialog):
+class TiantanDialog(wx.Dialog):
 	"""Show Tiantan Cloud Clipboard account and synchronization state."""
 
 	def __init__(
 		self,
 		parent: wx.Window,
-		manager: CloudSyncManager,
+		manager: TiantanSyncManager,
 		onDestroy: Callable[[], None],
 	) -> None:
 		super().__init__(

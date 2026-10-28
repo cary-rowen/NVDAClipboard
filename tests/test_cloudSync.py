@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch
 from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_PACKAGE_NAME = "nvdaClipboardCloudSyncTests"
+_PACKAGE_NAME = "nvdaClipboardTiantanSyncTests"
 createAddonPackage(_PACKAGE_NAME)
 
 
@@ -54,12 +54,12 @@ cloudSync = loadAddonModule(
 cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.tiantan.sdk"]
 
 
-class CloudSyncTests(unittest.TestCase):
+class TiantanSyncTests(unittest.TestCase):
 	"""Verify cloud validation and completion cleanup without NVDA."""
 
 	def testStateObserverFailureDoesNotBlockCompletion(self) -> None:
 		"""Continue to onDone when the state observer targets a destroyed window."""
-		manager = object.__new__(cloudSync.CloudSyncManager)
+		manager = object.__new__(cloudSync.TiantanSyncManager)
 		manager._terminated = False
 		manager._onStateChanged = Mock(side_effect=RuntimeError("destroyed"))
 		completionLock = Lock()
@@ -71,11 +71,11 @@ class CloudSyncTests(unittest.TestCase):
 
 		onDone.assert_called_once_with(True, "done")
 		self.assertFalse(completionLock.locked())
-		logException.assert_called_once_with("CloudSyncManager state callback failed.")
+		logException.assert_called_once_with("TiantanSyncManager state callback failed.")
 
 	def testDispatchFailureReleasesStateAndCleanup(self) -> None:
 		"""Release operation guards when wx rejects a worker result."""
-		manager = object.__new__(cloudSync.CloudSyncManager)
+		manager = object.__new__(cloudSync.TiantanSyncManager)
 		manager._terminated = False
 		manager._stateOperationId = 7
 		manager._stateOperationInProgress = True
@@ -101,7 +101,7 @@ class CloudSyncTests(unittest.TestCase):
 
 	def testSuccessfulResultCallbackFailureStillCompletes(self) -> None:
 		"""Clear busy state and fail completion when successful-result application raises."""
-		manager = object.__new__(cloudSync.CloudSyncManager)
+		manager = object.__new__(cloudSync.TiantanSyncManager)
 		manager._terminated = False
 		manager._stateOperationId = 3
 		manager._stateOperationInProgress = True
@@ -130,14 +130,14 @@ class CloudSyncTests(unittest.TestCase):
 		)
 		for text, expectedMessage in invalidValues:
 			with self.subTest(text=repr(text)):
-				with self.assertRaises(cloudSync.CloudClipboardError) as context:
+				with self.assertRaises(cloudSync.TiantanError) as context:
 					cloudSync.validateUploadText(text)
 				self.assertEqual(context.exception.code, cloudSync.INVALID_ARGUMENT)
 				self.assertEqual(context.exception.message, expectedMessage)
 
 		withinLimit = "a" * cloudClipboard.MAX_TEXT_BYTES
 		self.assertEqual(cloudSync.validateUploadText(withinLimit), withinLimit.encode("utf-8"))
-		with self.assertRaises(cloudSync.CloudClipboardError) as context:
+		with self.assertRaises(cloudSync.TiantanError) as context:
 			cloudSync.validateUploadText(withinLimit + "a")
 		self.assertEqual(context.exception.code, cloudSync.INVALID_ARGUMENT)
 		self.assertEqual(context.exception.message, cloudSync.TEXT_EXCEEDS_MAX_BYTES_ERROR)
@@ -153,8 +153,8 @@ class TiantanSupportTests(unittest.TestCase):
 
 	def testSdkLoadFailureReportsUnavailable(self) -> None:
 		"""Return an unavailable state when the native SDK cannot be loaded."""
-		error = cloudSync.CloudClipboardError(None, "load failed")
-		with patch.object(cloudSync, "CloudClipboardSdk", side_effect=error):
+		error = cloudSync.TiantanError(None, "load failed")
+		with patch.object(cloudSync, "TiantanSdk", side_effect=error):
 			state = cloudSync.getTiantanSupportState()
 
 		self.assertFalse(state.isAvailable)
@@ -170,7 +170,7 @@ class TiantanSupportTests(unittest.TestCase):
 
 	def testSdkIsLoadedOnceAndReturned(self) -> None:
 		"""Load the native SDK only once and expose the loaded instance."""
-		with patch.object(cloudSync, "CloudClipboardSdk") as sdkClass:
+		with patch.object(cloudSync, "TiantanSdk") as sdkClass:
 			state = cloudSync.getTiantanSupportState()
 			self.assertIs(cloudSync.getTiantanSupportState(), state)
 
