@@ -52,6 +52,26 @@ def _buildDibV5() -> bytes:
 	return bytes(data)
 
 
+def _createImageReadMonitor(image: object) -> object:
+	"""Create a monitor whose open-clipboard read returns one image and no other content."""
+	monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+	monitor._formats = SimpleNamespace(
+		html=101,
+		rtf=102,
+		excludeMonitor=105,
+		canIncludeHistory=106,
+		canUpload=107,
+	)
+	monitor._openClipboardWithRetry = Mock(return_value=True)
+	monitor._isFormatAvailable = Mock(return_value=False)
+	monitor._readPolicy = Mock(return_value=True)
+	monitor._readTextIfAvailable = Mock(return_value=None)
+	monitor._readOptionalFormat = Mock(return_value=(None, False))
+	monitor._readImageFromOpenClipboard = Mock(return_value=(image, None, False))
+	monitor.getSequenceNumber = Mock(return_value=42)
+	return monitor
+
+
 def _buildRawDropFilesData(pathData: bytes, *, isWide: bool, offset: int = 0) -> bytes:
 	"""Build CF_HDROP data with an arbitrary path list placed ``offset`` bytes after the header."""
 	headerSize = ctypes.sizeof(clipboardMonitor._DROPFILES)
@@ -103,7 +123,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 		monitor.getSequenceNumber = Mock(return_value=42)
 		monitor._readTextIfAvailable = Mock(return_value="secret")
 		monitor._readOptionalFormat = Mock(side_effect=((None, True), (None, False)))
-		monitor._readImageFromOpenClipboard = Mock(return_value=(None, None, None, True))
+		monitor._readImageFromOpenClipboard = Mock(return_value=(None, None, True))
 
 		with patch.object(clipboardMonitor, "_closeClipboard", return_value=True):
 			protected = monitor.readNow()
@@ -146,25 +166,11 @@ class ClipboardMonitorTests(unittest.TestCase):
 
 	def testImageAnalysisRunsOnlyForWorkerReadsAfterClipboardClose(self) -> None:
 		"""Keep synchronous DIB reads fast and analyze worker images only after clipboard close."""
-		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
-		monitor._formats = SimpleNamespace(
-			html=101,
-			rtf=102,
-			excludeMonitor=105,
-			canIncludeHistory=106,
-			canUpload=107,
-		)
-		monitor._openClipboardWithRetry = Mock(return_value=True)
-		monitor._isFormatAvailable = Mock(return_value=False)
-		monitor._readPolicy = Mock(return_value=True)
-		monitor._readTextIfAvailable = Mock(return_value=None)
-		monitor._readOptionalFormat = Mock(return_value=(None, False))
 		dibData = _buildDibV5()
-		monitor._readImageFromOpenClipboard = Mock(return_value=("DIBV5", dibData, (1, 1, 32), False))
-		monitor._readDibImageForSequence = Mock(
-			return_value=("DIBV5", dibData, (1, 1, 32), False),
+		monitor = _createImageReadMonitor(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)))
+		monitor._readDibImageFromOpenClipboard = Mock(
+			return_value=(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)), None, True),
 		)
-		monitor.getSequenceNumber = Mock(return_value=42)
 		clipboardIsClosed = False
 
 		def closeClipboard() -> bool:
@@ -186,21 +192,189 @@ class ClipboardMonitorTests(unittest.TestCase):
 				else SimpleNamespace(color=(0, 0, 0), colorPercentage=100.0, transparentPercentage=0.0)
 			)
 
+		def checkDibHeader(_data: bytes, _info: tuple[int, int, int]) -> bool:
+			"""Accept the DIB header after verifying that the clipboard is closed."""
+			self.assertTrue(clipboardIsClosed)
+			return True
+
 		with (
 			patch.object(clipboardMonitor, "_closeClipboard", side_effect=closeClipboard),
 			patch.object(clipboardMonitor, "getImageProperties", side_effect=analyzeImage) as analyzer,
+			patch.object(clipboardMonitor, "isDibImageSupported", side_effect=checkDibHeader) as headerCheck,
 		):
-			synchronousSnapshot = monitor.readNow(decodePng=True)
+			synchronousSnapshot = monitor.readNow()
 			analyzer.assert_not_called()
-			monitor._readImageFromOpenClipboard.return_value = ("PNG", b"png", (1, 1, 32), False)
+			headerCheck.assert_called_once_with(dibData, (1, 1, 32))
+			monitor._readImageFromOpenClipboard.return_value = (
+				clipboardMonitor._ClipboardImage("PNG", b"png", (1, 1, 32)),
+				None,
+				False,
+			)
 			clipboardIsClosed = False
 			snapshot = monitor.readNow(analyzeImage=True)
 
 		self.assertEqual("DIBV5", synchronousSnapshot.imageFormat)
+		self.assertIsNone(synchronousSnapshot.imageColor)
 		self.assertEqual("DIBV5", snapshot.imageFormat)
 		self.assertEqual(dibData, snapshot.imageData)
 		self.assertEqual((0, 0, 0), snapshot.imageColor)
-		monitor._readDibImageForSequence.assert_called_once_with(42)
+		monitor._readDibImageFromOpenClipboard.assert_called_once_with()
+
+	def testSynchronousReadsVerifyPngBeforeRetainingIt(self) -> None:
+		"""Retain decodable PNG and replace undecodable PNG with the same sequence's DIB."""
+		dibData = _buildDibV5()
+		monitor = _createImageReadMonitor(clipboardMonitor._ClipboardImage("PNG", b"png", (1, 1, 24)))
+		monitor._readDibImageFromOpenClipboard = Mock(
+			return_value=(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)), None, True),
+		)
+
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+			patch.object(clipboardMonitor, "getImageProperties") as analyzer,
+			patch.object(clipboardMonitor, "isDibImageSupported", return_value=True),
+			patch.object(clipboardMonitor, "isPngImageDecodable", return_value=True) as pngCheck,
+		):
+			decodableSnapshot = monitor.readNow()
+			monitor._readDibImageFromOpenClipboard.assert_not_called()
+			pngCheck.return_value = False
+			fallbackSnapshot = monitor.readNow()
+
+		pngCheck.assert_called_with(b"png", (1, 1, 24))
+		analyzer.assert_not_called()
+		self.assertEqual(("PNG", b"png"), (decodableSnapshot.imageFormat, decodableSnapshot.imageData))
+		self.assertEqual(("DIBV5", dibData), (fallbackSnapshot.imageFormat, fallbackSnapshot.imageData))
+		self.assertEqual(32, fallbackSnapshot.imageBitDepth)
+		monitor._readDibImageFromOpenClipboard.assert_called_once_with()
+		self.assertEqual(3, monitor._openClipboardWithRetry.call_count)
+
+	def testUndecodablePngIsDroppedWhenClipboardChangedBeforeFallback(self) -> None:
+		"""Keep only image metadata when the DIB fallback sequence no longer matches."""
+		monitor = _createImageReadMonitor(clipboardMonitor._ClipboardImage("PNG", b"png", (3, 2, 24)))
+		monitor._readDibImageFromOpenClipboard = Mock()
+
+		def closeClipboard() -> bool:
+			"""Simulate another application replacing the clipboard after the first read."""
+			monitor.getSequenceNumber.return_value = 43
+			return True
+
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", side_effect=closeClipboard),
+			patch.object(clipboardMonitor, "isPngImageDecodable", return_value=False),
+		):
+			snapshot = monitor.readNow()
+
+		self.assertEqual(clipboardMonitor.ClipboardContentType.IMAGE, snapshot.contentType)
+		self.assertIsNone(snapshot.imageFormat)
+		self.assertIsNone(snapshot.imageData)
+		self.assertEqual((3, 2, 24), (snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth))
+		monitor._readDibImageFromOpenClipboard.assert_not_called()
+		monitor._openClipboardWithRetry.assert_called_once_with(None)
+
+	def testUnconvertibleDibIsReplacedByBitmapOnReadPath(self) -> None:
+		"""Convert CF_BITMAP at read time when Pillow cannot convert the retained DIB."""
+		dibData = _buildDibV5()
+		bitmapImage = clipboardMonitor._ClipboardImage("DIB", b"converted", (1, 1, 24), fromBitmap=True)
+		monitor = _createImageReadMonitor(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)))
+		monitor._readBitmapImageFromOpenClipboard = Mock(return_value=(bitmapImage, (1, 1, 24)))
+
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+			patch.object(clipboardMonitor, "isDibImageSupported", return_value=False),
+			patch.object(clipboardMonitor, "getImageProperties", return_value=None) as analyzer,
+		):
+			synchronousSnapshot = monitor.readNow()
+			analyzedSnapshot = monitor.readNow(analyzeImage=True)
+
+		for snapshot in (synchronousSnapshot, analyzedSnapshot):
+			self.assertEqual(("DIB", b"converted"), (snapshot.imageFormat, snapshot.imageData))
+			self.assertEqual((1, 1, 24), (snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth))
+			self.assertIsNone(snapshot.imageColor)
+		# The converted bitmap stays unanalyzed, matching the former history-time conversion.
+		analyzer.assert_called_once_with("DIBV5", dibData, (1, 1, 32))
+		self.assertEqual(2, monitor._readBitmapImageFromOpenClipboard.call_count)
+
+	def testUnconvertibleDibIsKeptWhenBitmapFallbackIsUnavailable(self) -> None:
+		"""Keep the original DIB when no bitmap conversion can replace it."""
+		dibData = _buildDibV5()
+		monitor = _createImageReadMonitor(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)))
+		monitor._readBitmapImageFromOpenClipboard = Mock(return_value=(None, None))
+
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+			patch.object(clipboardMonitor, "isDibImageSupported", return_value=False),
+		):
+			snapshot = monitor.readNow()
+
+		self.assertEqual(("DIBV5", dibData), (snapshot.imageFormat, snapshot.imageData))
+		monitor._readBitmapImageFromOpenClipboard.assert_called_once_with()
+
+	def testBitmapFallbackIsSkippedForConvertedBitmapsAndUnsafeSizes(self) -> None:
+		"""Trust canonical bitmap conversions and leave oversized DIBs to normalization."""
+		bitmapImage = clipboardMonitor._ClipboardImage("DIB", b"converted", (1, 1, 24), fromBitmap=True)
+		monitor = _createImageReadMonitor(bitmapImage)
+		monitor._readBitmapImageFromOpenClipboard = Mock()
+
+		with (
+			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
+			patch.object(clipboardMonitor, "isDibImageSupported", return_value=False) as headerCheck,
+		):
+			bitmapSnapshot = monitor.readNow()
+			headerCheck.assert_not_called()
+			dibData = _buildDibV5()
+			monitor._readImageFromOpenClipboard.return_value = (
+				clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)),
+				None,
+				False,
+			)
+			with patch.object(clipboardMonitor, "isImageSizeSafe", return_value=False):
+				oversizedSnapshot = monitor.readNow()
+
+		self.assertEqual(b"converted", bitmapSnapshot.imageData)
+		self.assertEqual(dibData, oversizedSnapshot.imageData)
+		monitor._readBitmapImageFromOpenClipboard.assert_not_called()
+		self.assertEqual(2, monitor._openClipboardWithRetry.call_count)
+
+	def testOpenClipboardChainFallsBackFromPngToDibV5ToDibToBitmap(self) -> None:
+		"""Read PNG, DIBV5, DIB, then bitmap formats while skipping structurally invalid data."""
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+		monitor._formats = SimpleNamespace(png=100)
+		availableFormats = {
+			100,
+			clipboardMonitor.CF_DIBV5,
+			clipboardMonitor.CF_DIB,
+			clipboardMonitor.CF_BITMAP,
+		}
+		monitor._isFormatAvailable = Mock(side_effect=lambda formatId: formatId in availableFormats)
+		dibV5Data = _buildDibV5()
+		dibData = struct.pack("<I", 40) + dibV5Data[4:40] + b"\0" * 4
+		payloads = {100: b"png", clipboardMonitor.CF_DIBV5: dibV5Data, clipboardMonitor.CF_DIB: dibData}
+		monitor._readGlobalData = Mock(side_effect=lambda formatId, _maximumBytes: payloads[formatId])
+		bitmapImage = clipboardMonitor._ClipboardImage("DIB", b"converted", (1, 1, 24), fromBitmap=True)
+		monitor._readBitmapImageFromOpenClipboard = Mock(return_value=(bitmapImage, (1, 1, 24)))
+
+		with patch.object(clipboardMonitor, "getPngImageInfo", return_value=(1, 1, 24)):
+			pngResult = monitor._readImageFromOpenClipboard()
+		with patch.object(clipboardMonitor, "getPngImageInfo", return_value=None):
+			dibV5Result = monitor._readImageFromOpenClipboard()
+			payloads[clipboardMonitor.CF_DIBV5] = b"invalid DIBV5"
+			dibResult = monitor._readImageFromOpenClipboard()
+			payloads[clipboardMonitor.CF_DIB] = b"invalid DIB"
+			bitmapResult = monitor._readImageFromOpenClipboard()
+			monitor._readBitmapImageFromOpenClipboard.return_value = (None, (1, 1, 8))
+			droppedResult = monitor._readImageFromOpenClipboard()
+
+		self.assertEqual(
+			(clipboardMonitor._ClipboardImage("PNG", b"png", (1, 1, 24)), None, False), pngResult
+		)
+		self.assertEqual(
+			(clipboardMonitor._ClipboardImage("DIBV5", dibV5Data, (1, 1, 32)), None, False),
+			dibV5Result,
+		)
+		self.assertEqual(
+			(clipboardMonitor._ClipboardImage("DIB", dibData, (1, 1, 32)), None, False), dibResult
+		)
+		self.assertEqual((bitmapImage, (1, 1, 24), False), bitmapResult)
+		self.assertEqual((None, (1, 1, 8), True), droppedResult)
 
 	def testSourceDibDoesNotCopySynthesizedBitmap(self) -> None:
 		"""Retain exact DIBV5 bytes without materializing a duplicate bitmap copy."""
@@ -211,26 +385,64 @@ class ClipboardMonitorTests(unittest.TestCase):
 		)
 		dibData = _buildDibV5()
 		monitor._readGlobalData = Mock(return_value=dibData)
-		monitor._readBitmapFromOpenClipboard = Mock(return_value=(b"converted", (1, 1, 24)))
+		monitor._readBitmapImageFromOpenClipboard = Mock()
 
 		result = monitor._readImageFromOpenClipboard()
 
-		self.assertEqual(("DIBV5", dibData, (1, 1, 32), False), result)
-		monitor._readBitmapFromOpenClipboard.assert_not_called()
+		self.assertEqual(
+			(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)), None, False), result
+		)
+		monitor._readBitmapImageFromOpenClipboard.assert_not_called()
 
-	def testBitmapFallbackRequiresMatchingSequence(self) -> None:
-		"""Read a canonical bitmap only while the expected clipboard item remains current."""
+	def testBitmapConversionMarksCanonicalDib(self) -> None:
+		"""Mark CF_BITMAP conversions so the fallback chain ends with them."""
+		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
+
+		def getObject(_handle: int, _size: int, bitmapReference: object) -> int:
+			"""Describe a 2-by-1 32-bit bitmap."""
+			bitmap = bitmapReference._obj
+			bitmap.bmWidth = 2
+			bitmap.bmHeight = 1
+			bitmap.bmPlanes = 1
+			bitmap.bmBitsPixel = 32
+			return 1
+
+		with (
+			patch.object(clipboardMonitor, "_getClipboardData", return_value=5),
+			patch.object(clipboardMonitor, "_getObject", side_effect=getObject),
+			patch.object(clipboardMonitor, "_bitmapHandleToDib", return_value=b"converted") as converter,
+		):
+			image, imageInfo = monitor._readBitmapImageFromOpenClipboard()
+			converter.return_value = None
+			_missingImage, missingInfo = monitor._readBitmapImageFromOpenClipboard()
+
+		self.assertEqual(
+			clipboardMonitor._ClipboardImage("DIB", b"converted", (2, 1, 24), fromBitmap=True), image
+		)
+		self.assertEqual((2, 1, 24), imageInfo)
+		self.assertEqual((2, 1, 32), missingInfo)
+		converter.assert_called_with(5, (2, 1, 32))
+
+	def testImageFallbackReadRequiresMatchingSequence(self) -> None:
+		"""Read a fallback image only while the expected clipboard item remains current."""
 		monitor = object.__new__(clipboardMonitor.ClipboardMonitor)
 		monitor.getSequenceNumber = Mock(return_value=42)
 		monitor._openClipboardWithRetry = Mock(return_value=True)
-		monitor._readBitmapFromOpenClipboard = Mock(return_value=(b"converted", (1, 1, 24)))
+		image = clipboardMonitor._ClipboardImage("DIB", b"converted", (1, 1, 24), fromBitmap=True)
+		reader = Mock(return_value=image)
 
-		with patch.object(clipboardMonitor, "_closeClipboard", return_value=True):
-			self.assertIsNone(monitor.readBitmapDib(41))
-			self.assertEqual((b"converted", (1, 1, 24)), monitor.readBitmapDib(42))
+		with patch.object(clipboardMonitor, "_closeClipboard", return_value=True) as closeClipboard:
+			self.assertIsNone(monitor._readImageForSequence(0, reader))
+			self.assertIsNone(monitor._readImageForSequence(41, reader))
+			monitor._openClipboardWithRetry.assert_not_called()
+			self.assertIs(image, monitor._readImageForSequence(42, reader))
+			monitor.getSequenceNumber.side_effect = (42, 43)
+			self.assertIsNone(monitor._readImageForSequence(42, reader))
 
-		monitor._openClipboardWithRetry.assert_called_once_with(None)
-		monitor._readBitmapFromOpenClipboard.assert_called_once_with()
+		reader.assert_called_once_with()
+		self.assertEqual(2, monitor._openClipboardWithRetry.call_count)
+		monitor._openClipboardWithRetry.assert_called_with(None)
+		self.assertEqual(2, closeClipboard.call_count)
 
 	def testWritableFormatsUseSourceDib(self) -> None:
 		"""Write the source DIBV5 bytes without materializing another representation."""
@@ -561,13 +773,13 @@ class ClipboardMonitorTests(unittest.TestCase):
 				(b"<p>html</p>", False) if formatId == monitor._formats.html else (None, False)
 			),
 		)
-		monitor._readImageFromOpenClipboard = Mock(return_value=(None, None, None, False))
+		monitor._readImageFromOpenClipboard = Mock(return_value=(None, None, False))
 		monitor.getSequenceNumber = Mock(return_value=1)
 		with (
 			patch.object(clipboardMonitor, "_countClipboardFormats", return_value=1),
 			patch.object(clipboardMonitor, "_closeClipboard", return_value=True),
 		):
-			snapshot = monitor._readSnapshot(decodePng=False, analyzeImage=False)
+			snapshot = monitor._readSnapshot(analyzeImage=False)
 		self.assertEqual(clipboardMonitor.ClipboardContentType.UNSUPPORTED, snapshot.contentType)
 		self.assertEqual(b"<p>html</p>", snapshot.html)
 

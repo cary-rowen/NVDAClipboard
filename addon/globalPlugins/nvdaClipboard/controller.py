@@ -50,7 +50,6 @@ from .clipboardData import (
 )
 from .imageCodec import (
 	ImageDataTooLargeError,
-	isPngImageDecodable,
 	normalizeImageDataToPng,
 	pngToPackedDib,
 )
@@ -1398,7 +1397,7 @@ class ClipboardController:
 
 	def _saveCurrentClipboardImage(self, parent: wx.Window) -> None:
 		"""Save the current clipboard image as a validated PNG file."""
-		snapshot = self.monitor.readNow(decodePng=True, includeRichFormats=False)
+		snapshot = self.monitor.readNow(includeRichFormats=False)
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when the current clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
@@ -1406,10 +1405,7 @@ class ClipboardController:
 			# Translators: Message shown when no clipboard image is available to save.
 			ui.message(_("There is no clipboard image to save"))
 			return
-		snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(
-			snapshot,
-			pngIsDecodable=snapshot.imageFormat == "PNG" and snapshot.imageData is not None,
-		)
+		snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
 		if snapshot.imageData is None:
 			# Translators: Error shown when an expected clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
@@ -1468,11 +1464,7 @@ class ClipboardController:
 			else _ClipboardChangeSource.EXTERNAL
 		)
 		self._awaitingInitialSnapshot = False
-		self._applySnapshot(
-			snapshot,
-			source,
-			pngIsDecodable=snapshot.imageFormat == "PNG" and snapshot.imageData is not None,
-		)
+		self._applySnapshot(snapshot, source)
 
 	def _consumePendingWrite(self, snapshot: ClipboardSnapshot) -> bool:
 		if snapshot.sequenceNumber in self._pendingWrites:
@@ -1486,7 +1478,6 @@ class ClipboardController:
 		snapshot: ClipboardSnapshot,
 		source: _ClipboardChangeSource,
 		*,
-		pngIsDecodable: bool = False,
 		historyPreviousText: str | None = None,
 	) -> None:
 		"""Apply current state immediately and queue source-dependent history work."""
@@ -1505,7 +1496,7 @@ class ClipboardController:
 		self._applyCurrentSnapshot(snapshot)
 		if shouldRecord and snapshot.canIncludeInHistory:
 			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
-				self._queueImageHistorySnapshot(snapshot, pngIsDecodable=pngIsDecodable)
+				self._queueImageHistorySnapshot(snapshot)
 			else:
 				item = self._clipboardItemFromSnapshot(snapshot)
 				if item is not None:
@@ -1569,9 +1560,8 @@ class ClipboardController:
 			partial(self._queueHistoryWriteCompletion, expectedText=expectedText),
 		)
 
-	def _queueImageHistorySnapshot(self, snapshot: ClipboardSnapshot, *, pngIsDecodable: bool) -> None:
+	def _queueImageHistorySnapshot(self, snapshot: ClipboardSnapshot) -> None:
 		"""Queue one image snapshot without allowing unbounded retained image data."""
-		pngIsDecodable = pngIsDecodable and snapshot.imageFormat == "PNG"
 		imageDataMissing = snapshot.imageData is None
 		if imageDataMissing or not self._imageHistorySlots.acquire(blocking=False):
 			item = self._clipboardItemFromSnapshot(
@@ -1584,26 +1574,15 @@ class ClipboardController:
 				self._queueHistoryItem(item, imageWasDropped=imageDataMissing)
 			return
 		try:
-			future = self._historyExecutor.submit(
-				self._storeImageHistorySnapshot,
-				snapshot,
-				pngIsDecodable,
-			)
+			future = self._historyExecutor.submit(self._storeImageHistorySnapshot, snapshot)
 		except Exception:
 			self._imageHistorySlots.release()
 			raise
 		future.add_done_callback(self._queueImageHistoryWriteCompletion)
 
-	def _storeImageHistorySnapshot(
-		self,
-		snapshot: ClipboardSnapshot,
-		pngIsDecodable: bool,
-	) -> _HistoryWriteResult:
+	def _storeImageHistorySnapshot(self, snapshot: ClipboardSnapshot) -> _HistoryWriteResult:
 		"""Normalize and store one retained image snapshot on the serial worker."""
-		snapshot, imageWasTooLarge = self._normalizeImageSnapshot(
-			snapshot,
-			pngIsDecodable=pngIsDecodable,
-		)
+		snapshot, imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
 		item = self._clipboardItemFromSnapshot(snapshot)
 		if item is None:
 			return _HistoryWriteResult(
@@ -1762,14 +1741,11 @@ class ClipboardController:
 			canUpload=snapshot.canUpload,
 		)
 
-	def _normalizeImageSnapshot(
-		self,
-		snapshot: ClipboardSnapshot,
-		*,
-		pngIsDecodable: bool = False,
-		allowBitmapFallback: bool = True,
-	) -> tuple[ClipboardSnapshot, bool]:
-		"""Return a PNG-backed snapshot and whether normalization exceeded the byte limit."""
+	def _normalizeImageSnapshot(self, snapshot: ClipboardSnapshot) -> tuple[ClipboardSnapshot, bool]:
+		"""Return a PNG-backed snapshot and whether normalization exceeded the byte limit.
+
+		The monitor has already verified PNG data and applied its DIB and bitmap fallbacks.
+		"""
 		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
 			return snapshot, False
 		canDecodeSafely = isImageSizeSafe(
@@ -1779,42 +1755,18 @@ class ClipboardController:
 		)
 		if not canDecodeSafely:
 			return replace(snapshot, imageFormat=None, imageData=None), False
-		if snapshot.imageFormat == "PNG" and snapshot.imageData is not None and not pngIsDecodable:
-			pngIsDecodable = isPngImageDecodable(
-				snapshot.imageData,
-				(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
-			)
 		try:
 			pngData = (
 				normalizeImageDataToPng(
 					snapshot.imageFormat,
 					snapshot.imageData,
 					(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
-					pngIsDecodable=pngIsDecodable,
 				)
 				if snapshot.imageData is not None
 				else None
 			)
 		except ImageDataTooLargeError:
 			return replace(snapshot, imageFormat=None, imageData=None), True
-		if (
-			pngData is None
-			and allowBitmapFallback
-			and snapshot.imageFormat in ("DIB", "DIBV5")
-			and (fallback := self.monitor.readBitmapDib(snapshot.sequenceNumber)) is not None
-		):
-			fallbackData, fallbackInfo = fallback
-			return self._normalizeImageSnapshot(
-				replace(
-					snapshot,
-					imageFormat="DIB",
-					imageData=fallbackData,
-					imageWidth=fallbackInfo[0],
-					imageHeight=fallbackInfo[1],
-					imageBitDepth=fallbackInfo[2],
-				),
-				allowBitmapFallback=False,
-			)
 		info = getPngImageInfo(pngData) if pngData is not None else None
 		if pngData is not None and info is not None and isImageSizeSafe(info[0], info[1], max(32, info[2])):
 			return (
@@ -2194,7 +2146,7 @@ class ClipboardController:
 
 	def _captureOriginalClipboardForTemporaryPaste(self) -> tuple[ClipboardSnapshot | None, int]:
 		"""Capture the best-effort restorable clipboard state and sequence number."""
-		snapshot = self.monitor.readNow(decodePng=True)
+		snapshot = self.monitor.readNow()
 		sequenceNumber = snapshot.sequenceNumber or self.monitor.getSequenceNumber()
 		imageNormalizationFailed = False
 		if snapshot.contentType in _IMAGE_CONTENT_TYPES and snapshot.imageData is None:
@@ -2424,7 +2376,6 @@ class ClipboardController:
 			self._applySnapshot(
 				appliedSnapshot,
 				source,
-				pngIsDecodable=snapshot.imageFormat == "PNG" and snapshot.imageData is not None,
 				historyPreviousText=historyPreviousText,
 			)
 		except Exception as error:

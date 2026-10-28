@@ -70,12 +70,24 @@ def _decodeImage(
 		max(32, expectedInfo[2]),
 	):
 		return None
+	return _openImage(data, expectedInfo, imageFormat=imageFormat, decodePixels=True)
+
+
+def _openImage(
+	data: bytes,
+	expectedInfo: tuple[int, int, int],
+	*,
+	imageFormat: str,
+	decodePixels: bool,
+) -> Image.Image | None:
+	"""Open one image with the expected dimensions, optionally decoding its pixels."""
 	from PIL import Image
 
 	image: Image.Image | None = None
 	try:
 		image = Image.open(BytesIO(data), formats=(imageFormat,))
-		image.load()
+		if decodePixels:
+			image.load()
 	except (Image.DecompressionBombError, OSError, SyntaxError, ValueError):
 		if image is not None:
 			image.close()
@@ -334,6 +346,21 @@ def isPngImageDecodable(pngData: bytes, expectedInfo: tuple[int, int, int]) -> b
 	return True
 
 
+def isDibImageSupported(dibData: bytes, expectedInfo: tuple[int, int, int]) -> bool:
+	"""Return whether Pillow accepts a bounded packed DIB header with matching dimensions.
+
+	Only the header is parsed, so this stays cheap enough for synchronous clipboard reads while
+	rejecting the DIB layouts, such as unsupported bit fields, that normalization cannot convert.
+	"""
+	if len(dibData) > MAX_DECODED_IMAGE_BYTES:
+		return False
+	image = _openImage(dibData, expectedInfo, imageFormat="DIB", decodePixels=False)
+	if image is None:
+		return False
+	image.close()
+	return True
+
+
 def encodeBgrPixelsToPng(pixelData: bytes | memoryview, width: int, height: int) -> bytes | None:
 	"""Encode bounded top-down BGRX pixels as an adaptively filtered RGB PNG."""
 	rowStride = width * 4
@@ -363,14 +390,15 @@ def normalizeImageDataToPng(
 	imageFormat: str | None,
 	imageData: bytes,
 	imageInfo: tuple[int, int, int],
-	*,
-	pngIsDecodable: bool = False,
 ) -> bytes | None:
-	"""Normalize retained PNG or DIB bytes without accessing the clipboard."""
+	"""Normalize retained PNG or DIB bytes without accessing the clipboard.
+
+	PNG data must already be verified decodable, as clipboard monitor snapshots guarantee.
+	"""
 	if not isImageSizeSafe(imageInfo[0], imageInfo[1], max(32, imageInfo[2])):
 		return None
 	if imageFormat == "PNG":
-		return imageData if pngIsDecodable and getPngImageInfo(imageData) == imageInfo else None
+		return imageData if getPngImageInfo(imageData) == imageInfo else None
 	if imageFormat not in ("DIB", "DIBV5"):
 		return None
 	image = _decodeImage(
