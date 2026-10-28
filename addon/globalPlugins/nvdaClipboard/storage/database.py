@@ -186,14 +186,11 @@ def _openDatabase(path: Path) -> sqlite3.Connection:
 
 def _openReadOnlyDatabase(path: Path) -> sqlite3.Connection:
 	"""Open a read-only connection without blocking stored writes."""
-	connection = sqlite3.connect(
-		f"{path.resolve().as_uri()}?mode=ro",
-		uri=True,
-		timeout=5,
-		check_same_thread=False,
-	)
+	# A plain path, unlike a file: URI, also works for UNC paths: the bundled SQLite rejects URI authorities.
+	connection = sqlite3.connect(path, timeout=5, check_same_thread=False)
 	try:
 		connection.row_factory = sqlite3.Row
+		_ = connection.execute("PRAGMA query_only = ON")
 		_ = connection.execute("PRAGMA foreign_keys = ON")
 		_ = connection.execute("PRAGMA busy_timeout = 5000")
 	except Exception:

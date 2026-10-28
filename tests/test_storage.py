@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
@@ -1026,3 +1026,38 @@ class StorageSelfCheckTests(unittest.TestCase):
 	def testStorageSelfCheck(self) -> None:
 		"""Require the complete storage self-check to succeed."""
 		_runSelfCheck()
+
+
+class _ResolvedWindowsPath(PureWindowsPath):
+	"""A Windows path whose resolve() returns itself, as for an existing path without links."""
+
+	def resolve(self, strict: bool = False) -> _ResolvedWindowsPath:
+		"""Return this already absolute path."""
+		return self
+
+
+class ReadOnlyConnectionTests(unittest.TestCase):
+	"""Open the reader connection for every location the writer connection supports."""
+
+	def testUncDatabasePathIsOpenedWithoutUriAuthority(self) -> None:
+		"""Pass a UNC path to SQLite as a plain filename instead of a file:// URI with an authority."""
+		uncPath = _ResolvedWindowsPath(r"\\fileserver\users$\alice\AppData\Roaming\nvda\nvdaClipboard.db")
+		with patch.object(storageModule.sqlite3, "connect", return_value=Mock()) as connect:
+			_ = storageModule._openReadOnlyDatabase(uncPath)
+		database = connect.call_args.args[0]
+		self.assertNotIn("file:", str(database))
+		self.assertFalse(connect.call_args.kwargs.get("uri", False))
+
+	def testReaderCanReadButNotWrite(self) -> None:
+		"""Keep the reader connection read-only."""
+		with TemporaryDirectory() as directory:
+			path = Path(directory) / "history.db"
+			storage = ClipboardStorage(path, Path(directory) / "missing-history.json")
+			reader = storageModule._openReadOnlyDatabase(path)
+			try:
+				self.assertEqual(0, reader.execute("SELECT COUNT(*) FROM items").fetchone()[0])
+				with self.assertRaises(storageModule.sqlite3.OperationalError):
+					reader.execute("CREATE TABLE extra (value INTEGER)")
+			finally:
+				reader.close()
+				storage.close()
