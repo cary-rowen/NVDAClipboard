@@ -1061,3 +1061,20 @@ class ReadOnlyConnectionTests(unittest.TestCase):
 			finally:
 				reader.close()
 				storage.close()
+
+
+class TextPreviewTests(unittest.TestCase):
+	"""Store summary previews that describe the visible text."""
+
+	def testPreviewSkipsLongLeadingWhitespace(self) -> None:
+		"""Preview visible text even when it follows more whitespace than the preview scan window."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+			try:
+				storage.addHistory(
+					ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="\r\n" * 200 + "visible text")
+				)
+				self.assertEqual("visible text", storage.history[0].textPreview)
+			finally:
+				storage.close()

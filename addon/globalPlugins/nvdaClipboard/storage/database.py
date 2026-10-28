@@ -525,7 +525,7 @@ def _insertItem(
 		(
 			item.contentType.value,
 			item.text,
-			" ".join(item.text[: SUMMARY_TEXT_LIMIT * 2].split())[:SUMMARY_TEXT_LIMIT],
+			" ".join(item.text.lstrip()[: SUMMARY_TEXT_LIMIT * 2].split())[:SUMMARY_TEXT_LIMIT],
 			item.html,
 			item.rtf,
 			item.imageData,
