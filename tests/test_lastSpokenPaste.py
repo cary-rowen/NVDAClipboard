@@ -113,6 +113,7 @@ class TemporaryPasteTests(unittest.TestCase):
 				self.assertFalse(prepared.snapshot.canUpload)
 				self.assertEqual(None if fails else b"png", prepared.snapshot.imageData)
 				self.assertEqual(None if fails else b"dib", prepared.preparedPngDib)
+				self.assertEqual(fails, prepared.usedPlainTextFallback)
 
 	def testTextFeedbackUsesConfiguredCharacterLimit(self) -> None:
 		"""Replace lengthy selection and paste feedback with a character count."""

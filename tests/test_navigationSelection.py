@@ -27,6 +27,7 @@ _NAVIGATION_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvda
 _CONTROLLER_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
 
 _UI = SimpleNamespace(message=Mock())
+_PLAIN_TEXT_FALLBACK_MESSAGE = "Pasted as plain text; formatting could not be kept"
 _SPEECH = SimpleNamespace(speakTextSelected=Mock())
 _BRAILLE = SimpleNamespace(handler=SimpleNamespace(message=Mock()))
 
@@ -103,6 +104,8 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 				"_normalizeUnicodeText",
 				"_getPlainTextPasteRequest",
 				"_isTemporarySnapshot",
+				"_preparePngDib",
+				"_prepareTemporaryPngPaste",
 			}
 			or isinstance(node, ast.Assign)
 			and any(
@@ -1030,15 +1033,17 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 	def testTemporaryPasteFallbackRetainsOriginalClipboardAndPosition(self) -> None:
 		"""Keep payload, ownership and restoration correct across one optional text fallback."""
 		registerOnly = _ClipboardChangeSource.REGISTER_ONLY
-		for failure, expectedWrites in (
-			(None, 2),
-			("prepare", 3),
-			("partial", 3),
-			("fallback", 3),
-			("fallbackPartial", 3),
-			("plainFailure", 1),
-			("owner", 1),
-			("focus", 2),
+		# A pasted text fallback says formatting was lost instead of the normal feedback.
+		fallbackFeedback = [call(_PLAIN_TEXT_FALLBACK_MESSAGE)]
+		for failure, expectedWrites, expectedFeedback in (
+			(None, 2, [call("entry")]),
+			("prepare", 3, fallbackFeedback),
+			("partial", 3, fallbackFeedback),
+			("fallback", 3, []),
+			("fallbackPartial", 3, []),
+			("plainFailure", 1, []),
+			("owner", 1, []),
+			("focus", 2, []),
 		):
 			with self.subTest(failure=failure):
 				contentType = clipboardMonitor.ClipboardContentType
@@ -1119,14 +1124,16 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 					controller._getVerifiedTemporarySequenceNumber = Mock(return_value=None)
 				schedule = Mock()
 				keyboard = Mock()
+				ui = Mock()
 				with patch.dict(
 					_beginTemporaryPaste.__globals__,
 					_waitForTriggerKeysReleased=Mock(return_value=True),
 					callLater=schedule,
 					KeyboardInputGesture=keyboard,
-					ui=Mock(),
+					ui=ui,
 				):
 					_pasteSnapshotTemporarily(controller, rich, "entry", frozenset(), expectedFocus=object())
+					self.assertEqual(expectedFeedback, ui.delayedMessage.call_args_list)
 					if failure in ("owner", "focus", "fallback", "fallbackPartial", "plainFailure"):
 						keyboard.fromName.assert_not_called()
 						schedule.assert_not_called()
@@ -1157,6 +1164,57 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				self.assertEqual("a\nb", navigator._owner.text)
 				self.assertEqual(2, navigator.getPosition())
 				self.assertEqual(expectedWrites, controller._writeSnapshot.call_count)
+
+	def testImagePreparationFallbackAnnouncesPlainTextPaste(self) -> None:
+		"""Say formatting was lost only when a mixed entry's image could not be prepared."""
+		namespace = _beginTemporaryPaste.__globals__
+		contentType = clipboardMonitor.ClipboardContentType
+		mixed = clipboardMonitor.ClipboardSnapshot(
+			contentType.TEXT_AND_IMAGE,
+			text="mixed\ntext",
+			html=b"html",
+			imageFormat="PNG",
+			imageData=b"png",
+			canIncludeInHistory=False,
+			canUpload=False,
+		)
+		for fails in (False, True):
+			with self.subTest(fails=fails):
+				controller = _createTemporaryPasteController("abcdef", ClipboardNavigator("abcdef"))
+				controller._temporaryPasteInProgress = True
+				request = namespace["_TemporaryPasteRequest"](
+					mixed,
+					"mixed entry",
+					frozenset(),
+					monotonic() + 3.0,
+					expectedFocus=object(),
+				)
+				keyboard = Mock()
+				ui = Mock()
+				with patch.dict(
+					namespace,
+					pngToPackedDib=Mock(
+						return_value=b"dib",
+						side_effect=ValueError("decode failed") if fails else None,
+					),
+					_waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=Mock(),
+					KeyboardInputGesture=keyboard,
+					ui=ui,
+				):
+					prepared = namespace["_prepareTemporaryPngPaste"](request)
+					controller._beginTemporaryPaste(prepared, 0)
+				self.assertEqual(fails, prepared.usedPlainTextFallback)
+				keyboard.fromName.return_value.send.assert_called_once_with()
+				pasted = controller.monitor.current
+				self.assertEqual(
+					contentType.TEXT if fails else contentType.TEXT_AND_IMAGE, pasted.contentType
+				)
+				self.assertEqual(mixed.text, pasted.text)
+				ui.delayedMessage.assert_called_once_with(
+					_PLAIN_TEXT_FALLBACK_MESSAGE if fails else "mixed entry",
+				)
+				ui.message.assert_not_called()
 
 	def testPasteTargetUsesSelectionOnlyWhenTheRangeIsComplete(self) -> None:
 		"""Prefer marked text and otherwise route the shared gesture to stored-item navigation."""

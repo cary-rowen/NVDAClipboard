@@ -253,6 +253,8 @@ class _TemporaryPasteRequest:
 	sourceSequenceNumber: int | None = None
 	expectedFocus: object | None = None
 	preparedPngDib: bytes | None = None
+	# Whether rich content was degraded to plain text, so feedback must say formatting was lost.
+	usedPlainTextFallback: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +334,7 @@ def _getPlainTextPasteRequest(request: _TemporaryPasteRequest) -> _TemporaryPast
 			canUpload=False,
 		),
 		preparedPngDib=None,
+		usedPlainTextFallback=True,
 	)
 
 
@@ -1943,7 +1946,8 @@ class ClipboardController:
 			return
 		try:
 			partialWriteError: _ClipboardWriteFailedError | None = None
-			for attempt in range(2):
+			# At most two writes: the plain-text fallback has no further fallback of its own.
+			while True:
 				try:
 					temporarySequenceNumber = self._writeSnapshot(
 						request.snapshot,
@@ -1952,32 +1956,28 @@ class ClipboardController:
 						preparedPngDib=request.preparedPngDib,
 					)
 					break
-				except ClipboardSequenceChangedError:
-					if partialWriteError is not None:
-						raise partialWriteError
-					raise
+				except ClipboardSequenceChangedError as error:
+					raise partialWriteError or error
 				except RuntimeError as error:
 					if isinstance(error, _ClipboardWriteFailedError):
 						partialWriteError = error
-					fallback = _getPlainTextPasteRequest(request) if attempt == 0 else None
+					fallback = _getPlainTextPasteRequest(request)
 					if (
 						fallback is None
 						or not isinstance(error, _ClipboardWriteFailedError)
 						and not isinstance(error.__cause__, (OSError, ValueError))
 						or request.expectedFocus is not None
 						and not self._isSameFocus(request.expectedFocus)
-					):
-						if partialWriteError is not None:
-							raise partialWriteError
-						raise
-					if partialWriteError is not None:
 						# Never recapture a partial write as the original clipboard for the fallback.
-						if (
+						or partialWriteError is not None
+						and (
 							not partialWriteError.sequenceNumber
 							or self.monitor.getSequenceNumber() != partialWriteError.sequenceNumber
 							or self.monitor.getOwnerHandle() != self._getClipboardOwnerHandle()
-						):
-							raise partialWriteError
+						)
+					):
+						raise partialWriteError or error
+					if partialWriteError is not None:
 						expectedSequenceNumber = partialWriteError.sequenceNumber
 					log.debugWarning(
 						"Could not write rich formats; retrying temporary paste as text.",
@@ -2063,11 +2063,15 @@ class ClipboardController:
 			# Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
 			ui.message(_("The content was pasted, but the original clipboard content could not be restored"))
 			return
+		feedbackText = request.feedbackText
+		if request.usedPlainTextFallback:
+			# Translators: Spoken when formatted clipboard content had to be pasted as plain text.
+			feedbackText = _("Pasted as plain text; formatting could not be kept")
 		try:
-			ui.delayedMessage(request.feedbackText)
+			ui.delayedMessage(feedbackText)
 		except Exception:
 			log.debugWarning("Could not delay temporary paste feedback.", exc_info=True)
-			ui.message(request.feedbackText)
+			ui.message(feedbackText)
 
 	def _captureOriginalClipboardForTemporaryPaste(self) -> tuple[ClipboardSnapshot | None, int, bool]:
 		"""Capture the restorable clipboard, its sequence number, and whether applying it succeeded."""
