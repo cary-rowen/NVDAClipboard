@@ -12,6 +12,7 @@ import ctypes
 from ctypes import WinError, create_unicode_buffer, memmove, string_at, windll
 import ctypes.wintypes as w
 from dataclasses import dataclass, replace
+from functools import partial
 from enum import Enum
 import struct
 from threading import Lock, Thread
@@ -20,9 +21,8 @@ from time import monotonic, sleep
 from logHandler import log
 from winBindings import gdi32, kernel32, user32
 from windowUtils import CustomWindow
-import wx
 
-from .clipboardData import (
+from .payload import (
 	MAX_DECODED_IMAGE_BYTES,
 	MAX_IMAGE_BYTES,
 	MAX_RICH_FORMAT_BYTES,
@@ -32,6 +32,7 @@ from .clipboardData import (
 	normalizeNewlinesForWin32,
 )
 from .imageCodec import getImageProperties, isPngImageDecodable, pngToPackedDib
+from ..background import queueMainThread
 
 __all__ = [
 	"ClipboardContentType",
@@ -107,8 +108,8 @@ WM_CLIPBOARDUPDATE = 0x031D
 HWND_MESSAGE = -3
 DRAG_QUERY_FILE_COUNT = 0xFFFFFFFF
 
-DEFAULT_OPEN_RETRIES = 10
-DEFAULT_OPEN_RETRY_INTERVAL = 0.05
+_OPEN_RETRIES = 10
+_OPEN_RETRY_INTERVAL = 0.05
 _FAILED_OPEN_RETRY_INTERVAL = 0.1
 _OPEN_CLIPBOARD_ERROR = "OpenClipboard failed"
 
@@ -127,13 +128,16 @@ _DROPEFFECT_LINK = 4
 _DROPEFFECT_MASK = _DROPEFFECT_COPY | _DROPEFFECT_MOVE | _DROPEFFECT_LINK
 _SEQUENCE_NUMBER_MASK = 0xFFFFFFFF
 
-_HTML_FORMAT_NAME = "HTML Format"
-_RTF_FORMAT_NAME = "Rich Text Format"
-_PNG_FORMAT_NAME = "PNG"
-_PREFERRED_DROP_EFFECT_FORMAT_NAME = "Preferred DropEffect"
-_EXCLUDE_MONITOR_FORMAT_NAME = "ExcludeClipboardContentFromMonitorProcessing"
-_CAN_INCLUDE_HISTORY_FORMAT_NAME = "CanIncludeInClipboardHistory"
-_CAN_UPLOAD_FORMAT_NAME = "CanUploadToCloudClipboard"
+# Windows names of the registered clipboard formats, keyed by _RegisteredFormats field.
+_REGISTERED_FORMAT_NAMES = {
+	"html": "HTML Format",
+	"rtf": "Rich Text Format",
+	"png": "PNG",
+	"preferredDropEffect": "Preferred DropEffect",
+	"excludeMonitor": "ExcludeClipboardContentFromMonitorProcessing",
+	"canIncludeHistory": "CanIncludeInClipboardHistory",
+	"canUpload": "CanUploadToCloudClipboard",
+}
 
 
 def _isNewerClipboardSequence(candidate: int, previous: int) -> bool:
@@ -257,15 +261,13 @@ class _RegisteredFormats:
 
 
 def _registerFormats() -> _RegisteredFormats:
-	return _RegisteredFormats(
-		html=int(_registerClipboardFormat(_HTML_FORMAT_NAME)),
-		rtf=int(_registerClipboardFormat(_RTF_FORMAT_NAME)),
-		png=int(_registerClipboardFormat(_PNG_FORMAT_NAME)),
-		preferredDropEffect=int(_registerClipboardFormat(_PREFERRED_DROP_EFFECT_FORMAT_NAME)),
-		excludeMonitor=int(_registerClipboardFormat(_EXCLUDE_MONITOR_FORMAT_NAME)),
-		canIncludeHistory=int(_registerClipboardFormat(_CAN_INCLUDE_HISTORY_FORMAT_NAME)),
-		canUpload=int(_registerClipboardFormat(_CAN_UPLOAD_FORMAT_NAME)),
-	)
+	"""Register every named clipboard format, raising the Windows error if any registration fails."""
+	formatIds = {
+		field: int(_registerClipboardFormat(name)) for field, name in _REGISTERED_FORMAT_NAMES.items()
+	}
+	if not all(formatIds.values()):
+		raise WinError()
+	return _RegisteredFormats(**formatIds)
 
 
 # Keep the format-specific bounds checks together so this trust boundary remains auditable.
@@ -430,28 +432,9 @@ class ClipboardMonitor:
 	thread. Clipboard reads are performed on a worker and dispatched through wx.
 	"""
 
-	def __init__(
-		self,
-		onSnapshot: ClipboardSnapshotCallback | None = None,
-		openRetries: int = DEFAULT_OPEN_RETRIES,
-		openRetryInterval: float = DEFAULT_OPEN_RETRY_INTERVAL,
-	) -> None:
+	def __init__(self, onSnapshot: ClipboardSnapshotCallback | None = None) -> None:
 		self._onSnapshot = onSnapshot
-		self._openRetries = openRetries
-		self._openRetryInterval = openRetryInterval
 		self._formats = _registerFormats()
-		if not all(
-			(
-				self._formats.html,
-				self._formats.rtf,
-				self._formats.png,
-				self._formats.preferredDropEffect,
-				self._formats.excludeMonitor,
-				self._formats.canIncludeHistory,
-				self._formats.canUpload,
-			),
-		):
-			raise WinError()
 		self._window: _ClipboardMessageWindow | None = None
 		self._lock = Lock()
 		self._cancelToken = 0
@@ -549,44 +532,44 @@ class ClipboardMonitor:
 		if not formats:
 			raise ValueError(snapshot.contentType)
 		allocated: list[tuple[int, int]] = []
-		writeFailure: OSError | None = None
 		try:
 			for formatId, data in formats:
 				allocated.append((formatId, self._allocateGlobalData(data)))
-			if not self._openClipboardWithRetry(ownerHandle):
-				raise OSError(_OPEN_CLIPBOARD_ERROR)
-			try:
-				if expectedSequenceNumber is not None and self.getSequenceNumber() != expectedSequenceNumber:
-					raise ClipboardSequenceChangedError(expectedSequenceNumber)
-				if not _emptyClipboard():
-					raise WinError()
-				for index, (formatId, handle) in enumerate(allocated):
-					if not _setClipboardData(formatId, handle):
-						writeFailure = WinError()
-						break
-					allocated[index] = (formatId, 0)
-			finally:
-				if not _closeClipboard():
-					log.debugWarning(
-						"ClipboardMonitor failed to close clipboard after writing.",
-						exc_info=WinError(),
-					)
-			# The final sequence is only observable after Windows publishes all formats on close.
-			sequenceNumber = self.getSequenceNumber()
-			if self.getOwnerHandle() != ownerHandle:
-				raise ClipboardSequenceChangedError(sequenceNumber)
-			if writeFailure is not None:
-				raise ClipboardWriteError(sequenceNumber) from writeFailure
+			return self._replaceClipboard(
+				ownerHandle,
+				expectedSequenceNumber,
+				allocated,
+				"ClipboardMonitor failed to close clipboard after writing.",
+			)
 		finally:
 			for _formatId, handle in allocated:
 				if handle:
 					_globalFree(handle)
-		return sequenceNumber
 
 	def clearClipboard(self, ownerHandle: int, expectedSequenceNumber: int | None = None) -> int:
 		"""Remove every format if the sequence still matches an optional expectation."""
 		if not ownerHandle:
 			raise ValueError("A non-null clipboard owner is required when clearing data")
+		return self._replaceClipboard(
+			ownerHandle,
+			expectedSequenceNumber,
+			[],
+			"ClipboardMonitor failed to close clipboard after clearing.",
+		)
+
+	def _replaceClipboard(
+		self,
+		ownerHandle: int,
+		expectedSequenceNumber: int | None,
+		allocated: list[tuple[int, int]],
+		closeFailureMessage: str,
+	) -> int:
+		"""Empty the clipboard and hand it the allocated handles if its sequence still matches.
+
+		Handles transferred to the clipboard are zeroed in ``allocated``; the caller frees the rest.
+		Return the clipboard sequence number observed after closing the clipboard.
+		"""
+		writeFailure: OSError | None = None
 		if not self._openClipboardWithRetry(ownerHandle):
 			raise OSError(_OPEN_CLIPBOARD_ERROR)
 		try:
@@ -594,15 +577,20 @@ class ClipboardMonitor:
 				raise ClipboardSequenceChangedError(expectedSequenceNumber)
 			if not _emptyClipboard():
 				raise WinError()
+			for index, (formatId, handle) in enumerate(allocated):
+				if not _setClipboardData(formatId, handle):
+					writeFailure = WinError()
+					break
+				allocated[index] = (formatId, 0)
 		finally:
 			if not _closeClipboard():
-				log.debugWarning(
-					"ClipboardMonitor failed to close clipboard after clearing.",
-					exc_info=WinError(),
-				)
+				log.debugWarning(closeFailureMessage, exc_info=WinError())
+		# The final sequence is only observable after Windows publishes all formats on close.
 		sequenceNumber = self.getSequenceNumber()
 		if self.getOwnerHandle() != ownerHandle:
 			raise ClipboardSequenceChangedError(sequenceNumber)
+		if writeFailure is not None:
+			raise ClipboardWriteError(sequenceNumber) from writeFailure
 		return sequenceNumber
 
 	def getSequenceNumber(self) -> int:
@@ -647,17 +635,20 @@ class ClipboardMonitor:
 
 	def _queueMainThread(self, callback: Callable[..., None], *args: object) -> bool:
 		"""Queue one reader result and release reader state if wx is no longer accepting work."""
-		try:
-			wx.CallAfter(callback, *args)
-		except RuntimeError:
-			with self._lock:
-				isRunning = self._isRunning
-				self._readInProgress = False
-				self._readAgain = False
-			if isRunning:
-				log.debugWarning("Could not schedule a clipboard reader callback.", exc_info=True)
-			return False
-		return True
+		return queueMainThread(
+			callback,
+			*args,
+			onFailure=self._releaseReaderAfterDispatchFailure,
+			failureMessage="Could not schedule a clipboard reader callback.",
+		)
+
+	def _releaseReaderAfterDispatchFailure(self) -> bool:
+		"""Release reader state after wx rejected a result and return whether monitoring is running."""
+		with self._lock:
+			isRunning = self._isRunning
+			self._readInProgress = False
+			self._readAgain = False
+		return isRunning
 
 	def _readAndDispatchSnapshot(self, cancelToken: int) -> None:
 		"""Read and queue completed snapshots until pending updates are consumed."""
@@ -688,7 +679,7 @@ class ClipboardMonitor:
 			if shouldRetry:
 				if not reportedOpenFailure:
 					log.debugWarning(
-						f"Could not open the clipboard after {self._openRetries} attempts; retrying.",
+						f"Could not open the clipboard after {_OPEN_RETRIES} attempts; retrying.",
 					)
 					reportedOpenFailure = True
 				sleep(_FAILED_OPEN_RETRY_INTERVAL)
@@ -755,32 +746,30 @@ class ClipboardMonitor:
 					canIncludeInHistory=False,
 					canUpload=False,
 				)
-			canIncludeInHistory = self._readPolicy(self._formats.canIncludeHistory)
-			canUpload = self._readPolicy(self._formats.canUpload)
+			# Each snapshot still reads the sequence number at construction, while the clipboard is open.
+			makeSnapshot = partial(
+				ClipboardSnapshot,
+				canIncludeInHistory=self._readPolicy(self._formats.canIncludeHistory),
+				canUpload=self._readPolicy(self._formats.canUpload),
+			)
 			if self._isFormatAvailable(CF_HDROP):
 				if not includeImages and not includeRichFormats:
-					return ClipboardSnapshot(
+					return makeSnapshot(
 						ClipboardContentType.FILES,
 						sequenceNumber=self.getSequenceNumber(),
-						canIncludeInHistory=canIncludeInHistory,
-						canUpload=canUpload,
 					)
 				try:
 					files = tuple(self._readFilesFromOpenClipboard())
 				except _ClipboardDataLimitError:
-					return ClipboardSnapshot(
+					return makeSnapshot(
 						ClipboardContentType.UNSUPPORTED,
 						sequenceNumber=self.getSequenceNumber(),
-						canIncludeInHistory=canIncludeInHistory,
-						canUpload=canUpload,
 					)
-				return ClipboardSnapshot(
+				return makeSnapshot(
 					ClipboardContentType.FILES if files else ClipboardContentType.UNSUPPORTED,
 					sequenceNumber=self.getSequenceNumber(),
 					files=files,
 					preferredDropEffect=self._readPreferredDropEffect(),
-					canIncludeInHistory=canIncludeInHistory,
-					canUpload=canUpload,
 				)
 			text = self._readTextIfAvailable()
 			richLimit = MAX_RICH_FORMAT_BYTES if includeRichFormats else 0
@@ -803,7 +792,7 @@ class ClipboardMonitor:
 			hasAdvertisedImage = imageData is not None or imageDropped
 			if hasAdvertisedImage:
 				width, height, bitDepth = imageInfo or (0, 0, 0)
-				imageSnapshot = ClipboardSnapshot(
+				imageSnapshot = makeSnapshot(
 					ClipboardContentType.TEXT_AND_IMAGE if text else ClipboardContentType.IMAGE,
 					sequenceNumber=self.getSequenceNumber(),
 					text=text or "",
@@ -814,12 +803,10 @@ class ClipboardMonitor:
 					imageWidth=width,
 					imageHeight=height,
 					imageBitDepth=bitDepth,
-					canIncludeInHistory=canIncludeInHistory,
-					canUpload=canUpload,
 					richFormatsDropped=htmlDropped or rtfDropped,
 				)
 			elif text:
-				return ClipboardSnapshot(
+				return makeSnapshot(
 					ClipboardContentType.FORMATTED_TEXT
 					if html is not None or rtf is not None
 					else ClipboardContentType.TEXT,
@@ -827,8 +814,6 @@ class ClipboardMonitor:
 					text=text,
 					html=html,
 					rtf=rtf,
-					canIncludeInHistory=canIncludeInHistory,
-					canUpload=canUpload,
 					richFormatsDropped=htmlDropped or rtfDropped,
 				)
 			else:
@@ -843,12 +828,10 @@ class ClipboardMonitor:
 					or (text == "" and html is None and formatCount == policyFormatCount + 1)
 					else ClipboardContentType.UNSUPPORTED
 				)
-				return ClipboardSnapshot(
+				return makeSnapshot(
 					contentType,
 					sequenceNumber=self.getSequenceNumber(),
 					html=html,
-					canIncludeInHistory=canIncludeInHistory,
-					canUpload=canUpload,
 					richFormatsDropped=htmlDropped or rtfDropped,
 				)
 		finally:
@@ -1013,38 +996,30 @@ class ClipboardMonitor:
 		"""Read a privacy DWORD, failing closed when present but malformed."""
 		if not self._isFormatAvailable(formatId):
 			return True
-		try:
-			handle = _getClipboardData(formatId)
-			if not handle or int(_globalSize(handle)) < 4:
-				return False
-			address = _globalLock(handle)
-			if not address:
-				return False
-			try:
-				return struct.unpack("<I", string_at(address, 4))[0] == 1
-			finally:
-				_globalUnlock(handle)
-		except OSError:
-			return False
+		return self._readDword(formatId) == 1
 
 	def _readPreferredDropEffect(self) -> int:
 		"""Return the preferred copy, move, or link effect for a file group."""
 		if not self._isFormatAvailable(self._formats.preferredDropEffect):
 			return _DROPEFFECT_COPY
+		dropEffect = self._readDword(self._formats.preferredDropEffect)
+		return ((dropEffect or 0) & _DROPEFFECT_MASK) or _DROPEFFECT_COPY
+
+	def _readDword(self, formatId: int) -> int | None:
+		"""Read an available DWORD format while the clipboard is open, returning None when malformed."""
 		try:
-			handle = _getClipboardData(self._formats.preferredDropEffect)
+			handle = _getClipboardData(formatId)
 			if not handle or int(_globalSize(handle)) < 4:
-				return _DROPEFFECT_COPY
+				return None
 			address = _globalLock(handle)
 			if not address:
-				return _DROPEFFECT_COPY
+				return None
 			try:
-				dropEffect = struct.unpack("<I", string_at(address, 4))[0] & _DROPEFFECT_MASK
-				return dropEffect or _DROPEFFECT_COPY
+				return int(struct.unpack("<I", string_at(address, 4))[0])
 			finally:
 				_globalUnlock(handle)
 		except OSError:
-			return _DROPEFFECT_COPY
+			return None
 
 	def _readGlobalData(self, formatId: int, maximumBytes: int) -> bytes:
 		"""Copy bounded HGLOBAL clipboard data while the clipboard remains open."""
@@ -1208,11 +1183,11 @@ class ClipboardMonitor:
 
 	def _openClipboardWithRetry(self, ownerHandle: int | None) -> bool:
 		"""Open the clipboard, retrying briefly while another process owns it."""
-		for attempt in range(1, self._openRetries + 1):
+		for attempt in range(1, _OPEN_RETRIES + 1):
 			if _openClipboard(ownerHandle):
 				return True
-			if attempt < self._openRetries:
-				sleep(self._openRetryInterval)
+			if attempt < _OPEN_RETRIES:
+				sleep(_OPEN_RETRY_INTERVAL)
 		return False
 
 

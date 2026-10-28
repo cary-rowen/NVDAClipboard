@@ -24,7 +24,7 @@ import ui
 import wx
 
 from .configuration import getPageLineCount, getTiantanEnabled
-from .settings import NVDAClipboardSettingsPanel
+from .settingsPanel import NVDAClipboardSettingsPanel
 
 
 addonHandler.initTranslation()

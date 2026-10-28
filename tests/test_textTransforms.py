@@ -7,20 +7,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import ctypes
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "textTransforms.py"
 _PACKAGE_NAME = "nvdaClipboardTextTransformsTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_PATH.parent)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 
 
 class _IdentityOffsetConverter:
@@ -95,9 +92,11 @@ def _makeTextUtilsPackage() -> dict[str, ModuleType]:
 
 
 textTransforms = loadAddonModule(
-	f"{_PACKAGE_NAME}.textTransforms",
-	_MODULE_PATH,
-	injectedModules={"textUtils": SimpleNamespace(WideStringOffsetConverter=_IdentityOffsetConverter)},
+	f"{_PACKAGE_NAME}.manager.transforms",
+	injectedModules={
+		"textUtils": SimpleNamespace(WideStringOffsetConverter=_IdentityOffsetConverter),
+		"winUser": ModuleType("winUser"),
+	},
 )
 
 
@@ -145,7 +144,6 @@ class TextTransformTests(unittest.TestCase):
 		changed = textTransforms.applyEditorTextTransform(
 			editor,
 			textTransforms.cleanTerminalOutput,
-			lineWise=True,
 		)
 
 		self.assertTrue(changed)
@@ -174,7 +172,6 @@ class TextTransformTests(unittest.TestCase):
 		changed = textTransforms.applyEditorTextTransform(
 			editor,
 			textTransforms.trimLeadingAndTrailingSpaces,
-			lineWise=True,
 		)
 
 		self.assertTrue(changed)
@@ -200,7 +197,6 @@ class TextTransformTests(unittest.TestCase):
 			changed = textTransforms.applyEditorTextTransform(
 				editor,
 				textTransforms.replaceLineBreaksWithSpaces,
-				lineWise=True,
 			)
 
 		self.assertTrue(changed)
@@ -212,17 +208,28 @@ class TextTransformTests(unittest.TestCase):
 		"""Send CRLF line breaks to the native Windows edit control."""
 		editor = Mock()
 		editor.GetHandle.return_value = 100
-		user32 = Mock()
-		user32.IsWindow.return_value = True
+		sentTexts: list[str] = []
 
-		with patch.object(textTransforms.ctypes, "windll", SimpleNamespace(user32=user32), create=True):
+		def sendMessage(_handle: int, message: int, _wParam: int, lParam: int) -> None:
+			"""Capture the replacement text while its buffer is still alive."""
+			if message == textTransforms._EM_REPLACESEL:
+				sentTexts.append(ctypes.wstring_at(lParam))
+
+		winUser = SimpleNamespace(
+			EM_SETSEL=0x00B1,
+			isWindow=Mock(return_value=True),
+			sendMessage=Mock(side_effect=sendMessage),
+		)
+
+		with patch.object(textTransforms, "winUser", winUser):
 			replaced = textTransforms._replaceEditorRangeWithWin32(editor, 0, 7, "a\nb\n")
 
 		self.assertTrue(replaced)
-		user32.SendMessageW.assert_any_call(100, textTransforms._EM_SETSEL, 0, 7)
-		replaceCall = user32.SendMessageW.call_args_list[-1]
+		winUser.isWindow.assert_called_once_with(100)
+		winUser.sendMessage.assert_any_call(100, winUser.EM_SETSEL, 0, 7)
+		replaceCall = winUser.sendMessage.call_args_list[-1]
 		self.assertEqual((100, textTransforms._EM_REPLACESEL, True), replaceCall.args[:3])
-		self.assertEqual("a\r\nb\r\n", replaceCall.args[3].value)
+		self.assertEqual(["a\r\nb\r\n"], sentTexts)
 
 
 if __name__ == "__main__":

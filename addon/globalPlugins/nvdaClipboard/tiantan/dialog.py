@@ -14,7 +14,7 @@ import addonHandler
 import wx
 
 if TYPE_CHECKING:
-	from .cloudSync import CloudSyncManager
+	from .sync import CloudSyncManager
 
 
 addonHandler.initTranslation()
@@ -141,7 +141,7 @@ class CloudClipboardDialog(wx.Dialog):
 		self.loginPanel.Show(not state.isLoggedIn)
 		self.loggedInPanel.Show(state.isLoggedIn)
 
-		canUse = not self._busy and state.isAvailable
+		canUse = not self._busy
 		self.phoneCtrl.Enable(canUse)
 		self.passwordCtrl.Enable(canUse)
 		self.loginButton.Enable(canUse)
@@ -151,10 +151,10 @@ class CloudClipboardDialog(wx.Dialog):
 		self.Layout()
 		self.Fit()
 
-	def refreshFromManager(self, updateStatus: bool = True) -> None:
+	def refreshFromManager(self) -> None:
 		"""Refresh controls after cloud state changes outside this dialog."""
 		if not self._isDestroyed:
-			self._refreshUi(updateStatus=updateStatus)
+			self._refreshUi()
 
 	def _setBusy(self, busy: bool, message: str | None = None) -> None:
 		self._busy = busy

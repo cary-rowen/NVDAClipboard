@@ -16,18 +16,19 @@ from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "fileSize.py"
+_PACKAGE_NAME = "nvdaClipboardFileSizeTests"
+createAddonPackage(_PACKAGE_NAME)
 _WIN_BINDINGS = ModuleType("winBindings")
 _WIN_BINDINGS.kernel32 = SimpleNamespace(GetDriveType=lambda _root: 3)
 fileSize = loadAddonModule(
-	"nvdaClipboardFileSize",
-	_MODULE_PATH,
+	f"{_PACKAGE_NAME}.summary.fileSize",
 	injectedModules={
 		"logHandler": SimpleNamespace(log=SimpleNamespace(exception=lambda *_args, **_kwargs: None)),
 		"winBindings": _WIN_BINDINGS,
+		"wx": SimpleNamespace(CallAfter=lambda *_args: None),
 	},
 )
 

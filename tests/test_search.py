@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import tracemalloc
 import unittest
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "search.py"
-search = loadAddonModule("nvdaClipboardSearch", _MODULE_PATH)
+_PACKAGE_NAME = "nvdaClipboardSearchTests"
+createAddonPackage(_PACKAGE_NAME)
+search = loadAddonModule(f"{_PACKAGE_NAME}.textSearch")
 
 
 class SearchTests(unittest.TestCase):

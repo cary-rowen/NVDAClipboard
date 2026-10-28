@@ -31,17 +31,17 @@ import ui
 import winUser
 import wx
 
-from .cues import playNonPlainText
-from .clipboardData import MAX_TEXT_BYTES
-from . import textTransforms
-from .managerEditor import _ManagerEditorCommands
-from .configuration import getConfirmOnClose, getManagerWindowState
-from .search import normalizeSearchText, splitSearchKeywords
-from .storage import ItemNotFoundError
-from .storageModels import ClipboardItemType
+from ..cues import playNonPlainText
+from ..clipboard.payload import MAX_TEXT_BYTES
+from . import transforms as textTransforms
+from .editor import _ManagerEditorCommands
+from ..configuration import getConfirmOnClose, getManagerWindowState
+from ..textSearch import normalizeSearchText, splitSearchKeywords
+from ..storage.database import ItemNotFoundError
+from ..storage.models import ClipboardItemType
 
 if TYPE_CHECKING:
-	from .controller import CategoryId, ClipboardController, MissingFileCleanupResult
+	from ..controller import CategoryId, ClipboardController, MissingFileCleanupResult
 
 __all__ = ["ClipboardManagerFrame"]
 
@@ -654,15 +654,12 @@ class ClipboardManagerFrame(wx.Frame):
 			cloudState = cloudSync.getState()
 			if self.autoSyncTiantanItem is not None:
 				self.autoSyncTiantanItem.Check(cloudState.isAutoSyncEnabled)
-				self.autoSyncTiantanItem.Enable(cloudState.isAvailable)
 			if self.sendToTiantanItem is not None:
 				self.sendToTiantanItem.Enable(
-					cloudState.isAvailable
-					and cloudState.isLoggedIn
-					and not cloudState.isManualSendInProgress,
+					cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
 				)
 			if self.receiveFromTiantanItem is not None:
-				self.receiveFromTiantanItem.Enable(cloudState.isAvailable and cloudState.isLoggedIn)
+				self.receiveFromTiantanItem.Enable(cloudState.isLoggedIn)
 		oneDriveState = self.controller.oneDriveSync.getState()
 		self.syncOneDriveItem.Enable(
 			oneDriveState.isAvailable
@@ -1446,30 +1443,20 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _saveVisibleContent(self, *, closeAfterSave: bool) -> bool:
 		"""Save the current editor text, optionally closing the manager."""
-		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
+		if not self._canEditContent():
 			return False
 		category = self._getSelectedCategory()
 		if category is None:
 			return False
 		try:
 			text = self.editor.GetValue()
-			if self.controller.isHistoryCategory(category):
-				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
-					return False
-				self._markSystemClipboardTextSaved(text)
-			else:
-				self.controller.savePlainTextToCategory(
-					category,
-					text,
-					canUpload=self._contentCanUpload,
-					notifyManager=False,
-				)
+			if not self._saveText(category, text, notifyManager=False):
+				return False
 			self._markContentSaved(text)
 			if closeAfterSave:
 				self.Close()
 				return True
-			isHistory = self.controller.isHistoryCategory(category)
-			if not isHistory:
+			if not self.controller.isHistoryCategory(category):
 				self._reloadItemsFromController(preferredIndex=0, selectedKeys=())
 				self._loadActiveItem(confirmDirty=False)
 		except Exception as error:
@@ -1526,22 +1513,28 @@ class ClipboardManagerFrame(wx.Frame):
 		"""Save modified plain text according to its category context."""
 		text = self.editor.GetValue()
 		try:
-			if category is None or self.controller.isHistoryCategory(category):
-				if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
-					return False
-				self._markSystemClipboardTextSaved(text)
-			else:
-				# A later dialog or operation may be cancelled or fail, so this save must refresh independently.
-				self.controller.savePlainTextToCategory(
-					category,
-					text,
-					canUpload=self._contentCanUpload,
-					notifyManager=True,
-				)
+			# A later dialog or operation may be cancelled or fail, so a category save must refresh independently.
+			if not self._saveText(category, text, notifyManager=True):
+				return False
 		except Exception as error:
 			self._showError(error)
 			return False
 		self._markContentSaved(text)
+		return True
+
+	def _saveText(self, category: CategoryId | None, text: str, *, notifyManager: bool) -> bool:
+		"""Put history text on the clipboard or save it to its category; return False if the write was declined."""
+		if category is None or self.controller.isHistoryCategory(category):
+			if self.controller.replaceClipboardWithText(text, canUpload=self._contentCanUpload) is False:
+				return False
+			self._markSystemClipboardTextSaved(text)
+		else:
+			self.controller.savePlainTextToCategory(
+				category,
+				text,
+				canUpload=self._contentCanUpload,
+				notifyManager=notifyManager,
+			)
 		return True
 
 	def _getSelectedCategory(self) -> CategoryId | None:
@@ -1600,6 +1593,18 @@ class ClipboardManagerFrame(wx.Frame):
 			and self._contentActiveKey == self._getActiveItemKey()
 		)
 
+	def _hasSearchableText(self) -> bool:
+		"""Return whether the editor shows current, non-empty, non-image content."""
+		return (
+			self._isContentCurrent()
+			and self.editor.GetLastPosition() != 0
+			and self._contentKind != ClipboardItemType.IMAGE
+		)
+
+	def _canEditContent(self) -> bool:
+		"""Return whether the current content may be edited outside a search session."""
+		return not self._isSearchSessionActive and self._isContentCurrent() and self._contentEditable
+
 	def _isStoredContentCurrent(self) -> bool:
 		"""Return whether the editor contains the active stored entry rather than a draft."""
 		return (
@@ -1612,10 +1617,8 @@ class ClipboardManagerFrame(wx.Frame):
 		"""Enable commands valid for the visible content and category."""
 		category = self._getSelectedCategory()
 		hasCategory = category is not None
-		isCurrentContent = self._isContentCurrent()
-		hasContent = isCurrentContent and self.editor.GetLastPosition() != 0
-		hasTextContent = hasContent and self._contentKind != ClipboardItemType.IMAGE
-		canEditContent = isCurrentContent and self._contentEditable and not self._isSearchSessionActive
+		hasTextContent = self._hasSearchableText()
+		canEditContent = self._canEditContent()
 		self._updateSaveMenuLabels()
 		if self._newItem is not None:
 			self._newItem.Enable(not self._isSearchSessionActive)
@@ -1623,7 +1626,9 @@ class ClipboardManagerFrame(wx.Frame):
 			self._openItem.Enable(not self._isSearchSessionActive)
 		self.saveAsItem.Enable(hasTextContent)
 		self.replaceClipboardItem.Enable(canEditContent)
-		self.savePlainTextToCategoryItem.Enable(hasContent and canEditContent and hasCategory)
+		self.savePlainTextToCategoryItem.Enable(
+			canEditContent and self.editor.GetLastPosition() != 0 and hasCategory,
+		)
 		self.findItem.Enable(hasTextContent)
 		self.continueFindItem.Enable(hasTextContent)
 		self.previousFindItem.Enable(hasTextContent)
@@ -1635,6 +1640,13 @@ class ClipboardManagerFrame(wx.Frame):
 			self._textCleanupMenuItem.Enable(canEditContent)
 		if self._lineOperationsMenuItem is not None:
 			self._lineOperationsMenuItem.Enable(canEditContent)
+
+	def _runSafely(self, action: Callable[..., None], *args: object) -> None:
+		"""Run one action and show any failure instead of propagating it to wx."""
+		try:
+			action(*args)
+		except Exception as error:
+			self._showError(error)
 
 	def _showError(self, error: Exception) -> None:
 		if not isinstance(error, (ValueError, re.error)):
@@ -2199,10 +2211,7 @@ class ClipboardManagerFrame(wx.Frame):
 		key = self._getActiveItemKey()
 		if category is None or index is None or key is None:
 			return
-		try:
-			self.controller.saveStoredItemImage(category, key, self)
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.saveStoredItemImage, category, key, self)
 
 	def _onNewEntry(self, event: wx.CommandEvent) -> None:
 		"""Start a blank plain-text entry in the selected category."""
@@ -2252,11 +2261,7 @@ class ClipboardManagerFrame(wx.Frame):
 			dialog.Destroy()
 
 	def _onSaveAs(self, event: wx.CommandEvent) -> None:
-		if (
-			not self._isContentCurrent()
-			or self.editor.GetLastPosition() == 0
-			or self._contentKind == ClipboardItemType.IMAGE
-		):
+		if not self._hasSearchableText():
 			return
 		dialog = wx.FileDialog(
 			self,
@@ -2285,11 +2290,7 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onFind(self, event: wx.CommandEvent, backwards: bool = False) -> None:
 		"""Open the editor find dialog when visible content can be searched."""
-		if (
-			not self._isContentCurrent()
-			or self.editor.GetLastPosition() == 0
-			or self._contentKind == ClipboardItemType.IMAGE
-		):
+		if not self._hasSearchableText():
 			return
 		self._editorCommands.showFind(backwards=backwards)
 
@@ -2307,17 +2308,13 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onReplace(self, event: wx.CommandEvent) -> None:
 		"""Open the editor replacement dialog for editable content."""
-		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
+		if not self._canEditContent():
 			return
 		self._editorCommands.showReplace()
 
 	def _onGotoLine(self, event: wx.CommandEvent) -> None:
 		"""Open line navigation for visible text content."""
-		if (
-			not self._isContentCurrent()
-			or self.editor.GetLastPosition() == 0
-			or self._contentKind == ClipboardItemType.IMAGE
-		):
+		if not self._hasSearchableText():
 			return
 		self._editorCommands.goToLine()
 
@@ -2328,30 +2325,21 @@ class ClipboardManagerFrame(wx.Frame):
 		transform: Callable[[str], str],
 	) -> None:
 		"""Apply one text transform to the current editable content."""
-		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
+		if not self._canEditContent():
 			return
-		textTransforms.applyEditorTextTransform(self.editor, transform, lineWise=True)
+		textTransforms.applyEditorTextTransform(self.editor, transform)
 
 	def _onCloudSync(self, event: wx.CommandEvent) -> None:
 		"""Open the Tiantan Cloud Clipboard account dialog."""
-		try:
-			self.controller.showCloudDialog(self)
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.showCloudDialog, self)
 
 	def _onOneDriveSync(self, event: wx.CommandEvent) -> None:
 		"""Open the OneDrive account dialog."""
-		try:
-			self.controller.showOneDriveDialog(self)
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.showOneDriveDialog, self)
 
 	def _onSendToTiantan(self, event: wx.CommandEvent) -> None:
 		"""Send current clipboard text to Tiantan Cloud Clipboard."""
-		try:
-			self.controller.sendToTiantan()
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.sendToTiantan)
 
 	def _onAutoSyncTiantan(self, event: wx.CommandEvent) -> None:
 		"""Toggle automatic Tiantan Cloud Clipboard synchronization."""
@@ -2361,17 +2349,11 @@ class ClipboardManagerFrame(wx.Frame):
 
 	def _onReceiveFromTiantan(self, event: wx.CommandEvent) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard."""
-		try:
-			self.controller.receiveFromTiantan()
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.receiveFromTiantan)
 
 	def _onSyncOneDrive(self, event: wx.CommandEvent) -> None:
 		"""Synchronize with OneDrive immediately."""
-		try:
-			self.controller.syncOneDrive()
-		except Exception as error:
-			self._showError(error)
+		self._runSafely(self.controller.syncOneDrive)
 
 	def _onCharHook(self, event: wx.KeyEvent) -> None:
 		"""Handle manager-wide keys and list batch commands."""

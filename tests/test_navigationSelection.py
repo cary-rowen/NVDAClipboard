@@ -10,19 +10,19 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, replace
 from enum import Enum, auto
-from pathlib import Path
 from time import monotonic
 from types import MethodType, SimpleNamespace
 import sys
 import unittest
 from unittest.mock import Mock, patch
 
+from tests._module_loader import addonSourcePath
 from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
-_NAVIGATION_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "navigation.py"
-_CONTROLLER_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
+_NAVIGATION_PATH = addonSourcePath("navigation")
+_CONTROLLER_PATH = addonSourcePath("controller")
 
 _UI = SimpleNamespace(message=Mock())
 _SPEECH = SimpleNamespace(speakTextSelected=Mock())

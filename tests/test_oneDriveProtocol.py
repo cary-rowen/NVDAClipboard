@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
-from pathlib import Path
 import struct
 import sys
 from types import ModuleType
@@ -18,14 +17,11 @@ from unittest.mock import Mock, patch
 from uuid import UUID
 import zlib
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardOneDriveProtocolTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 
 
 def _translate(message: str) -> str:
@@ -43,11 +39,10 @@ _ADDON_HANDLER.initTranslation = _initTranslation
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
 oneDriveProtocol = loadAddonModule(
-	f"{_PACKAGE_NAME}.oneDriveProtocol",
-	_MODULE_DIRECTORY / "oneDriveProtocol.py",
+	f"{_PACKAGE_NAME}.oneDrive.protocol",
 	injectedModules={"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER},
 )
-storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
+storage = sys.modules[f"{_PACKAGE_NAME}.storage.database"]
 
 
 class OneDriveProtocolTests(unittest.TestCase):
@@ -143,7 +138,7 @@ class OneDriveProtocolTests(unittest.TestCase):
 		payloadHash = storage.getItemPayloadHash(item)
 		firstVersion = oneDriveProtocol.SyncVersion(1, "00000000-0000-0000-0000-000000000001")
 		secondVersion = oneDriveProtocol.SyncVersion(2, "00000000-0000-0000-0000-000000000002")
-		dedupKey = storage.getItemDedupKey(item)
+		dedupKey = storage._dedupKey(item)
 		local = oneDriveProtocol.OneDriveSyncSnapshot(
 			accountId="account",
 			history=(oneDriveProtocol.OneDriveHistoryState(dedupKey, payloadHash, firstVersion, False),),

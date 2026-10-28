@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import platform
 from threading import Lock
 
-from ._nativeDeps import getNativeFilePath
+from .._native import getNativeFilePath
 
 
 _SDK_DLL_NAME_BY_MACHINE = {

@@ -9,21 +9,18 @@ from __future__ import annotations
 
 import ast
 import ctypes
-from pathlib import Path
 import struct
 import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import addonSourcePath, createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardClipboardMonitorTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
+_WX = SimpleNamespace()
 
 with (
 	patch.object(ctypes, "windll", Mock(), create=True),
@@ -34,13 +31,12 @@ with (
 			"logHandler": SimpleNamespace(log=Mock()),
 			"winBindings": SimpleNamespace(gdi32=Mock(), kernel32=Mock(), user32=Mock()),
 			"windowUtils": SimpleNamespace(CustomWindow=type("CustomWindow", (), {})),
-			"wx": SimpleNamespace(),
+			"wx": _WX,
 		},
 	),
 ):
 	clipboardMonitor = loadAddonModule(
-		f"{_PACKAGE_NAME}.clipboardMonitor",
-		_MODULE_DIRECTORY / "clipboardMonitor.py",
+		f"{_PACKAGE_NAME}.clipboard.monitor",
 	)
 
 
@@ -318,7 +314,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 		)
 
 		with patch.object(
-			clipboardMonitor.wx,
+			_WX,
 			"CallAfter",
 			side_effect=RuntimeError("wx stopped"),
 			create=True,
@@ -390,7 +386,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 				with (
 					patch.object(clipboardMonitor, "Thread") as readerThread,
 					patch.object(
-						clipboardMonitor.wx,
+						_WX,
 						"CallAfter",
 						side_effect=lambda function, *args: function(*args),
 						create=True,
@@ -491,7 +487,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 
 	def testControllerTranslatesOversizedTextAndResynchronizesMonitor(self) -> None:
 		"""Translate a rejected text write and resume clipboard monitoring."""
-		controllerPath = _MODULE_DIRECTORY / "controller.py"
+		controllerPath = addonSourcePath("controller")
 		tree = ast.parse(controllerPath.read_text(encoding="utf-8"))
 		controllerClass = next(
 			node

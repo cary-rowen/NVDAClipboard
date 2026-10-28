@@ -7,14 +7,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 import os
 import stat
-from threading import Event, Lock, Thread
+from threading import Lock
+from typing import override
 
 from logHandler import log
 from winBindings import kernel32
+
+from ..background import BackgroundCalculation
 
 
 __all__ = ["FileSizeCalculation", "FileSizeProgress"]
@@ -48,50 +50,25 @@ class _ScanTotals:
 	isIncomplete: bool = False
 
 
-class FileSizeCalculation:
+class FileSizeCalculation(BackgroundCalculation[FileSizeProgress]):
 	"""Calculate the logical size of files and directory contents in one background thread."""
+
+	_threadName = "nvdaClipboard.fileSize"
+	_startFailureMessage = "Unable to start clipboard file size calculation"
+	_completionFailureMessage = "Unable to report clipboard file size completion"
 
 	def __init__(self, paths: tuple[str, ...]) -> None:
 		"""Create a calculation that remains idle until :meth:`start` is called."""
+		super().__init__(FileSizeProgress())
 		self._paths: tuple[str, ...] = tuple(paths)
-		self._cancelEvent: Event = Event()
-		self._progressLock: Lock = Lock()
-		self._progress: FileSizeProgress = FileSizeProgress()
-		self._hasStarted: bool = False
 
-	def start(
-		self,
-		onComplete: Callable[[FileSizeCalculation], None] | None = None,
-	) -> bool:
-		"""Start the calculation once and return whether its worker was started."""
-		with self._progressLock:
-			if self._hasStarted:
-				return False
-			self._hasStarted = True
-			thread = Thread(
-				target=self._run,
-				args=(onComplete,),
-				name="nvdaClipboard.fileSize",
-				daemon=True,
-			)
-		try:
-			thread.start()
-		except RuntimeError:
-			log.exception("Unable to start clipboard file size calculation")
-			self._publish(_ScanTotals(isIncomplete=True), isComplete=True)
-			return False
-		return True
+	@override
+	def _publishStartFailure(self) -> None:
+		"""Publish an incomplete empty result when the worker thread cannot be started."""
+		self._publish(_ScanTotals(isIncomplete=True), isComplete=True)
 
-	def getProgress(self) -> FileSizeProgress:
-		"""Return an immutable snapshot of the latest calculation progress."""
-		with self._progressLock:
-			return self._progress
-
-	def cancel(self) -> None:
-		"""Request cancellation without waiting for the worker thread."""
-		self._cancelEvent.set()
-
-	def _run(self, onComplete: Callable[[FileSizeCalculation], None] | None) -> None:
+	@override
+	def _calculate(self) -> None:
 		"""Run the calculation under the process-wide scanning slot."""
 		totals = _ScanTotals()
 		hasScanSlot = False
@@ -110,11 +87,6 @@ class FileSizeCalculation:
 				_scanSlot.release()
 			totals.isIncomplete = totals.isIncomplete or self._cancelEvent.is_set()
 			self._publish(totals, isComplete=True)
-		if onComplete is not None:
-			try:
-				onComplete(self)
-			except Exception:
-				log.exception("Unable to report clipboard file size completion")
 
 	def _scan(self, totals: _ScanTotals) -> None:
 		"""Add metadata for each local regular file and directory to the totals."""
@@ -201,14 +173,15 @@ class FileSizeCalculation:
 		isComplete: bool = False,
 	) -> None:
 		"""Atomically replace the progress visible to callers."""
-		with self._progressLock:
-			self._progress = FileSizeProgress(
+		self._setProgress(
+			FileSizeProgress(
 				byteCount=totals.byteCount,
 				fileCount=totals.fileCount,
 				directoryCount=totals.directoryCount,
 				isComplete=isComplete,
 				isIncomplete=totals.isIncomplete,
-			)
+			),
+		)
 
 
 def _isRemotePath(path: str) -> bool:

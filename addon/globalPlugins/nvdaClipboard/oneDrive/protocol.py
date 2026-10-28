@@ -17,9 +17,9 @@ from uuid import UUID
 
 import addonHandler
 
-from .clipboardData import getPngImageInfo, isImageSizeSafe
-from .imageCodec import isPngImageDecodable
-from .storage import (
+from ..clipboard.payload import getPngImageInfo, isImageSizeSafe
+from ..clipboard.imageCodec import isPngImageDecodable
+from ..storage.database import (
 	MAX_HISTORY_ITEMS,
 	MAX_IMAGE_HISTORY_ITEMS,
 	MAX_TOTAL_IMAGE_BYTES,
@@ -28,7 +28,7 @@ from .storage import (
 	isOneDriveSyncItem,
 )
 
-from .storageModels import (
+from ..storage.models import (
 	ClipboardItem,
 	ClipboardItemType,
 	OneDriveCategoryItemState,

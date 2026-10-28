@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
 from threading import BoundedSemaphore, Event, Thread
 from time import monotonic
-from typing import TYPE_CHECKING, Never
+from typing import TYPE_CHECKING, Literal, Never
 
 import addonHandler
 import api
@@ -29,12 +29,13 @@ import gui
 from keyboardHandler import KeyboardInputGesture
 from logHandler import log
 import speech
+from speech import CHUNK_SEPARATOR
 import textInfos
 import ui
 import winUser
 import wx
 
-from .clipboardMonitor import (
+from .clipboard.monitor import (
 	ClipboardContentType,
 	ClipboardMonitor,
 	ClipboardSequenceChangedError,
@@ -42,32 +43,30 @@ from .clipboardMonitor import (
 	ClipboardWriteError,
 )
 from .configuration import getShowClipboardContentAsPlainText
-from .clipboardData import (
+from .clipboard.payload import (
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,
 	isImageSizeSafe,
 	normalizeNewlinesForWin32,
 )
-from .imageCodec import (
+from .clipboard.imageCodec import (
 	ImageDataTooLargeError,
 	isPngImageDecodable,
 	normalizeImageDataToPng,
 	pngToPackedDib,
 )
-from .fileSize import FileSizeCalculation
-from . import lastSpoken
-from .cloudSync import CloudClipboardWriteError, CloudSyncManager
+from .summary.fileSize import FileSizeCalculation
+from .tiantan.sync import CloudClipboardWriteError, CloudSyncManager, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
-from .oneDriveSync import OneDriveSyncManager
-from .search import matchesSearchKeywords, normalizeSearchText
+from .oneDrive.sync import OneDriveSyncManager
+from .textSearch import matchesSearchKeywords, normalizeSearchText
 from .cues import playBoundary, playCopy, playLineBoundary, playNonPlainText
-from .images import (
+from .clipboard.images import (
 	ScreenCurtainCaptureUnavailableError,
 	captureNavigatorObjectPng,
 	savePngImage,
 )
-from .tiantanSupport import getTiantanSupportState
-from .storage import (
+from .storage.database import (
 	CategoryExistsError,
 	CategoryNameError,
 	CategoryNotEmptyError,
@@ -80,13 +79,13 @@ from .storage import (
 	StorageError,
 	StorageFormatError,
 )
-from .storageModels import ClipboardItem, ClipboardItemContent, ClipboardItemSummary, ClipboardItemType
-from .textStats import TextStatistics, TextStatisticsCalculation
+from .storage.models import ClipboardItem, ClipboardItemContent, ClipboardItemSummary, ClipboardItemType
+from .summary.textStats import TextStatistics, TextStatisticsCalculation
 
 if TYPE_CHECKING:
-	from .cloudDialog import CloudClipboardDialog
-	from .manager import ClipboardManagerFrame
-	from .oneDriveDialog import OneDriveSyncDialog
+	from .tiantan.dialog import CloudClipboardDialog
+	from .manager.window import ClipboardManagerFrame
+	from .oneDrive.dialog import OneDriveSyncDialog
 
 
 addonHandler.initTranslation()
@@ -132,8 +131,20 @@ class _BuiltinCategory(Enum):
 
 
 type CategoryId = str | _BuiltinCategory
+# Background calculation backing the summary of the current clipboard content.
+type _SummaryCalculation = FileSizeCalculation | TextStatisticsCalculation
 
 _HISTORY_CATEGORY_ID = _BuiltinCategory.HISTORY
+
+# Content types whose snapshots or stored items carry navigable clipboard text.
+_TEXT_CONTENT_TYPES = frozenset(
+	{ClipboardContentType.TEXT, ClipboardContentType.FORMATTED_TEXT, ClipboardContentType.TEXT_AND_IMAGE},
+)
+_TEXT_ITEM_TYPES = frozenset(
+	{ClipboardItemType.PLAIN_TEXT, ClipboardItemType.FORMATTED_TEXT, ClipboardItemType.TEXT_AND_IMAGE},
+)
+# Content types whose snapshots carry an image.
+_IMAGE_CONTENT_TYPES = frozenset({ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE})
 
 
 def _waitForTriggerKeysReleased(
@@ -148,6 +159,18 @@ def _waitForTriggerKeysReleased(
 		return False
 	callLater(_PASTE_KEY_RELEASE_POLL_INTERVAL_MS, retry)
 	return None
+
+
+@contextmanager
+def _popup(mainFrame: gui.MainFrame | None) -> Iterator[None]:
+	"""Bracket showing an add-on window with NVDA's main frame popup notifications, if available."""
+	if mainFrame is not None:
+		mainFrame.prePopup()
+	try:
+		yield
+	finally:
+		if mainFrame is not None:
+			mainFrame.postPopup()
 
 
 def _normalizeUnicodeText(text: str) -> str:
@@ -184,6 +207,19 @@ def _getTextOrCharacterCount(text: str, maxLength: int = 1024) -> str:
 		return text
 	# Translators: Presented instead of lengthy text in clipboard feedback.
 	return ngettext("%d character", "%d characters", textLength) % textLength
+
+
+def _getLastSpokenText() -> str | None:
+	"""Return the text from NVDA's most recent speech sequence."""
+	# NVDA 2026.3 private record: (speechSequence, symbolLevel).
+	try:
+		lastSpeech = getattr(speech.speech, "_lastSpeech")
+	except AttributeError:
+		log.debugWarning("NVDA's last speech record is unavailable.", exc_info=True)
+		return None
+	if lastSpeech is None:
+		return None
+	return CHUNK_SEPARATOR.join(item for item in lastSpeech[0] if isinstance(item, str))
 
 
 class _ClipboardChangeSource(Enum):
@@ -371,13 +407,11 @@ class ClipboardController:
 			if tiantanEnabled:
 				tiantanSupportState = getTiantanSupportState()
 				self._tiantanUnavailableMessage = tiantanSupportState.statusMessage
-				if tiantanSupportState.isAvailable:
-					self.cloudSync = CloudSyncManager(onStateChanged=self._onCloudStateChanged)
-					cloudState = self.cloudSync.getState()
-					if not cloudState.isAvailable:
-						self._tiantanUnavailableMessage = cloudState.statusMessage
-						self.cloudSync.terminate()
-						self.cloudSync = None
+				if tiantanSupportState.sdk is not None:
+					self.cloudSync = CloudSyncManager(
+						tiantanSupportState.sdk,
+						onStateChanged=self._onCloudStateChanged,
+					)
 			self.oneDriveSync = OneDriveSyncManager(
 				self.storage,
 				onStateChanged=self._onOneDriveStateChanged,
@@ -404,10 +438,8 @@ class ClipboardController:
 		self._contentType = ClipboardContentType.EMPTY
 		self._text = ""
 		self._canUpload = False
-		self._fileSizeCalculation: FileSizeCalculation | None = None
-		self._pendingFileSizeReport: FileSizeCalculation | None = None
-		self._textStatisticsCalculation: TextStatisticsCalculation | None = None
-		self._pendingTextStatisticsReport: TextStatisticsCalculation | None = None
+		self._summaryCalculation: _SummaryCalculation | None = None
+		self._pendingSummaryReport: _SummaryCalculation | None = None
 		self._missingFileCleanupInProgress = False
 		# Translators: Summary used when the system clipboard is empty.
 		self._summary = _("Clipboard is empty")
@@ -456,14 +488,10 @@ class ClipboardController:
 		self._cloudFetchInProgress = False
 		self._temporaryPasteInProgress = False
 		self._temporaryPasteState = None
-		self._pendingFileSizeReport = None
-		if self._fileSizeCalculation is not None:
-			self._fileSizeCalculation.cancel()
-			self._fileSizeCalculation = None
-		self._pendingTextStatisticsReport = None
-		if self._textStatisticsCalculation is not None:
-			self._textStatisticsCalculation.cancel()
-			self._textStatisticsCalculation = None
+		self._pendingSummaryReport = None
+		if self._summaryCalculation is not None:
+			self._summaryCalculation.cancel()
+			self._summaryCalculation = None
 		try:
 			self.monitor.stop()
 		except Exception:
@@ -491,94 +519,85 @@ class ClipboardController:
 		mainFrame = gui.mainFrame
 		if mainFrame is None:
 			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		mainFrame.prePopup()
-		try:
+		with _popup(mainFrame):
 			if self.manager is None:
-				from .manager import ClipboardManagerFrame
+				from .manager.window import ClipboardManagerFrame
 
 				self.manager = ClipboardManagerFrame(mainFrame, self)
 			self.manager.showManager(self._resolveStoredItemCategory(), self._storedItemIndex)
-		finally:
-			mainFrame.postPopup()
+
+	def _showSingletonDialog(
+		self,
+		attributeName: Literal["cloudDialog", "oneDriveDialog"],
+		parent: wx.Window | None,
+		createDialog: Callable[[wx.Window], wx.Dialog],
+	) -> None:
+		"""Raise the dialog stored in ``attributeName``, or create, store, and show a new one."""
+		existingDialog: wx.Dialog | None = getattr(self, attributeName)
+		if existingDialog is not None:
+			try:
+				existingDialog.Raise()
+				existingDialog.SetFocus()
+				return
+			except RuntimeError:
+				setattr(self, attributeName, None)
+		mainFrame = gui.mainFrame
+		dialogParent = parent if parent is not None else mainFrame
+		if dialogParent is None:
+			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
+		dialog = createDialog(dialogParent)
+		setattr(self, attributeName, dialog)
+		with _popup(mainFrame):
+			dialog.Show()
+			dialog.Raise()
 
 	def showCloudDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the Tiantan Cloud Clipboard account dialog."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getAvailableCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
-		if not cloudSync.getState().isAvailable:
-			ui.message(cloudSync.getState().statusMessage)
-			return
-		if self.cloudDialog is not None:
-			try:
-				self.cloudDialog.Raise()
-				self.cloudDialog.SetFocus()
-				return
-			except RuntimeError:
-				self.cloudDialog = None
-		mainFrame = gui.mainFrame
-		dialogParent = parent if parent is not None else mainFrame
-		if dialogParent is None:
-			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		from .cloudDialog import CloudClipboardDialog
+		from .tiantan.dialog import CloudClipboardDialog
 
-		self.cloudDialog = CloudClipboardDialog(
-			dialogParent,
-			cloudSync,
-			self._clearCloudDialog,
+		self._showSingletonDialog(
+			"cloudDialog",
+			parent,
+			lambda dialogParent: CloudClipboardDialog(dialogParent, cloudSync, self._clearCloudDialog),
 		)
-		if mainFrame is not None:
-			mainFrame.prePopup()
-		try:
-			self.cloudDialog.Show()
-			self.cloudDialog.Raise()
-		finally:
-			if mainFrame is not None:
-				mainFrame.postPopup()
 
 	def showOneDriveDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the OneDrive history synchronization dialog."""
-		if self.oneDriveDialog is not None:
-			try:
-				self.oneDriveDialog.Raise()
-				self.oneDriveDialog.SetFocus()
-				return
-			except RuntimeError:
-				self.oneDriveDialog = None
-		mainFrame = gui.mainFrame
-		dialogParent = parent if parent is not None else mainFrame
-		if dialogParent is None:
-			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		from .oneDriveDialog import OneDriveSyncDialog
+		from .oneDrive.dialog import OneDriveSyncDialog
 
-		self.oneDriveDialog = OneDriveSyncDialog(
-			dialogParent,
-			self.oneDriveSync,
-			self._clearOneDriveDialog,
+		self._showSingletonDialog(
+			"oneDriveDialog",
+			parent,
+			lambda dialogParent: OneDriveSyncDialog(
+				dialogParent,
+				self.oneDriveSync,
+				self._clearOneDriveDialog,
+			),
 		)
-		if mainFrame is not None:
-			mainFrame.prePopup()
-		try:
-			self.oneDriveDialog.Show()
-			self.oneDriveDialog.Raise()
-		finally:
-			if mainFrame is not None:
-				mainFrame.postPopup()
 
-	def pasteCloudText(self, triggerKeyCodes: frozenset[int]) -> None:
-		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
+	def _getAvailableCloudSync(self) -> CloudSyncManager | None:
+		"""Return the Tiantan Cloud Clipboard manager, or report why it is unavailable."""
 		cloudSync = self.cloudSync
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-			return
-		state = cloudSync.getState()
-		if not state.isAvailable:
-			ui.message(state.statusMessage)
-			return
-		if self._cloudFetchInProgress:
+		return cloudSync
+
+	def _getIdleCloudSync(self) -> CloudSyncManager | None:
+		"""Return the Tiantan Cloud Clipboard manager only when no receive is already running."""
+		cloudSync = self._getAvailableCloudSync()
+		if cloudSync is not None and self._cloudFetchInProgress:
 			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
 			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
+			return None
+		return cloudSync
+
+	def pasteCloudText(self, triggerKeyCodes: frozenset[int]) -> None:
+		"""Fetch cloud text, leave it on the clipboard, and send the paste gesture."""
+		cloudSync = self._getIdleCloudSync()
+		if cloudSync is None:
 			return
 		focusObject = self._getFocusObject()
 		if focusObject is None:
@@ -615,25 +634,15 @@ class ClipboardController:
 
 	def sendToTiantan(self) -> None:
 		"""Send the current allowed clipboard text to Tiantan Cloud Clipboard."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getAvailableCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
 		cloudSync.uploadCurrentText(self._getCurrentCloudUploadText())
 
 	def receiveFromTiantan(self) -> None:
 		"""Receive Tiantan Cloud Clipboard text into the system clipboard without pasting it."""
-		cloudSync = self.cloudSync
+		cloudSync = self._getIdleCloudSync()
 		if cloudSync is None:
-			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-			return
-		state = cloudSync.getState()
-		if not state.isAvailable:
-			ui.message(state.statusMessage)
-			return
-		if self._cloudFetchInProgress:
-			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
-			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
 			return
 		self._cloudFetchInProgress = True
 
@@ -655,51 +664,31 @@ class ClipboardController:
 
 	def reportClipboardSummary(self) -> None:
 		"""Report a concise summary of the current clipboard content."""
-		calculation = self._fileSizeCalculation
-		if self._contentType == ClipboardContentType.FILES and calculation is not None:
-			if calculation.start(onComplete=self._onFileSizeCalculationComplete):
-				self._pendingFileSizeReport = calculation
-				try:
-					callLater(
-						_SUMMARY_REPORT_TIMEOUT_MS,
-						self._reportPendingFileSizeSummary,
-						calculation,
-					)
-				except Exception:
-					self._pendingFileSizeReport = None
-					self._reportFileSizeSummary(calculation)
-					return
-				if speech.getState().speechMode == speech.SpeechMode.onDemand:
-					self._reportFileSizeSummary(calculation)
-				return
-			self._pendingFileSizeReport = None
-			self._reportFileSizeSummary(calculation)
+		calculation = self._summaryCalculation
+		if calculation is None:
+			ui.message(self._summary)
 			return
-		calculation = self._textStatisticsCalculation
-		if calculation is not None:
-			if calculation.start(onComplete=self._onTextStatisticsCalculationComplete):
-				self._pendingTextStatisticsReport = calculation
-				try:
-					callLater(
-						_SUMMARY_REPORT_TIMEOUT_MS,
-						self._reportPendingTextStatisticsSummary,
-						calculation,
-					)
-				except Exception:
-					self._pendingTextStatisticsReport = None
-					self._reportTextStatisticsSummary(calculation)
-					return
-				if speech.getState().speechMode == speech.SpeechMode.onDemand:
-					self._reportTextStatisticsSummary(calculation)
+		if calculation.start(onComplete=self._onSummaryCalculationComplete):
+			self._pendingSummaryReport = calculation
+			try:
+				callLater(
+					_SUMMARY_REPORT_TIMEOUT_MS,
+					self._reportPendingSummary,
+					calculation,
+				)
+			except Exception:
+				self._pendingSummaryReport = None
+				self._reportCalculatedSummary(calculation)
 				return
-			self._pendingTextStatisticsReport = None
-			self._reportTextStatisticsSummary(calculation)
+			if speech.getState().speechMode == speech.SpeechMode.onDemand:
+				self._reportCalculatedSummary(calculation)
 			return
-		ui.message(self._summary)
+		self._pendingSummaryReport = None
+		self._reportCalculatedSummary(calculation)
 
 	def showClipboardContent(self) -> None:
 		"""Show the current clipboard content in the configured browseable format."""
-		from .clipboardViewer import showSnapshot
+		from .clipboard.viewer import showSnapshot
 
 		snapshot = self.monitor.readNow()
 		if snapshot.contentType == ClipboardContentType.ERROR:
@@ -713,18 +702,25 @@ class ClipboardController:
 			showAsPlainText=getShowClipboardContentAsPlainText(),
 		)
 
-	def _onFileSizeCalculationComplete(self, calculation: FileSizeCalculation) -> None:
+	def _onSummaryCalculationComplete(self, calculation: _SummaryCalculation) -> None:
 		"""Queue the response for a pending summary request on NVDA's main thread."""
-		callLater(0, self._reportPendingFileSizeSummary, calculation)
+		callLater(0, self._reportPendingSummary, calculation)
 
-	def _reportPendingFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
+	def _reportPendingSummary(self, calculation: _SummaryCalculation) -> None:
 		"""Report one requested summary while its calculation is still current."""
-		if self._pendingFileSizeReport is not calculation:
+		if self._pendingSummaryReport is not calculation:
 			return
-		self._pendingFileSizeReport = None
-		if not self._isStarted or self._fileSizeCalculation is not calculation:
+		self._pendingSummaryReport = None
+		if not self._isStarted or self._summaryCalculation is not calculation:
 			return
-		self._reportFileSizeSummary(calculation)
+		self._reportCalculatedSummary(calculation)
+
+	def _reportCalculatedSummary(self, calculation: _SummaryCalculation) -> None:
+		"""Report the summary matching the kind of the current clipboard calculation."""
+		if isinstance(calculation, FileSizeCalculation):
+			self._reportFileSizeSummary(calculation)
+		else:
+			self._reportTextStatisticsSummary(calculation)
 
 	def _reportFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
 		"""Report the latest size and item counts for the current clipboard files."""
@@ -779,19 +775,6 @@ class ClipboardController:
 				# Translators: Clipboard file calculation before any content details are available.
 				summary = _("{summary}; calculating contents").format(summary=self._summary)
 		ui.message(summary)
-
-	def _onTextStatisticsCalculationComplete(self, calculation: TextStatisticsCalculation) -> None:
-		"""Queue the response for a pending text summary request on NVDA's main thread."""
-		callLater(0, self._reportPendingTextStatisticsSummary, calculation)
-
-	def _reportPendingTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
-		"""Report one requested text summary while its calculation is still current."""
-		if self._pendingTextStatisticsReport is not calculation:
-			return
-		self._pendingTextStatisticsReport = None
-		if not self._isStarted or self._textStatisticsCalculation is not calculation:
-			return
-		self._reportTextStatisticsSummary(calculation)
 
 	def _reportTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
 		"""Report exact completed text statistics or the current calculation state."""
@@ -994,11 +977,8 @@ class ClipboardController:
 		mainFrame = gui.mainFrame
 		if mainFrame is None:
 			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
-		mainFrame.prePopup()
-		try:
+		with _popup(mainFrame):
 			self._saveCurrentClipboardImage(mainFrame)
-		finally:
-			mainFrame.postPopup()
 
 	def cycleStoredItemCategory(self) -> None:
 		"""Select and report the next category of stored clipboard items."""
@@ -1093,12 +1073,8 @@ class ClipboardController:
 		# ponytail: Re-scan off-thread to bound memory; add a byte-capped cache only if profiling justifies it.
 		visibleSummaries = {itemId: summary for itemId, summary, _itemType in items}
 		matchingKeys: list[int] = []
-		try:
-			if self.isHistoryCategory(category):
-				contents = self.storage.iterHistoryItemContents()
-			else:
-				assert isinstance(category, str)
-				contents = self.storage.iterCategoryItemContents(category)
+		with self._userStorageErrors():
+			contents = self.storage.iterItemContents(self._storageCategory(category))
 			with closing(contents):
 				for item in contents:
 					if cancelEvent.is_set():
@@ -1107,11 +1083,7 @@ class ClipboardController:
 					if visibleSummary is None:
 						continue
 					fields = [visibleSummary]
-					if item.contentType in (
-						ClipboardItemType.PLAIN_TEXT,
-						ClipboardItemType.FORMATTED_TEXT,
-						ClipboardItemType.TEXT_AND_IMAGE,
-					):
+					if item.contentType in _TEXT_ITEM_TYPES:
 						fields.append(item.text)
 					elif item.contentType == ClipboardItemType.FILES:
 						fields.extend(item.files)
@@ -1123,18 +1095,12 @@ class ClipboardController:
 						break
 					if matches:
 						matchingKeys.append(item.itemId)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		return tuple(matchingKeys)
 
 	def getItemDetails(self, category: CategoryId, itemId: int) -> ClipboardItemDetails:
 		"""Load the selected entry only and describe it for the manager content control."""
 		item = self._getStoredItemContentById(category, itemId)
-		if item.contentType in (
-			ClipboardItemType.PLAIN_TEXT,
-			ClipboardItemType.FORMATTED_TEXT,
-			ClipboardItemType.TEXT_AND_IMAGE,
-		):
+		if item.contentType in _TEXT_ITEM_TYPES:
 			content = item.text
 		elif item.contentType == ClipboardItemType.FILES:
 			content = "\n".join(item.files)
@@ -1144,12 +1110,7 @@ class ClipboardController:
 			key=item.itemId,
 			kind=item.contentType,
 			content=content,
-			isEditable=item.contentType
-			in (
-				ClipboardItemType.PLAIN_TEXT,
-				ClipboardItemType.FORMATTED_TEXT,
-				ClipboardItemType.TEXT_AND_IMAGE,
-			),
+			isEditable=item.contentType in _TEXT_ITEM_TYPES,
 			hasImage=item.hasImage,
 			canUpload=item.canUpload,
 		)
@@ -1158,12 +1119,7 @@ class ClipboardController:
 		"""Return the navigation offset only when text is still the current clipboard text."""
 		if not (
 			text
-			and self._contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
+			and self._contentType in _TEXT_CONTENT_TYPES
 			and text == self._text
 			and self._lastAppliedSequenceNumber
 			and self.monitor.getSequenceNumber() == self._lastAppliedSequenceNumber
@@ -1202,13 +1158,11 @@ class ClipboardController:
 			# Translators: Error shown when an empty category entry is requested.
 			raise ValueError(_("An empty entry cannot be saved"))
 		assert isinstance(category, str)
-		try:
+		with self._userStorageErrors():
 			self.storage.addCategoryItem(
 				category,
 				ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=text, canUpload=canUpload),
 			)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == category:
 			self._storedItemIndex = 0
 		self.oneDriveSync.notifyLocalChange()
@@ -1358,14 +1312,8 @@ class ClipboardController:
 
 	def deleteItems(self, category: CategoryId, itemIds: tuple[int, ...]) -> None:
 		"""Delete stored entries."""
-		try:
-			if self.isHistoryCategory(category):
-				self.storage.deleteHistoryItemsById(itemIds)
-			else:
-				assert isinstance(category, str)
-				self.storage.deleteCategoryItemsById(category, itemIds)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			self.storage.deleteItemsById(self._storageCategory(category), itemIds)
 		self.oneDriveSync.notifyLocalChange()
 
 	def startMissingFileCleanup(
@@ -1390,22 +1338,12 @@ class ClipboardController:
 				if not self._isStarted or not missingPaths:
 					result: MissingFileCleanupResult | Exception = MissingFileCleanupResult(0, 0, {})
 				else:
-					try:
-						if self.isHistoryCategory(category):
-							changedCount, removedCount, replacementIds = (
-								self.storage.removeMissingHistoryFileReferences(itemIds, missingPaths)
-							)
-						else:
-							assert isinstance(category, str)
-							changedCount, removedCount, replacementIds = (
-								self.storage.removeMissingCategoryFileReferences(
-									category,
-									itemIds,
-									missingPaths,
-								)
-							)
-					except StorageError as error:
-						self._raiseUserStorageError(error)
+					with self._userStorageErrors():
+						changedCount, removedCount, replacementIds = self.storage.removeMissingFileReferences(
+							self._storageCategory(category),
+							itemIds,
+							missingPaths,
+						)
 					result = MissingFileCleanupResult(
 						changedCount,
 						removedCount,
@@ -1449,19 +1387,15 @@ class ClipboardController:
 
 	def createCategory(self, name: str) -> str:
 		"""Create a user category and return its stored name."""
-		try:
+		with self._userStorageErrors():
 			actualName = self.storage.createCategory(name)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		self.oneDriveSync.notifyLocalChange()
 		return actualName
 
 	def renameCategory(self, oldName: str, newName: str) -> str:
 		"""Rename a user category and return its stored name."""
-		try:
+		with self._userStorageErrors():
 			actualName = self.storage.renameCategory(oldName, newName)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == oldName:
 			self._storedItemCategory = actualName
 		self.oneDriveSync.notifyLocalChange()
@@ -1469,10 +1403,8 @@ class ClipboardController:
 
 	def deleteCategory(self, name: str) -> None:
 		"""Delete an empty user category."""
-		try:
+		with self._userStorageErrors():
 			self.storage.deleteCategory(name)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == name:
 			self._storedItemCategory = _HISTORY_CATEGORY_ID
 			self._storedItemIndex = 0
@@ -1484,7 +1416,7 @@ class ClipboardController:
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when the current clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
-		if snapshot.contentType not in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
 			# Translators: Message shown when no clipboard image is available to save.
 			ui.message(_("There is no clipboard image to save"))
 			return
@@ -1534,7 +1466,7 @@ class ClipboardController:
 			return
 		if self._consumePendingWrite(snapshot):
 			self._awaitingInitialSnapshot = False
-			if snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
 				self._summary = self._formatCurrentSummary(snapshot)
 				if snapshot.contentType == ClipboardContentType.IMAGE:
 					self.navigator.setText(self._summary)
@@ -1586,7 +1518,7 @@ class ClipboardController:
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 		self._applyCurrentSnapshot(snapshot)
 		if shouldRecord and snapshot.canIncludeInHistory:
-			if snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
 				self._queueImageHistorySnapshot(snapshot, pngIsDecodable=pngIsDecodable)
 			else:
 				item = self._clipboardItemFromSnapshot(snapshot)
@@ -1610,43 +1542,26 @@ class ClipboardController:
 		if shouldRecord:
 			playCopy()
 
+	@staticmethod
+	def _createSummaryCalculation(snapshot: ClipboardSnapshot) -> _SummaryCalculation | None:
+		"""Return the idle background calculation that summarizes a clipboard snapshot, if any."""
+		if snapshot.contentType == ClipboardContentType.FILES:
+			return FileSizeCalculation(snapshot.files) if snapshot.files else None
+		if snapshot.text and snapshot.contentType in _TEXT_CONTENT_TYPES:
+			return TextStatisticsCalculation(snapshot.text)
+		return None
+
 	def _applyCurrentSnapshot(self, snapshot: ClipboardSnapshot) -> None:
 		"""Update current clipboard navigation without reading or writing history."""
-		self._pendingFileSizeReport = None
-		if self._fileSizeCalculation is not None:
-			self._fileSizeCalculation.cancel()
-		self._fileSizeCalculation = (
-			FileSizeCalculation(snapshot.files)
-			if snapshot.contentType == ClipboardContentType.FILES and snapshot.files
-			else None
-		)
-		self._pendingTextStatisticsReport = None
-		if self._textStatisticsCalculation is not None:
-			self._textStatisticsCalculation.cancel()
-		self._textStatisticsCalculation = (
-			TextStatisticsCalculation(snapshot.text)
-			if snapshot.text
-			and snapshot.contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
-			else None
-		)
+		self._pendingSummaryReport = None
+		if self._summaryCalculation is not None:
+			self._summaryCalculation.cancel()
+		self._summaryCalculation = self._createSummaryCalculation(snapshot)
 		self._contentType = snapshot.contentType
 		self._text = snapshot.text
 		self._canUpload = snapshot.canUpload
 		self._summary = self._formatCurrentSummary(snapshot)
-		if (
-			snapshot.contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
-			and snapshot.text
-		):
+		if snapshot.contentType in _TEXT_CONTENT_TYPES and snapshot.text:
 			navigationText = snapshot.text
 		elif snapshot.contentType == ClipboardContentType.FILES:
 			navigationText = self._formatFileNavigationText(snapshot.files)
@@ -1869,7 +1784,7 @@ class ClipboardController:
 		allowBitmapFallback: bool = True,
 	) -> tuple[ClipboardSnapshot, bool]:
 		"""Return a PNG-backed snapshot and whether normalization exceeded the byte limit."""
-		if snapshot.contentType not in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE):
+		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
 			return snapshot, False
 		canDecodeSafely = isImageSizeSafe(
 			snapshot.imageWidth,
@@ -1930,7 +1845,7 @@ class ClipboardController:
 		return replace(snapshot, imageFormat=None, imageData=None), False
 
 	def _requireLastSpokenText(self) -> str:
-		text = lastSpoken.getText()
+		text = _getLastSpokenText()
 		if not text:
 			# Translators: Error shown when a last-spoken command has no captured speech text.
 			raise ValueError(_("No spoken text is available"))
@@ -1946,12 +1861,7 @@ class ClipboardController:
 			self._pendingWrites.clear()
 			self._awaitingInitialSnapshot = False
 			self._applySnapshot(snapshot, _ClipboardChangeSource.EXTERNAL)
-		textContentTypes = (
-			ClipboardContentType.TEXT,
-			ClipboardContentType.FORMATTED_TEXT,
-			ClipboardContentType.TEXT_AND_IMAGE,
-		)
-		clipboardText = snapshot.text if snapshot.contentType in textContentTypes else ""
+		clipboardText = snapshot.text if snapshot.contentType in _TEXT_CONTENT_TYPES else ""
 		separator = "\n" if clipboardText and not clipboardText.endswith(("\r", "\n")) else ""
 		self._writeClipboardText(
 			f"{clipboardText}{separator}{text}",
@@ -2301,10 +2211,7 @@ class ClipboardController:
 		snapshot = self.monitor.readNow(decodePng=True)
 		sequenceNumber = snapshot.sequenceNumber or self.monitor.getSequenceNumber()
 		imageNormalizationFailed = False
-		if (
-			snapshot.contentType in (ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE)
-			and snapshot.imageData is None
-		):
+		if snapshot.contentType in _IMAGE_CONTENT_TYPES and snapshot.imageData is None:
 			try:
 				snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
 			except Exception:
@@ -2757,53 +2664,27 @@ class ClipboardController:
 		offset: int = 0,
 	) -> tuple[ClipboardItemSummary | None, int, int]:
 		"""Return one stored-item summary at the current position plus an offset."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistorySummaryAt(self._storedItemIndex, offset)
-			assert isinstance(category, str)
-			return self.storage.getCategorySummaryAt(category, self._storedItemIndex, offset)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getSummaryAt(self._storageCategory(category), self._storedItemIndex, offset)
 
 	def _getCategorySummaries(self, category: CategoryId) -> tuple[ClipboardItemSummary, ...]:
 		"""Return metadata-only entries for one manager category."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.history
-			assert isinstance(category, str)
-			return self.storage.getCategoryItems(category)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getItems(self._storageCategory(category))
 
 	def _getStoredItemById(self, category: CategoryId, itemId: int) -> ClipboardItem:
 		"""Load one complete entry after validating its stable category membership."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistoryItemById(itemId)
-			assert isinstance(category, str)
-			return self.storage.getCategoryItemById(category, itemId)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getItemById(self._storageCategory(category), itemId)
 
 	def _getStoredItemContentById(self, category: CategoryId, itemId: int) -> ClipboardItemContent:
 		"""Load displayable content by stable identifier without payload BLOBs."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistoryItemContentById(itemId)
-			assert isinstance(category, str)
-			return self.storage.getCategoryItemContentById(category, itemId)
-		except ItemNotFoundError:
-			raise
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors(reraiseItemNotFound=True):
+			return self.storage.getItemContentById(self._storageCategory(category), itemId)
 
 	def _formatItemSummary(self, item: ClipboardItemSummary) -> str:
 		"""Return a concise content summary without a type prefix."""
-		if item.contentType in (
-			ClipboardItemType.PLAIN_TEXT,
-			ClipboardItemType.FORMATTED_TEXT,
-			ClipboardItemType.TEXT_AND_IMAGE,
-		):
+		if item.contentType in _TEXT_ITEM_TYPES:
 			if item.textPreview:
 				return item.textPreview
 			# Translators: Clipboard list summary when text contains no visible characters.
@@ -3075,6 +2956,26 @@ class ClipboardController:
 
 	def _raiseUserStorageError(self, error: Exception) -> Never:
 		raise ValueError(self._formatItemError(error)) from error
+
+	@contextmanager
+	def _userStorageErrors(self, *, reraiseItemNotFound: bool = False) -> Iterator[None]:
+		"""Translate storage errors raised in the block into user-facing ``ValueError`` messages.
+
+		With ``reraiseItemNotFound``, ``ItemNotFoundError`` propagates unchanged.
+		"""
+		try:
+			yield
+		except StorageError as error:
+			if reraiseItemNotFound and isinstance(error, ItemNotFoundError):
+				raise
+			self._raiseUserStorageError(error)
+
+	def _storageCategory(self, category: CategoryId) -> str | None:
+		"""Return the storage scope of a category identifier, using ``None`` for history."""
+		if self.isHistoryCategory(category):
+			return None
+		assert isinstance(category, str)
+		return category
 
 	def _refreshManager(
 		self,

@@ -20,7 +20,7 @@ import screenCurtain
 import screenBitmap
 import wx
 
-from .clipboardData import getPngImageInfo, isImageSizeSafe
+from .payload import getPngImageInfo, isImageSizeSafe
 from .imageCodec import ImageDataTooLargeError, encodeBgrPixelsToPng, isPngImageDecodable
 
 
@@ -75,13 +75,7 @@ def captureNavigatorObjectPng() -> bytes | None:
 		finally:
 			del bitmap
 	try:
-		return encodeBgrPixelsToPng(
-			pixels,
-			width,
-			height,
-			bytesPerPixel=4,
-			rowStride=width * 4,
-		)
+		return encodeBgrPixelsToPng(pixels, width, height)
 	except ImageDataTooLargeError:
 		return None
 

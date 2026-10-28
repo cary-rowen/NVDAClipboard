@@ -7,18 +7,18 @@ from __future__ import annotations
 
 import ctypes
 from io import BytesIO
-from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
 from PIL import Image
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 from tests.test_imageCodec import clipboardData, imageCodec
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
+_PACKAGE_NAME = "nvdaClipboardImagesTests"
+createAddonPackage(_PACKAGE_NAME)
 
 
 class NavigatorImageTests(unittest.TestCase):
@@ -36,8 +36,7 @@ class NavigatorImageTests(unittest.TestCase):
 		self.wgc.captureImage.return_value = ctypes.create_string_buffer(b"\x01\x02\x03\x00", 4)
 		self.gdi = Mock()
 		self.images = loadAddonModule(
-			"tests.navigatorImages",
-			_MODULE_DIRECTORY / "images.py",
+			f"{_PACKAGE_NAME}.clipboard.images",
 			injectedModules={
 				"addonHandler": Mock(),
 				"api": SimpleNamespace(getNavigatorObject=lambda: SimpleNamespace(location=(0, 0, 1, 1))),
@@ -46,8 +45,8 @@ class NavigatorImageTests(unittest.TestCase):
 				"screenCurtain": SimpleNamespace(screenCurtain=self.curtain),
 				"screenBitmap": SimpleNamespace(ScreenBitmap=self.gdi),
 				"wx": SimpleNamespace(Display=display),
-				"tests.clipboardData": clipboardData,
-				"tests.imageCodec": imageCodec,
+				f"{_PACKAGE_NAME}.clipboard.payload": clipboardData,
+				f"{_PACKAGE_NAME}.clipboard.imageCodec": imageCodec,
 			},
 		)
 

@@ -12,10 +12,10 @@ import ctypes
 from itertools import groupby
 
 import textUtils
+import winUser
 
-from .clipboardData import normalizeNewlinesForWin32
+from ..clipboard.payload import normalizeNewlinesForWin32
 
-_EM_SETSEL = 0x00B1
 _EM_REPLACESEL = 0x00C2
 
 
@@ -112,21 +112,15 @@ def sortLinesByLengthDescending(text: str) -> str:
 	return _applyLineTransform(text, lambda lines: sorted(lines, key=len, reverse=True))
 
 
-def applyEditorTextTransform(
-	editor: object,
-	transform: Callable[[str], str],
-	*,
-	lineWise: bool = False,
-) -> bool:
-	"""Apply one text transform to the editor selection or full content."""
+def applyEditorTextTransform(editor: object, transform: Callable[[str], str]) -> bool:
+	"""Apply one text transform to the whole lines of the editor selection or full content."""
 	text = editor.GetValue()
 	selectionStart, selectionEnd = editor.GetSelection()
 	hasSelection = selectionStart != selectionEnd
 	offsetConverter = textUtils.WideStringOffsetConverter(text)
 	if hasSelection:
 		textStart, textEnd = offsetConverter.encodedToStrOffsets(selectionStart, selectionEnd)
-		if lineWise:
-			textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
+		textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
 		encodedStart, encodedEnd = offsetConverter.strToEncodedOffsets(textStart, textEnd)
 	else:
 		textStart = 0
@@ -163,18 +157,11 @@ def _replaceEditorRangeWithWin32(editor: object, start: int, end: int, replaceme
 		handle = int(getHandle())
 	except (TypeError, ValueError):
 		return False
-	if not handle or not hasattr(ctypes, "windll"):
+	if not handle or not winUser.isWindow(handle):
 		return False
-	user32 = ctypes.windll.user32
-	if not user32.IsWindow(handle):
-		return False
-	user32.SendMessageW(handle, _EM_SETSEL, start, end)
-	user32.SendMessageW(
-		handle,
-		_EM_REPLACESEL,
-		True,
-		ctypes.c_wchar_p(normalizeNewlinesForWin32(replacementText)),
-	)
+	winUser.sendMessage(handle, winUser.EM_SETSEL, start, end)
+	replacementBuffer = ctypes.create_unicode_buffer(normalizeNewlinesForWin32(replacementText))
+	winUser.sendMessage(handle, _EM_REPLACESEL, True, ctypes.addressof(replacementBuffer))
 	return True
 
 

@@ -7,21 +7,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 from threading import Lock
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardCloudSyncTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
+createAddonPackage(_PACKAGE_NAME)
 
 
 def _translate(message: str) -> str:
@@ -46,8 +42,7 @@ _UI.message = Mock()
 _WX = ModuleType("wx")
 _WX.CallAfter = Mock()
 cloudSync = loadAddonModule(
-	f"{_PACKAGE_NAME}.cloudSync",
-	_MODULE_DIRECTORY / "cloudSync.py",
+	f"{_PACKAGE_NAME}.tiantan.sync",
 	injectedModules={
 		"addonHandler": _ADDON_HANDLER,
 		"config": _CONFIG,
@@ -56,7 +51,7 @@ cloudSync = loadAddonModule(
 		"wx": _WX,
 	},
 )
-cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.cloudClipboard"]
+cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.tiantan.sdk"]
 
 
 class CloudSyncTests(unittest.TestCase):
@@ -88,7 +83,7 @@ class CloudSyncTests(unittest.TestCase):
 		cleanup = Mock()
 
 		with (
-			patch.object(cloudSync.wx, "CallAfter", side_effect=RuntimeError("wx stopped")),
+			patch.object(_WX, "CallAfter", side_effect=RuntimeError("wx stopped")),
 			patch.object(cloudSync, "Thread") as threadClass,
 		):
 			threadClass.return_value.start.side_effect = lambda: threadClass.call_args.kwargs["target"]()
@@ -146,3 +141,40 @@ class CloudSyncTests(unittest.TestCase):
 			cloudSync.validateUploadText(withinLimit + "a")
 		self.assertEqual(context.exception.code, cloudSync.INVALID_ARGUMENT)
 		self.assertEqual(context.exception.message, cloudSync.TEXT_EXCEEDS_MAX_BYTES_ERROR)
+
+
+class TiantanSupportTests(unittest.TestCase):
+	"""Verify Tiantan support probing without loading the native SDK unexpectedly."""
+
+	def setUp(self) -> None:
+		"""Clear the cached probe state before each test."""
+		cloudSync.getTiantanSupportState.cache_clear()
+		cloudSync.log.reset_mock()
+
+	def testSdkLoadFailureReportsUnavailable(self) -> None:
+		"""Return an unavailable state when the native SDK cannot be loaded."""
+		error = cloudSync.CloudClipboardError(None, "load failed")
+		with patch.object(cloudSync, "CloudClipboardSdk", side_effect=error):
+			state = cloudSync.getTiantanSupportState()
+
+		self.assertFalse(state.isAvailable)
+		self.assertIsNone(state.sdk)
+		self.assertEqual(
+			state.statusMessage,
+			"Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.",
+		)
+		cloudSync.log.debugWarning.assert_called_once_with(
+			"ClipDataCloud SDK is unavailable.",
+			exc_info=error,
+		)
+
+	def testSdkIsLoadedOnceAndReturned(self) -> None:
+		"""Load the native SDK only once and expose the loaded instance."""
+		with patch.object(cloudSync, "CloudClipboardSdk") as sdkClass:
+			state = cloudSync.getTiantanSupportState()
+			self.assertIs(cloudSync.getTiantanSupportState(), state)
+
+		self.assertTrue(state.isAvailable)
+		self.assertIs(state.sdk, sdkClass.return_value)
+		self.assertEqual(state.statusMessage, "")
+		sdkClass.assert_called_once_with()

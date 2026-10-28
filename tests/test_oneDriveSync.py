@@ -18,15 +18,12 @@ import unittest
 from unittest.mock import call, MagicMock, Mock, patch
 from uuid import UUID
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
 _PACKAGE_NAME = "nvdaClipboardOneDriveSyncTests"
-_PACKAGE = ModuleType(_PACKAGE_NAME)
-_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
-sys.modules[_PACKAGE_NAME] = _PACKAGE
-storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels", _MODULE_DIRECTORY / "storageModels.py")
+createAddonPackage(_PACKAGE_NAME)
+storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storage.models")
 
 
 def _translate(message: str) -> str:
@@ -113,9 +110,11 @@ _REQUESTS = ModuleType("requests")
 _REQUESTS.RequestException = OSError
 _REQUESTS.Response = object
 _REQUESTS.Session = MagicMock
+_NVDA_STATE = ModuleType("NVDAState")
+_NVDA_STATE.shouldWriteToDisk = MagicMock(return_value=False)
 _WX = ModuleType("wx")
 _WX.CallAfter = MagicMock()
-_STORAGE = ModuleType(f"{_PACKAGE_NAME}.storage")
+_STORAGE = ModuleType(f"{_PACKAGE_NAME}.storage.database")
 _STORAGE.ClipboardStorage = object
 _STORAGE.ImageStorageLimitError = _ImageStorageLimitError
 _STORAGE.OneDriveAccountMismatchError = _OneDriveAccountMismatchError
@@ -125,22 +124,21 @@ _STORAGE.StorageFormatError = _StorageFormatError
 _STORAGE.MAX_HISTORY_ITEMS = 1000
 _STORAGE.MAX_IMAGE_HISTORY_ITEMS = 20
 _STORAGE.MAX_TOTAL_IMAGE_BYTES = 256 * 1024 * 1024
-_STORAGE.getItemDedupKey = _getItemDedupKey
 _STORAGE.getItemPayloadHash = _getItemPayloadHash
 _STORAGE.isOneDriveSyncItem = _isOneDriveSyncItem
 with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True):
 	oneDriveSync = loadAddonModule(
-		f"{_PACKAGE_NAME}.oneDriveSync",
-		_MODULE_DIRECTORY / "oneDriveSync.py",
+		f"{_PACKAGE_NAME}.oneDrive.sync",
 		injectedModules={
 			"addonHandler": _ADDON_HANDLER,
 			"gui": _GUI,
 			"gui.message": _GUI_MESSAGE,
 			"fileUtils": _FILE_UTILS,
 			"logHandler": _LOG_HANDLER,
+			"NVDAState": _NVDA_STATE,
 			"requests": _REQUESTS,
 			"wx": _WX,
-			f"{_PACKAGE_NAME}.storage": _STORAGE,
+			f"{_PACKAGE_NAME}.storage.database": _STORAGE,
 		},
 	)
 
@@ -558,7 +556,7 @@ class OneDriveSyncTests(unittest.TestCase):
 		manager._hasPendingSync = False
 		manager._state = oneDriveSync.OneDriveSyncState(True, True, False, False, "Account", "Ready")
 
-		with patch.object(oneDriveSync.wx, "CallAfter", side_effect=RuntimeError("wx stopped")):
+		with patch.object(_WX, "CallAfter", side_effect=RuntimeError("wx stopped")):
 			manager._postOperationResult(None, True, "complete", False, True)
 
 		self.assertTrue(manager._hasPendingSync)
@@ -591,7 +589,7 @@ class OneDriveSyncTests(unittest.TestCase):
 			auth = object.__new__(oneDriveSync._AuthManager)
 			auth.cachePath = blockedParent / "cache.dat"
 			auth.cache = SimpleNamespace(has_state_changed=True)
-			with patch.object(oneDriveSync, "_shouldWriteToDisk", return_value=True):
+			with patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True):
 				with self.assertRaises(oneDriveSync.OneDriveError) as context:
 					auth._saveCache()
 			self.assertEqual(str(context.exception), "Could not save Microsoft sign-in data")
@@ -608,7 +606,7 @@ class OneDriveSyncTests(unittest.TestCase):
 			auth.cache = SimpleNamespace(has_state_changed=True, serialize=Mock(return_value="cached"))
 
 			with (
-				patch.object(oneDriveSync, "_shouldWriteToDisk", return_value=True),
+				patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True),
 				patch.object(oneDriveSync, "_protectData", return_value=b"encrypted"),
 				patch.object(oneDriveSync.fileUtils, "FaultTolerantFile", faultTolerantFile),
 			):

@@ -16,7 +16,7 @@ import ui
 import wx
 
 if TYPE_CHECKING:
-	from .oneDriveSync import OneDriveSyncManager
+	from .sync import OneDriveSyncManager
 
 
 addonHandler.initTranslation()

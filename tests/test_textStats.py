@@ -8,21 +8,23 @@
 from __future__ import annotations
 
 import ctypes
-from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import unicodedata
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "textStats.py"
+_PACKAGE_NAME = "nvdaClipboardTextStatsTests"
+createAddonPackage(_PACKAGE_NAME)
 textStats = loadAddonModule(
-	"nvdaClipboardTextStats",
-	_MODULE_PATH,
-	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
+	f"{_PACKAGE_NAME}.summary.textStats",
+	injectedModules={
+		"logHandler": SimpleNamespace(log=Mock()),
+		"wx": SimpleNamespace(CallAfter=Mock()),
+	},
 )
 
 

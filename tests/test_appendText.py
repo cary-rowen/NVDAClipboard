@@ -6,17 +6,17 @@
 """Tests for shared clipboard append behavior without loading NVDA."""
 
 import ast
-from pathlib import Path
 from types import MethodType, SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from tests._module_loader import addonSourcePath
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
 class AppendTextTests(unittest.TestCase):
 	def testBothCommandsAppendTextOrReplaceNonText(self) -> None:
-		path = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "controller.py"
+		path = addonSourcePath("controller")
 		tree = ast.parse(path.read_text(encoding="utf-8"))
 		controllerClass = next(
 			node
@@ -24,6 +24,14 @@ class AppendTextTests(unittest.TestCase):
 			if isinstance(node, ast.ClassDef) and node.name == "ClipboardController"
 		)
 		commands = ("appendSelectedText", "appendLastSpokenText")
+		textContentTypes = next(
+			node
+			for node in tree.body
+			if isinstance(node, ast.Assign)
+			and any(
+				isinstance(target, ast.Name) and target.id == "_TEXT_CONTENT_TYPES" for target in node.targets
+			)
+		)
 		methods = [
 			node
 			for node in controllerClass.body
@@ -38,7 +46,10 @@ class AppendTextTests(unittest.TestCase):
 			"_": lambda text: text,
 			"ui": Mock(),
 		}
-		exec(compile(ast.Module(body=methods, type_ignores=[]), str(path), "exec"), namespace)
+		exec(
+			compile(ast.Module(body=[textContentTypes, *methods], type_ignores=[]), str(path), "exec"),
+			namespace,
+		)
 		cases = (
 			(contentTypes.TEXT, "old", "old\nnew"),
 			(contentTypes.TEXT, "old\n", "old\nnew"),

@@ -7,12 +7,14 @@
 
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from _manager_method_loader import loadManagerClassMethods, loadManagerTopLevelFunctions
+from tests._manager_loader import loadManagerModule
 
 
-_clampWindowRect = loadManagerTopLevelFunctions({"_clampWindowRect"})["_clampWindowRect"]
+_MANAGER_MODULE = loadManagerModule("nvdaClipboardManagerWindowTests")
+_clampWindowRect = _MANAGER_MODULE._clampWindowRect
+_saveWindowState = _MANAGER_MODULE.ClipboardManagerFrame._saveWindowState
 
 
 class ManagerWindowTests(unittest.TestCase):
@@ -30,10 +32,9 @@ class ManagerWindowTests(unittest.TestCase):
 
 	def testMaximizingAndMinimizingPreserveNormalBounds(self) -> None:
 		state = {}
-		saveWindowState = loadManagerClassMethods(
-			{"_saveWindowState"},
-			{"getManagerWindowState": lambda: state},
-		)["_saveWindowState"]
+		patcher = patch.object(_MANAGER_MODULE, "getManagerWindowState", lambda: state)
+		patcher.start()
+		self.addCleanup(patcher.stop)
 		manager = SimpleNamespace(
 			_isBeingDestroyed=False,
 			IsIconized=Mock(return_value=False),
@@ -51,25 +52,24 @@ class ManagerWindowTests(unittest.TestCase):
 			"maximized": False,
 			"navigationWidth": 280,
 		}
-		saveWindowState(manager)
+		_saveWindowState(manager)
 		self.assertEqual(expected, state)
 
 		manager.IsMaximized.return_value = True
 		manager.GetPosition.return_value = (-8, -8)
 		manager.GetSize.return_value = (2560, 1440)
 		expected["maximized"] = True
-		saveWindowState(manager)
+		_saveWindowState(manager)
 		self.assertEqual(expected, state)
 
 		manager.IsIconized.return_value = True
 		manager.IsMaximized.return_value = False
 		manager.GetPosition.return_value = (-32000, -32000)
-		saveWindowState(manager)
+		_saveWindowState(manager)
 		self.assertEqual(expected, state)
 
 	def testQueuedSaveAfterDestructionDoesNotAccessWindow(self) -> None:
-		saveWindowState = loadManagerClassMethods({"_saveWindowState"})["_saveWindowState"]
-		saveWindowState(SimpleNamespace(_isBeingDestroyed=True))
+		_saveWindowState(SimpleNamespace(_isBeingDestroyed=True))
 
 
 if __name__ == "__main__":

@@ -7,15 +7,29 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "navigationUnits.py"
-navigationUnits = loadAddonModule("nvdaClipboardNavigationUnits", _MODULE_PATH)
+_PACKAGE_NAME = "nvdaClipboardNavigationUnitsTests"
+createAddonPackage(_PACKAGE_NAME)
+_TEXT_INFOS = SimpleNamespace(
+	UNIT_LINE="line",
+	UNIT_WORD="word",
+	UNIT_CHARACTER="character",
+	TextInfo=object,
+)
+navigationUnits = loadAddonModule(
+	f"{_PACKAGE_NAME}.navigation",
+	injectedModules={
+		"config": SimpleNamespace(conf=MagicMock()),
+		"textInfos": _TEXT_INFOS,
+		"textInfos.offsets": SimpleNamespace(Offsets=object, OffsetsTextInfo=object),
+	},
+)
 
 
 class NavigationUnitOffsetTests(unittest.TestCase):

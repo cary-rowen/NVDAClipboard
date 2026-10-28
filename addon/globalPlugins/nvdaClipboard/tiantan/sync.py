@@ -3,21 +3,21 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING.txt for more details.
 
-"""Coordinate ClipDataCloud operations with local clipboard changes."""
+"""Probe the ClipDataCloud SDK and coordinate its operations with local clipboard changes."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from threading import Lock, Thread
 
 import addonHandler
 import config
 from logHandler import log
 import ui
-import wx
 
-from .cloudClipboard import (
+from .sdk import (
 	BUFFER_TOO_SMALL,
 	INVALID_ARGUMENT,
 	TEXT_CONTAINS_NUL_ERROR,
@@ -30,6 +30,8 @@ from .cloudClipboard import (
 	CloudLoginResult,
 	validateUploadText,
 )
+from ..configuration import getSection
+from ..background import queueMainThread
 
 
 addonHandler.initTranslation()
@@ -37,16 +39,6 @@ addonHandler.initTranslation()
 CompletionCallback = Callable[[bool, str], None]
 ClipboardWriter = Callable[[str], None]
 StateChangedCallback = Callable[[], None]
-
-_CONFIG_SECTION = "nvdaClipboard"
-_CONFIG_AUTO_SYNC_TIANTAN = "autoSyncTiantan"
-
-config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "boolean(default=true)"
-
-
-def _getSdkUnavailableMessage() -> str:
-	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
 
 
 class CloudClipboardWriteError(Exception):
@@ -57,7 +49,6 @@ class CloudClipboardWriteError(Exception):
 class CloudSyncState:
 	"""Describe the current cloud clipboard state for user interfaces."""
 
-	isAvailable: bool
 	isLoggedIn: bool
 	isAutoSyncEnabled: bool
 	isManualSendInProgress: bool
@@ -67,19 +58,12 @@ class CloudSyncState:
 class CloudSyncManager:
 	"""Run cloud SDK calls in worker threads and track automatic upload state."""
 
-	def __init__(self, onStateChanged: StateChangedCallback | None = None) -> None:
+	def __init__(self, sdk: CloudClipboardSdk, onStateChanged: StateChangedCallback | None = None) -> None:
+		"""Use an already loaded SDK instance and register for configuration profile switches."""
 		self._onStateChanged = onStateChanged
-		self._sdk: CloudClipboardSdk | None = None
-		self._loadError: str | None = None
-		try:
-			self._sdk = CloudClipboardSdk()
-		except CloudClipboardError as error:
-			self._loadError = error.message
-			self._statusMessage = _getSdkUnavailableMessage()
-			log.debugWarning("ClipDataCloud SDK is unavailable.", exc_info=error)
-		else:
-			# Translators: Initial cloud clipboard status before the persisted login is checked.
-			self._statusMessage = _("Checking...")
+		self._sdk = sdk
+		# Translators: Initial cloud clipboard status before the persisted login is checked.
+		self._statusMessage = _("Checking...")
 		self._isLoggedIn = False
 		self._nickname: str | None = None
 		self._isVip: bool | None = None
@@ -98,8 +82,7 @@ class CloudSyncManager:
 
 	def initialize(self) -> None:
 		"""Check the persisted login state without blocking NVDA's main thread."""
-		if self._loadError is None:
-			self.checkStatus(announce=False)
+		self.checkStatus(announce=False)
 
 	def terminate(self) -> None:
 		"""Prevent future callbacks and automatic uploads."""
@@ -113,7 +96,6 @@ class CloudSyncManager:
 	def getState(self) -> CloudSyncState:
 		"""Return a snapshot of the current cloud state."""
 		return CloudSyncState(
-			isAvailable=self._loadError is None,
 			isLoggedIn=self._isLoggedIn,
 			isAutoSyncEnabled=self.isAutoSyncEnabled(),
 			isManualSendInProgress=self._manualSendLock.locked(),
@@ -122,11 +104,11 @@ class CloudSyncManager:
 
 	def isAutoSyncEnabled(self) -> bool:
 		"""Return whether automatic Tiantan Cloud Clipboard synchronization is configured."""
-		return bool(config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN])
+		return bool(getSection()["autoSyncTiantan"])
 
 	def setAutoSyncEnabled(self, enabled: bool) -> None:
 		"""Persist and immediately apply automatic Tiantan Cloud Clipboard synchronization."""
-		config.conf[_CONFIG_SECTION][_CONFIG_AUTO_SYNC_TIANTAN] = enabled
+		getSection()["autoSyncTiantan"] = enabled
 		self._applyAutoSyncSetting()
 
 	def getLoginStatusText(self) -> str:
@@ -157,7 +139,7 @@ class CloudSyncManager:
 			return
 
 		def work() -> CloudLoginResult:
-			return self._getSdk().login(phone, password)
+			return self._sdk.login(phone, password)
 
 		def success(result: object) -> str:
 			assert isinstance(result, CloudLoginResult)
@@ -182,7 +164,7 @@ class CloudSyncManager:
 		operationId = self._beginStateOperation()
 
 		def work() -> None:
-			self._getSdk().logout()
+			self._sdk.logout()
 
 		def success(_result: object) -> str:
 			# Translators: Status shown after signing out of cloud clipboard.
@@ -206,7 +188,7 @@ class CloudSyncManager:
 		operationId = self._beginStateOperation()
 
 		def work() -> bool:
-			return self._getSdk().isUserLoggedIn()
+			return self._sdk.isUserLoggedIn()
 
 		def success(result: object) -> str:
 			isLoggedIn = bool(result)
@@ -260,7 +242,7 @@ class CloudSyncManager:
 			self._manualSendLock.release()
 
 		def work() -> None:
-			self._getSdk().uploadText(text)
+			self._sdk.uploadText(text)
 
 		def success(_result: object) -> str:
 			# Translators: Confirmation after manually sending clipboard text.
@@ -296,7 +278,7 @@ class CloudSyncManager:
 						self._abandonSdkOperation(None, onDispatchFailed)
 					return
 				try:
-					text = self._getSdk().fetchText()
+					text = self._sdk.fetchText()
 				except Exception as error:
 					if not self._queueMainThread(
 						self._finishFailedOperation,
@@ -364,11 +346,6 @@ class CloudSyncManager:
 			if not self._autoUploadFailureReported:
 				self._autoUploadFailureReported = True
 				log.exception("Could not start automatic ClipDataCloud upload.")
-
-	def _getSdk(self) -> CloudClipboardSdk:
-		if self._sdk is not None:
-			return self._sdk
-		raise CloudClipboardError(None, self._loadError or _getSdkUnavailableMessage())
 
 	def _beginStateOperation(self) -> int:
 		"""Return a new identifier that invalidates older login-state results."""
@@ -455,13 +432,12 @@ class CloudSyncManager:
 
 	def _queueMainThread(self, callback: Callable[..., None], *args: object) -> bool:
 		"""Queue a GUI-thread callback and report only a live-manager scheduling failure."""
-		try:
-			wx.CallAfter(callback, *args)
-		except RuntimeError:
-			if not self._terminated:
-				log.debugWarning("Could not schedule a ClipDataCloud result callback.", exc_info=True)
-			return False
-		return True
+		return queueMainThread(
+			callback,
+			*args,
+			onFailure=lambda: not self._terminated,
+			failureMessage="Could not schedule a ClipDataCloud result callback.",
+		)
 
 	def _abandonSdkOperation(
 		self,
@@ -518,12 +494,6 @@ class CloudSyncManager:
 		operationId = stateOperationId if stateOperationId is not None else stateAtStart
 		if operationId != self._stateOperationId:
 			self._finishStaleOperation(onDone)
-			return
-		if isinstance(error, CloudClipboardError) and error.code is None:
-			if self._loadError is None:
-				log.debugWarning("ClipDataCloud SDK became unavailable.", exc_info=error)
-			self._markSdkUnavailable(error.message)
-			self._finish(False, _getSdkUnavailableMessage(), onDone, announce)
 			return
 		if not isinstance(error, CloudClipboardError):
 			log.exception(
@@ -627,7 +597,7 @@ class CloudSyncManager:
 						self._uploadInProgress = False
 						return
 				try:
-					self._getSdk().uploadText(currentText)
+					self._sdk.uploadText(currentText)
 					uploadSucceeded = True
 					self._autoUploadFailureReported = False
 				except Exception as error:
@@ -661,9 +631,6 @@ class CloudSyncManager:
 
 	def _handleAutoUploadError(self, error: Exception, stateAtStart: int) -> bool:
 		"""Handle automatic upload failure without repeated speech."""
-		if isinstance(error, CloudClipboardError) and error.code is None:
-			self._queueMainThread(self._handleSdkUnavailableForAutoUpload, error, stateAtStart)
-			return True
 		if not self._autoUploadFailureReported:
 			if isinstance(error, CloudClipboardError):
 				log.debugWarning(
@@ -692,15 +659,6 @@ class CloudSyncManager:
 			self._notLoggedInNotified = True
 			ui.message(message)
 
-	def _handleSdkUnavailableForAutoUpload(self, error: CloudClipboardError, stateAtStart: int) -> None:
-		"""Disable cloud state after an automatic upload detects an unusable SDK."""
-		if self._terminated or stateAtStart != self._stateOperationId:
-			return
-		if self._loadError is None:
-			log.debugWarning("ClipDataCloud SDK became unavailable.", exc_info=error)
-		self._markSdkUnavailable(error.message)
-		self._notifyStateChanged()
-
 	def _getInvalidUploadReason(self, text: str) -> str | None:
 		try:
 			validateUploadText(text)
@@ -725,8 +683,6 @@ class CloudSyncManager:
 
 	def _formatError(self, error: Exception) -> str:
 		if isinstance(error, CloudClipboardError):
-			if error.code is None:
-				return _getSdkUnavailableMessage()
 			if error.code == INVALID_ARGUMENT:
 				# Translators: Cloud SDK error description.
 				return _("Invalid argument")
@@ -760,12 +716,6 @@ class CloudSyncManager:
 		with self._uploadLock:
 			self._pendingUploadText = None
 
-	def _markSdkUnavailable(self, errorMessage: str) -> None:
-		self._sdk = None
-		self._loadError = errorMessage
-		self._stateOperationInProgress = False
-		self._setLoggedOut(_getSdkUnavailableMessage())
-
 	def _formatLoggedInStatus(self) -> str:
 		if self._autoUploadEnabled:
 			# Translators: Tiantan Cloud Clipboard automatic synchronization status when enabled.
@@ -794,3 +744,34 @@ class CloudSyncManager:
 				self._onStateChanged()
 			except Exception:
 				log.exception("CloudSyncManager state callback failed.")
+
+
+@dataclass(frozen=True, slots=True)
+class TiantanSupportState:
+	"""Describe whether Tiantan Cloud Clipboard can be loaded and hold the loaded SDK."""
+
+	sdk: CloudClipboardSdk | None
+	statusMessage: str
+
+	@property
+	def isAvailable(self) -> bool:
+		"""Return whether the ClipDataCloud SDK was loaded successfully."""
+		return self.sdk is not None
+
+
+# Translators: Error shown when the native cloud clipboard library cannot be used.
+_SDK_UNAVAILABLE_MESSAGE = _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
+
+
+@cache
+def getTiantanSupportState() -> TiantanSupportState:
+	"""Load the ClipDataCloud SDK on first use and return the cached support state."""
+	try:
+		sdk = CloudClipboardSdk()
+	except CloudClipboardError as error:
+		log.debugWarning("ClipDataCloud SDK is unavailable.", exc_info=error)
+		return TiantanSupportState(None, _SDK_UNAVAILABLE_MESSAGE)
+	except Exception:
+		log.exception("Unexpected ClipDataCloud SDK probe failure.")
+		return TiantanSupportState(None, _SDK_UNAVAILABLE_MESSAGE)
+	return TiantanSupportState(sdk, "")

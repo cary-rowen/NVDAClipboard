@@ -7,16 +7,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "clipboardViewer.py"
+_PACKAGE_NAME = "nvdaClipboardClipboardViewerTests"
+createAddonPackage(_PACKAGE_NAME)
 
 try:
 	import markdown  # noqa: F401
@@ -24,14 +24,13 @@ try:
 except ImportError:
 	clipboardViewer = None
 else:
-	clipboardMonitor = ModuleType("tests.clipboardMonitor")
+	clipboardMonitor = ModuleType(f"{_PACKAGE_NAME}.clipboard.monitor")
 	clipboardMonitor.ClipboardSnapshot = object
 	clipboardViewer = loadAddonModule(
-		"tests.clipboardViewer",
-		_MODULE_PATH,
+		f"{_PACKAGE_NAME}.clipboard.viewer",
 		injectedModules={
 			"logHandler": SimpleNamespace(log=Mock()),
-			"tests.clipboardMonitor": clipboardMonitor,
+			f"{_PACKAGE_NAME}.clipboard.monitor": clipboardMonitor,
 		},
 	)
 
@@ -126,8 +125,7 @@ class ClipboardViewerTests(unittest.TestCase):
 		self.assertIn("<table>", rendered)
 		self.assertIn("<code>code</code>", rendered)
 		self.assertIn("<code>$notmath$</code>", rendered)
-		if clipboardViewer.LaTeX2MathMLExtension is not None:
-			self.assertGreaterEqual(rendered.count("<math"), 2)
+		self.assertGreaterEqual(rendered.count("<math"), 2)
 
 	def testRenderTextFallsBackWhenSanitizationRemovesRawHtml(self) -> None:
 		"""Preserve plain text that Markdown exposes only as removable HTML."""
@@ -161,9 +159,6 @@ class ClipboardViewerTests(unittest.TestCase):
 	def testRenderHtmlConvertsVisibleLatexButNotCode(self) -> None:
 		"""Convert formulas in rich text while preserving literal code samples."""
 		html = clipboardViewer.renderHtml("<p>$x+1$</p><pre>$y+1$</pre><code>$z+1$</code>")
-		if clipboardViewer.converter is None:
-			self.assertIn("$x+1$", html)
-			return
 		self.assertEqual(1, html.count("<math"))
 		self.assertIn("$y+1$", html)
 		self.assertIn("$z+1$", html)

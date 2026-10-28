@@ -7,15 +7,13 @@
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
 import re
 from time import perf_counter
-from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tests._module_loader import loadAddonModule
+from tests._manager_loader import fakeNvdaModules
+from tests._module_loader import createAddonPackage, loadAddonModule
 
 
 class _WideStringOffsetConverter:
@@ -36,24 +34,20 @@ class _WideStringOffsetConverter:
 		)
 
 
-_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "managerEditor.py"
-_SEARCH = loadAddonModule("nvdaClipboardEditorSearchTests", _PATH.with_name("search.py"))
-_NAMESPACE = {
-	"re": re,
-	"findPreviousLiteralMatch": _SEARCH.findPreviousLiteralMatch,
-	"matchRegexSelection": _SEARCH.matchRegexSelection,
-	"textUtils": SimpleNamespace(WideStringOffsetConverter=_WideStringOffsetConverter),
-	"wx": SimpleNamespace(ID_APPLY=1, ID_OK=2, ID_CANCEL=3),
-	"_": lambda text: text,
-	"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
-}
-_CLASSES = [
-	node
-	for node in ast.parse(_PATH.read_text(encoding="utf-8")).body
-	if isinstance(node, ast.ClassDef) and node.name == "_ManagerEditorCommands"
-]
-exec(compile(ast.Module(body=_CLASSES, type_ignores=[]), str(_PATH), "exec"), _NAMESPACE)
-ManagerEditorCommands = _NAMESPACE["_ManagerEditorCommands"]
+_PACKAGE_NAME = "nvdaClipboardManagerEditorTests"
+createAddonPackage(_PACKAGE_NAME)
+_MANAGER_EDITOR = loadAddonModule(
+	f"{_PACKAGE_NAME}.manager.editor",
+	injectedModules=fakeNvdaModules(
+		{
+			"textUtils": {"WideStringOffsetConverter": _WideStringOffsetConverter},
+			"wx": {"ID_APPLY": 1, "ID_OK": 2, "ID_CANCEL": 3},
+		},
+	),
+)
+# Module globals of the real editor module, patched per test to replace dialogs.
+_NAMESPACE = vars(_MANAGER_EDITOR)
+ManagerEditorCommands = _MANAGER_EDITOR._ManagerEditorCommands
 
 
 class ManagerEditorTests(unittest.TestCase):
