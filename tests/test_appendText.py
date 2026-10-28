@@ -41,8 +41,8 @@ class AppendTextTests(unittest.TestCase):
 		source = SimpleNamespace(APPEND_TEXT=object())
 		namespace = {
 			"ClipboardContentType": contentTypes,
-			"_ClipboardChangeSource": source,
-			"_getTextOrCharacterCount": lambda text: text,
+			"ClipboardChangeSource": source,
+			"getTextOrCharacterCount": lambda text: text,
 			"_": lambda text: text,
 			"ui": Mock(),
 		}

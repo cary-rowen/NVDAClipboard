@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import ctypes
-from ctypes import WinError, create_unicode_buffer, memmove, string_at, windll
+from ctypes import WinDLL, WinError, get_last_error, memmove, string_at
 import ctypes.wintypes as w
 from dataclasses import dataclass, replace
 from functools import partial
@@ -31,7 +31,13 @@ from .payload import (
 	isImageSizeSafe,
 	normalizeNewlinesForWin32,
 )
-from .imageCodec import getImageProperties, isPngImageDecodable, pngToPackedDib
+from .imageCodec import (
+	ImageProperties,
+	getImageProperties,
+	isDibImageSupported,
+	isPngImageDecodable,
+	pngToPackedDib,
+)
 from ..background import queueMainThread
 
 __all__ = [
@@ -62,7 +68,9 @@ class ClipboardContentType(Enum):
 class ClipboardSnapshot:
 	"""Contain one immutable read of the supported Windows clipboard formats.
 
-	PNG data has passed structural validation and its image metadata matches the payload.
+	PNG data has been verified to fully decode and its image metadata matches the payload.
+	DIB data is structurally valid and, whenever a bitmap fallback was available, in a layout
+	that image normalization can convert.
 	Representations which cannot be retained may be omitted while the remaining fields stay writable.
 	"""
 
@@ -106,7 +114,6 @@ CF_HDROP = 0xF
 CF_DIBV5 = 0x11
 WM_CLIPBOARDUPDATE = 0x031D
 HWND_MESSAGE = -3
-DRAG_QUERY_FILE_COUNT = 0xFFFFFFFF
 
 _OPEN_RETRIES = 10
 _OPEN_RETRY_INTERVAL = 0.05
@@ -115,6 +122,9 @@ _OPEN_CLIPBOARD_ERROR = "OpenClipboard failed"
 
 _MAX_FILE_COUNT = 10_000
 _MAX_FILE_PATH_CHARACTERS = 1_000_000
+# Codec for non-wide DROPFILES path lists: the Windows ANSI code page, as DragQueryFileW assumes.
+# Tests on hosts without the Windows-only "mbcs" codec override this constant.
+_ANSI_PATH_ENCODING = "mbcs"
 _SUPPORTED_DIB_HEADER_SIZES = frozenset((12, 40, 52, 56, 108, 124))
 _SUPPORTED_DIB_BIT_DEPTHS = frozenset((1, 4, 8, 16, 24, 32))
 _BI_RGB = 0
@@ -191,10 +201,12 @@ class _BITMAP(ctypes.Structure):
 	)
 
 
-_user32 = windll.user32
-_kernel32 = windll.kernel32
-_shell32 = windll.shell32
-_gdi32 = windll.gdi32
+# Private library instances keep argtypes/restype off the process-wide ``ctypes.windll`` objects,
+# which NVDA and every other add-on share. Their Windows errors are read with ``get_last_error``;
+# functions taken from NVDA's ``winBindings`` do not use ``use_last_error`` and keep bare ``WinError()``.
+_user32 = WinDLL("user32", use_last_error=True)
+_kernel32 = WinDLL("kernel32", use_last_error=True)
+_gdi32 = WinDLL("gdi32", use_last_error=True)
 
 _addClipboardFormatListener = _user32.AddClipboardFormatListener
 _addClipboardFormatListener.argtypes = (w.HWND,)
@@ -244,10 +256,6 @@ _getObject = _gdi32.GetObjectW
 _getObject.argtypes = (w.HANDLE, ctypes.c_int, w.LPVOID)
 _getObject.restype = ctypes.c_int
 
-_dragQueryFile = _shell32.DragQueryFileW
-_dragQueryFile.argtypes = (w.HANDLE, w.UINT, w.LPWSTR, w.UINT)
-_dragQueryFile.restype = w.UINT
-
 
 @dataclass(frozen=True, slots=True)
 class _RegisteredFormats:
@@ -260,13 +268,37 @@ class _RegisteredFormats:
 	canUpload: int
 
 
+@dataclass(frozen=True, slots=True)
+class _ClipboardImage:
+	"""Hold one bounded image representation copied from the open clipboard."""
+
+	imageFormat: str
+	data: bytes
+	info: tuple[int, int, int]
+	# Canonical DIBs converted from CF_BITMAP end the fallback chain.
+	fromBitmap: bool = False
+
+
+def _withImage(snapshot: ClipboardSnapshot, image: _ClipboardImage) -> ClipboardSnapshot:
+	"""Return a snapshot carrying one replacement image representation."""
+	width, height, bitDepth = image.info
+	return replace(
+		snapshot,
+		imageFormat=image.imageFormat,
+		imageData=image.data,
+		imageWidth=width,
+		imageHeight=height,
+		imageBitDepth=bitDepth,
+	)
+
+
 def _registerFormats() -> _RegisteredFormats:
 	"""Register every named clipboard format, raising the Windows error if any registration fails."""
 	formatIds = {
 		field: int(_registerClipboardFormat(name)) for field, name in _REGISTERED_FORMAT_NAMES.items()
 	}
 	if not all(formatIds.values()):
-		raise WinError()
+		raise WinError(get_last_error())
 	return _RegisteredFormats(**formatIds)
 
 
@@ -425,6 +457,58 @@ def _isValidDropFilesData(data: bytes) -> bool:
 	return b"\0\0" in pathData
 
 
+def _splitDropFilesPaths(pathData: bytes, isWide: bool) -> list[bytes]:
+	"""Split a terminated DROPFILES path list into raw paths, stopping at the first empty path."""
+	unitSize = 2 if isWide else 1
+	nul = b"\0" * unitSize
+	paths: list[bytes] = []
+	start = 0
+	while True:
+		end = pathData.find(nul, start)
+		# Wide paths end only at a NUL code unit, so skip matches straddling two code units.
+		while end >= 0 and (end - start) % unitSize:
+			end = pathData.find(nul, end + 1)
+		if end < 0:
+			raise ValueError("Unterminated clipboard file list")
+		if end == start:
+			return paths
+		paths.append(pathData[start:end])
+		start = end + unitSize
+
+
+def _parseDropFilesPaths(data: bytes) -> list[str]:
+	"""Return the paths in bounded CF_HDROP data, or an empty list when the data is malformed.
+
+	Mirror DragQueryFileW: count UTF-16 code units, decode non-wide lists with the ANSI code page,
+	and replace undecodable data. Raise :class:`_ClipboardDataLimitError` when the list exceeds
+	the file count or total path length limits.
+	"""
+	if not _isValidDropFilesData(data):
+		return []
+	header = _DROPFILES.from_buffer_copy(data[: ctypes.sizeof(_DROPFILES)])
+	isWide = bool(header.fWide)
+	try:
+		rawPaths = _splitDropFilesPaths(data[int(header.pFiles) :], isWide)
+	except ValueError:
+		return []
+	if len(rawPaths) > _MAX_FILE_COUNT:
+		raise _ClipboardDataLimitError(len(rawPaths))
+	files: list[str] = []
+	totalCharacters = 0
+	for rawPath in rawPaths:
+		if isWide:
+			path = rawPath.decode("utf-16-le", errors="replace")
+			fileNameLength = len(rawPath) // 2
+		else:
+			path = rawPath.decode(_ANSI_PATH_ENCODING, errors="replace")
+			fileNameLength = len(path.encode("utf-16-le", errors="surrogatepass")) // 2
+		totalCharacters += fileNameLength
+		if totalCharacters > _MAX_FILE_PATH_CHARACTERS:
+			raise _ClipboardDataLimitError(totalCharacters)
+		files.append(path)
+	return files
+
+
 class ClipboardMonitor:
 	"""Monitor clipboard changes and read or restore the supported fixed formats.
 
@@ -449,7 +533,7 @@ class ClipboardMonitor:
 			return
 		window = _createClipboardMessageWindow(self)
 		if not _addClipboardFormatListener(window.handle):
-			error = WinError()
+			error = WinError(get_last_error())
 			window.destroy()
 			raise error
 		self._window = window
@@ -466,23 +550,24 @@ class ClipboardMonitor:
 		if self._window is None:
 			return
 		if not _removeClipboardFormatListener(self._window.handle):
-			log.debugWarning("Could not remove clipboard format listener.", exc_info=WinError())
+			log.debugWarning(
+				"Could not remove clipboard format listener.",
+				exc_info=WinError(get_last_error()),
+			)
 		self._window.destroy()
 		self._window = None
 
 	def readNow(
 		self,
 		*,
-		decodePng: bool = False,
 		analyzeImage: bool = False,
 		includeRichFormats: bool = True,
 		includeImages: bool = True,
 	) -> ClipboardSnapshot:
-		"""Read the clipboard, optionally validating PNG or analyzing image pixels after close."""
+		"""Read the clipboard, verifying images and optionally analyzing image pixels after close."""
 		started = monotonic()
 		try:
 			return self._readSnapshot(
-				decodePng=decodePng,
 				analyzeImage=analyzeImage,
 				includeRichFormats=includeRichFormats,
 				includeImages=includeImages,
@@ -494,27 +579,6 @@ class ClipboardMonitor:
 			elapsed = monotonic() - started
 			if elapsed >= 0.1:
 				log.debugWarning(f"Reading clipboard content took {elapsed:.3f}s.")
-
-	def readBitmapDib(
-		self,
-		expectedSequenceNumber: int,
-	) -> tuple[bytes, tuple[int, int, int]] | None:
-		"""Return a canonical bitmap DIB while the clipboard sequence still matches."""
-		if not expectedSequenceNumber or self.getSequenceNumber() != expectedSequenceNumber:
-			return None
-		if not self._openClipboardWithRetry(None):
-			return None
-		try:
-			if self.getSequenceNumber() != expectedSequenceNumber:
-				return None
-			data, imageInfo = self._readBitmapFromOpenClipboard()
-			return (data, imageInfo) if data is not None and imageInfo is not None else None
-		finally:
-			if not _closeClipboard():
-				log.debugWarning(
-					"ClipboardMonitor failed to close clipboard after reading a bitmap fallback.",
-					exc_info=WinError(),
-				)
 
 	# Keep HGLOBAL ownership transfer and cleanup in one scope to prevent resource leaks.
 	def writeSnapshot(
@@ -729,15 +793,15 @@ class ClipboardMonitor:
 	def _readSnapshot(
 		self,
 		*,
-		decodePng: bool,
 		analyzeImage: bool,
 		includeRichFormats: bool = True,
 		includeImages: bool = True,
 	) -> ClipboardSnapshot:
-		"""Read one internally consistent snapshot, decoding copied PNG data after close."""
+		"""Read one internally consistent snapshot, verifying copied image data after close."""
 		if not self._openClipboardWithRetry(None):
 			return ClipboardSnapshot(ClipboardContentType.ERROR, error=_OPEN_CLIPBOARD_ERROR)
 		imageSnapshot: ClipboardSnapshot | None = None
+		image: _ClipboardImage | None = None
 		try:
 			if self._isFormatAvailable(self._formats.excludeMonitor):
 				return ClipboardSnapshot(
@@ -775,8 +839,9 @@ class ClipboardMonitor:
 			richLimit = MAX_RICH_FORMAT_BYTES if includeRichFormats else 0
 			html, htmlDropped = self._readOptionalFormat(self._formats.html, richLimit)
 			rtf, rtfDropped = self._readOptionalFormat(self._formats.rtf, richLimit - len(html or b""))
+			missingImageInfo: tuple[int, int, int] | None = None
 			if includeImages:
-				imageFormat, imageData, imageInfo, imageDropped = self._readImageFromOpenClipboard()
+				image, missingImageInfo, imageDropped = self._readImageFromOpenClipboard()
 			else:
 				imageFormatsAdvertised = any(
 					self._isFormatAvailable(formatId)
@@ -787,19 +852,18 @@ class ClipboardMonitor:
 						CF_BITMAP,
 					)
 				)
-				imageFormat = imageData = imageInfo = None
 				imageDropped = imageFormatsAdvertised
-			hasAdvertisedImage = imageData is not None or imageDropped
+			hasAdvertisedImage = image is not None or imageDropped
 			if hasAdvertisedImage:
-				width, height, bitDepth = imageInfo or (0, 0, 0)
+				width, height, bitDepth = image.info if image is not None else missingImageInfo or (0, 0, 0)
 				imageSnapshot = makeSnapshot(
 					ClipboardContentType.TEXT_AND_IMAGE if text else ClipboardContentType.IMAGE,
 					sequenceNumber=self.getSequenceNumber(),
 					text=text or "",
 					html=html,
 					rtf=rtf,
-					imageFormat=imageFormat,
-					imageData=imageData,
+					imageFormat=image.imageFormat if image is not None else None,
+					imageData=image.data if image is not None else None,
 					imageWidth=width,
 					imageHeight=height,
 					imageBitDepth=bitDepth,
@@ -838,48 +902,87 @@ class ClipboardMonitor:
 			if not _closeClipboard():
 				log.debugWarning("ClipboardMonitor failed to close clipboard.", exc_info=WinError())
 		assert imageSnapshot is not None
-		if imageSnapshot.imageData is None:
+		if image is None:
 			return imageSnapshot
-		if not analyzeImage and (not decodePng or imageSnapshot.imageFormat != "PNG"):
-			return imageSnapshot
-		imageInfo = (imageSnapshot.imageWidth, imageSnapshot.imageHeight, imageSnapshot.imageBitDepth)
-		imageProperties = (
-			getImageProperties(imageSnapshot.imageFormat, imageSnapshot.imageData, imageInfo)
-			if analyzeImage
-			else None
-		)
-		pngIsDecodable = (
-			imageProperties is not None
-			if analyzeImage
-			else isPngImageDecodable(imageSnapshot.imageData, imageInfo)
-		)
-		if not pngIsDecodable and imageSnapshot.imageFormat == "PNG":
-			imageFormat, imageData, imageInfo, _imageDropped = self._readDibImageForSequence(
-				imageSnapshot.sequenceNumber,
+		return self._verifyImageSnapshot(imageSnapshot, image, analyzeImage=analyzeImage)
+
+	def _verifyImageSnapshot(
+		self,
+		snapshot: ClipboardSnapshot,
+		image: _ClipboardImage,
+		*,
+		analyzeImage: bool,
+	) -> ClipboardSnapshot:
+		"""Continue the PNG, DIBV5, DIB, and bitmap fallback chain after the clipboard is closed.
+
+		PNG data must fully decode, otherwise the DIB formats of the same clipboard sequence replace it.
+		A DIB which normalization cannot convert is replaced by the converted bitmap when available.
+		"""
+		imageProperties, isConvertible = self._inspectImage(image, analyzeImage=analyzeImage)
+		if not isConvertible and image.imageFormat == "PNG":
+			fallback = self._readImageForSequence(
+				snapshot.sequenceNumber,
+				lambda: self._readDibImageFromOpenClipboard()[0],
 			)
-			if imageData is None or imageInfo is None:
-				return replace(
-					imageSnapshot,
-					imageFormat=None,
-					imageData=None,
-				)
-			imageSnapshot = replace(
-				imageSnapshot,
-				imageFormat=imageFormat,
-				imageData=imageData,
-				imageWidth=imageInfo[0],
-				imageHeight=imageInfo[1],
-				imageBitDepth=imageInfo[2],
+			if fallback is None:
+				return replace(snapshot, imageFormat=None, imageData=None)
+			image = fallback
+			snapshot = _withImage(snapshot, image)
+			imageProperties, isConvertible = self._inspectImage(image, analyzeImage=analyzeImage)
+		width, height, bitDepth = image.info
+		# Images too large to decode safely are dropped by normalization, so a bitmap cannot help.
+		if not isConvertible and not image.fromBitmap and isImageSizeSafe(width, height, max(32, bitDepth)):
+			bitmapImage = self._readImageForSequence(
+				snapshot.sequenceNumber,
+				lambda: self._readBitmapImageFromOpenClipboard()[0],
 			)
-			imageProperties = getImageProperties(imageFormat, imageData, imageInfo) if analyzeImage else None
+			if bitmapImage is not None:
+				# Leave the bitmap unanalyzed so summaries match the former history-time conversion.
+				return _withImage(snapshot, bitmapImage)
 		if imageProperties is None:
-			return imageSnapshot
+			return snapshot
 		return replace(
-			imageSnapshot,
+			snapshot,
 			imageColor=imageProperties.color,
 			imageColorPercentage=imageProperties.colorPercentage,
 			imageTransparentPercentage=imageProperties.transparentPercentage,
 		)
+
+	@staticmethod
+	def _inspectImage(
+		image: _ClipboardImage,
+		*,
+		analyzeImage: bool,
+	) -> tuple[ImageProperties | None, bool]:
+		"""Return analyzed pixel properties and whether normalization can convert one image."""
+		if analyzeImage:
+			imageProperties = getImageProperties(image.imageFormat, image.data, image.info)
+			return imageProperties, imageProperties is not None
+		if image.imageFormat == "PNG":
+			return None, isPngImageDecodable(image.data, image.info)
+		# Keep synchronous DIB reads fast: parse only the header, leaving pixel decoding to normalization.
+		return None, image.fromBitmap or isDibImageSupported(image.data, image.info)
+
+	def _readImageForSequence(
+		self,
+		expectedSequenceNumber: int,
+		reader: Callable[[], _ClipboardImage | None],
+	) -> _ClipboardImage | None:
+		"""Open the clipboard and run one image reader only while the expected sequence is current."""
+		if not expectedSequenceNumber or self.getSequenceNumber() != expectedSequenceNumber:
+			return None
+		if not self._openClipboardWithRetry(None):
+			return None
+		try:
+			if self.getSequenceNumber() != expectedSequenceNumber:
+				return None
+			return reader()
+		finally:
+			if not _closeClipboard():
+				log.debugWarning(
+					"ClipboardMonitor failed to close clipboard after reading an image fallback.",
+					exc_info=WinError(),
+				)
 
 	def _readTextIfAvailable(self) -> str | None:
 		"""Return bounded CF_UNICODETEXT data, distinguishing an empty value from absence."""
@@ -911,8 +1014,11 @@ class ClipboardMonitor:
 
 	def _readImageFromOpenClipboard(
 		self,
-	) -> tuple[str | None, bytes | None, tuple[int, int, int] | None, bool]:
-		"""Read the richest valid bounded image representation from the clipboard."""
+	) -> tuple[_ClipboardImage | None, tuple[int, int, int] | None, bool]:
+		"""Read the richest structurally valid bounded image representation from the clipboard.
+
+		Return the image, metadata of an unconvertible bitmap, and whether an advertised image was dropped.
+		"""
 		advertised = self._isFormatAvailable(self._formats.png)
 		if advertised:
 			try:
@@ -922,16 +1028,18 @@ class ClipboardMonitor:
 			else:
 				info = getPngImageInfo(data)
 				if info is not None:
-					return "PNG", data, info, False
-		return self._readDibImageFromOpenClipboard(advertised=advertised)
+					return _ClipboardImage("PNG", data, info), None, False
+		image, bitmapInfo, dibAdvertised = self._readDibImageFromOpenClipboard()
+		return image, bitmapInfo, image is None and (advertised or dibAdvertised)
 
 	def _readDibImageFromOpenClipboard(
 		self,
-		*,
-		advertised: bool = False,
-	) -> tuple[str | None, bytes | None, tuple[int, int, int] | None, bool]:
-		"""Read original DIB bytes, falling back to a canonical bitmap conversion."""
-		dibImage: tuple[str, bytes, tuple[int, int, int]] | None = None
+	) -> tuple[_ClipboardImage | None, tuple[int, int, int] | None, bool]:
+		"""Read original DIBV5 or DIB bytes, falling back to a canonical bitmap conversion.
+
+		Return the image, metadata of an unconvertible bitmap, and whether any DIB or bitmap was advertised.
+		"""
+		advertised = False
 		for formatId, formatName in ((CF_DIBV5, "DIBV5"), (CF_DIB, "DIB")):
 			if not self._isFormatAvailable(formatId):
 				continue
@@ -942,42 +1050,16 @@ class ClipboardMonitor:
 				continue
 			info = _parseDibInfo(data)
 			if info is not None:
-				dibImage = (formatName, data, info)
-				break
-		bitmapInfo = None
-		if dibImage is None and self._isFormatAvailable(CF_BITMAP):
-			advertised = True
-			data, bitmapInfo = self._readBitmapFromOpenClipboard()
-			if data is not None and bitmapInfo is not None:
-				dibImage = ("DIB", data, bitmapInfo)
-		if dibImage is None:
-			return None, None, bitmapInfo, advertised
-		imageFormat, imageData, imageInfo = dibImage
-		return imageFormat, imageData, imageInfo, False
+				return _ClipboardImage(formatName, data, info), None, True
+		if not self._isFormatAvailable(CF_BITMAP):
+			return None, None, advertised
+		image, bitmapInfo = self._readBitmapImageFromOpenClipboard()
+		return image, bitmapInfo, True
 
-	def _readDibImageForSequence(
+	def _readBitmapImageFromOpenClipboard(
 		self,
-		expectedSequenceNumber: int,
-	) -> tuple[str | None, bytes | None, tuple[int, int, int] | None, bool]:
-		"""Read a DIB fallback only while the clipboard still has the expected sequence."""
-		dropped = (None, None, None, True)
-		if not expectedSequenceNumber or self.getSequenceNumber() != expectedSequenceNumber:
-			return dropped
-		if not self._openClipboardWithRetry(None):
-			return dropped
-		try:
-			if self.getSequenceNumber() != expectedSequenceNumber:
-				return dropped
-			return self._readDibImageFromOpenClipboard()
-		finally:
-			if not _closeClipboard():
-				log.debugWarning(
-					"ClipboardMonitor failed to close clipboard after reading a DIB fallback.",
-					exc_info=WinError(),
-				)
-
-	def _readBitmapFromOpenClipboard(self) -> tuple[bytes | None, tuple[int, int, int] | None]:
-		"""Return a bounded canonical DIB and metadata for an available bitmap."""
+	) -> tuple[_ClipboardImage | None, tuple[int, int, int] | None]:
+		"""Return a bounded canonical DIB converted from an available bitmap, and the bitmap metadata."""
 		handle = _getClipboardData(CF_BITMAP)
 		if not handle:
 			return None, None
@@ -990,7 +1072,10 @@ class ClipboardMonitor:
 		if not isImageSizeSafe(width, height, bitDepth):
 			return None, None
 		data = _bitmapHandleToDib(int(handle), (width, height, bitDepth))
-		return (data, (width, height, 24)) if data is not None else (None, (width, height, bitDepth))
+		if data is None:
+			return None, (width, height, bitDepth)
+		imageInfo = (width, height, 24)
+		return _ClipboardImage("DIB", data, imageInfo, fromBitmap=True), imageInfo
 
 	def _readPolicy(self, formatId: int) -> bool:
 		"""Read a privacy DWORD, failing closed when present but malformed."""
@@ -1028,7 +1113,7 @@ class ClipboardMonitor:
 			raise WinError()
 		size = int(_globalSize(handle))
 		if size <= 0:
-			raise WinError()
+			raise WinError(get_last_error())
 		if size > maximumBytes:
 			raise _ClipboardDataLimitError(size)
 		address = _globalLock(handle)
@@ -1042,36 +1127,10 @@ class ClipboardMonitor:
 	def _readFilesFromOpenClipboard(self) -> list[str]:
 		"""Read bounded CF_HDROP file-system paths while the clipboard is open."""
 		try:
-			handle = _getClipboardData(CF_HDROP)
-			if not handle:
-				raise WinError()
 			data = self._readGlobalData(CF_HDROP, _MAX_DROPFILES_BYTES)
 		except (_ClipboardDataLimitError, OSError):
 			return []
-		if not _isValidDropFilesData(data):
-			return []
-		fileCount = int(_dragQueryFile(handle, DRAG_QUERY_FILE_COUNT, None, 0))
-		if fileCount > _MAX_FILE_COUNT:
-			raise _ClipboardDataLimitError(fileCount)
-		files: list[str] = []
-		totalCharacters = 0
-		for index in range(fileCount):
-			fileNameLength = int(_dragQueryFile(handle, index, None, 0))
-			if fileNameLength <= 0:
-				return []
-			totalCharacters += fileNameLength
-			if totalCharacters > _MAX_FILE_PATH_CHARACTERS:
-				raise _ClipboardDataLimitError(totalCharacters)
-			buffer = create_unicode_buffer(fileNameLength + 1)
-			if int(_dragQueryFile(handle, index, buffer, len(buffer))) != fileNameLength:
-				return []
-			files.append(
-				buffer.value.encode("utf-16-le", errors="surrogatepass").decode(
-					"utf-16-le",
-					errors="replace",
-				),
-			)
-		return files
+		return _parseDropFilesPaths(data)
 
 	def _buildWritableImageFormats(
 		self,

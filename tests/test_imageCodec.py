@@ -84,6 +84,31 @@ class ImageCodecTests(unittest.TestCase):
 		self.assertIsNotNone(pngData)
 		self.assertEqual((1, 1, 24), clipboardData.getPngImageInfo(pngData))
 
+	def testDibHeaderCheckRejectsLayoutsNormalizationCannotConvert(self) -> None:
+		"""Accept convertible DIBs and reject unsupported bit fields or mismatched dimensions."""
+		unsupportedDib = (
+			struct.pack("<IiiHHIIiiII", 40, 1, 1, 1, 32, 3, 4, 0, 0, 0, 0)
+			+ struct.pack("<III", 0x3FF00000, 0x000FFC00, 0x000003FF)
+			+ b"\0\0\0\0"
+		)
+
+		self.assertTrue(imageCodec.isDibImageSupported(_buildCanonicalDib(), (1, 1, 24)))
+		self.assertFalse(imageCodec.isDibImageSupported(_buildCanonicalDib(), (2, 1, 24)))
+		self.assertFalse(imageCodec.isDibImageSupported(unsupportedDib, (1, 1, 32)))
+		self.assertIsNone(imageCodec.normalizeImageDataToPng("DIB", unsupportedDib, (1, 1, 32)))
+
+	def testPngNormalizationTrustsVerifiedPngWithMatchingMetadata(self) -> None:
+		"""Return verified PNG bytes unchanged and reject metadata that does not match them."""
+		from PIL import Image
+
+		output = BytesIO()
+		with Image.new("RGB", (2, 1), (1, 2, 3)) as image:
+			image.save(output, format="PNG")
+		pngData = output.getvalue()
+
+		self.assertIs(pngData, imageCodec.normalizeImageDataToPng("PNG", pngData, (2, 1, 24)))
+		self.assertIsNone(imageCodec.normalizeImageDataToPng("PNG", pngData, (1, 2, 24)))
+
 	def testImageNormalizationReportsEncodedSizeLimit(self) -> None:
 		"""Distinguish an oversized normalized PNG from invalid DIB input."""
 		with (

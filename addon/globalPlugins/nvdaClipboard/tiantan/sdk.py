@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from ctypes import Array, CDLL, POINTER, byref, c_char, c_char_p, c_int, c_void_p, create_string_buffer
 from dataclasses import dataclass
-import platform
+import sysconfig
 from threading import Lock
 
 from .._native import getNativeFilePath
 
 
 _SDK_DLL_NAME_BY_MACHINE = {
-	"ARM64": "ClipDataCloud.SDK.ARM.dll",
+	"win-arm64": "ClipDataCloud.SDK.ARM.dll",
 }
 _DEFAULT_SDK_DLL_NAME = "ClipDataCloud.SDK.dll"
 SUCCESS = 0
@@ -181,5 +181,5 @@ class TiantanSdk:
 
 
 def _getSdkDllName() -> str:
-	"""Return the SDK DLL name for the current Windows CPU architecture."""
-	return _SDK_DLL_NAME_BY_MACHINE.get(platform.machine().upper(), _DEFAULT_SDK_DLL_NAME)
+	"""Return the SDK DLL name for the architecture of the running NVDA process."""
+	return _SDK_DLL_NAME_BY_MACHINE.get(sysconfig.get_platform(), _DEFAULT_SDK_DLL_NAME)

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import Future
 from threading import Event, Lock, Thread
 from typing import ClassVar, Self
 
@@ -15,7 +16,7 @@ from logHandler import log
 import wx
 
 
-__all__ = ["BackgroundCalculation", "queueMainThread"]
+__all__ = ["BackgroundCalculation", "LatestWorkerResult", "queueMainThread"]
 
 
 class BackgroundCalculation[ProgressT]:
@@ -108,3 +109,75 @@ def queueMainThread(
 			log.debugWarning(failureMessage, exc_info=True)
 		return False
 	return True
+
+
+class LatestWorkerResult[ResultT]:
+	"""Deliver only the latest of a series of worker futures to a callback on wx's GUI thread.
+
+	Tracking a new future or cancelling makes any earlier future stale: a stale future is
+	cancelled if it has not started, and its result never reaches ``onFinish``.
+	"""
+
+	def __init__(
+		self,
+		onFinish: Callable[[Future[ResultT]], None],
+		*,
+		isOwnerActive: Callable[[], bool],
+		scheduleFailureMessage: str,
+		onScheduleFailure: Callable[[], None] | None = None,
+		queueStaleResults: bool = True,
+	) -> None:
+		"""Create an idle tracker.
+
+		``onFinish`` receives the completed latest future on the GUI thread. When wx no longer
+		accepts work, ``onScheduleFailure`` runs if the future was still the latest one, and
+		``scheduleFailureMessage`` is logged as a debug warning while ``isOwnerActive`` is true.
+		``queueStaleResults`` controls whether a future that became stale while running is still
+		queued to the GUI thread, where it is then ignored.
+		"""
+		super().__init__()
+		self._onFinish = onFinish
+		self._isOwnerActive = isOwnerActive
+		self._scheduleFailureMessage = scheduleFailureMessage
+		self._onScheduleFailure = onScheduleFailure
+		self._queueStaleResults = queueStaleResults
+		self._pending: Future[ResultT] | None = None
+
+	def track(self, future: Future[ResultT]) -> None:
+		"""Make ``future`` the latest pending result and deliver it once it completes."""
+		self._pending = future
+		future.add_done_callback(self._queueFinish)
+
+	def cancel(self) -> None:
+		"""Cancel a queued future and make any running result stale."""
+		future = self._pending
+		self._pending = None
+		if future is not None:
+			future.cancel()
+
+	def _queueFinish(self, future: Future[ResultT]) -> None:
+		"""Queue one completed future for delivery on the GUI thread."""
+		if not self._queueStaleResults and future is not self._pending:
+			return
+
+		def releaseAfterScheduleFailure() -> bool:
+			"""Forget the future if it is still the latest one and return whether the owner is active."""
+			if future is self._pending:
+				self._pending = None
+				if self._onScheduleFailure is not None:
+					self._onScheduleFailure()
+			return self._isOwnerActive()
+
+		_ = queueMainThread(
+			self._finish,
+			future,
+			onFailure=releaseAfterScheduleFailure,
+			failureMessage=self._scheduleFailureMessage,
+		)
+
+	def _finish(self, future: Future[ResultT]) -> None:
+		"""Pass the latest completed future to ``onFinish`` and ignore stale ones."""
+		if future is not self._pending:
+			return
+		self._pending = None
+		self._onFinish(future)

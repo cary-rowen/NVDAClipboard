@@ -10,8 +10,8 @@ from __future__ import annotations
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import os
-import platform
 import sys
+import sysconfig
 from types import ModuleType
 
 
@@ -24,7 +24,8 @@ _ARM64_DIRECTORY = _NATIVE_ROOT / "arm64"
 
 def getNativeFilePath(fileName: str) -> Path:
 	"""Return one bundled native file path for the current architecture."""
-	directory = _ARM64_DIRECTORY if platform.machine().upper() == "ARM64" else _AMD64_DIRECTORY
+	# platform.machine() reports the host CPU; x64 NVDA runs emulated on ARM64 Windows and needs AMD64 binaries.
+	directory = _ARM64_DIRECTORY if sysconfig.get_platform() == "win-arm64" else _AMD64_DIRECTORY
 	return directory / fileName
 
 

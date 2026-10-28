@@ -17,46 +17,51 @@ from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
-_CONTROLLER_PATH = addonSourcePath("controller")
+_PASTE_PATH = addonSourcePath("paste")
+_FORMATTING_PATH = addonSourcePath("summary.formatting")
 
 
 def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
-	"""Load temporary paste helpers without importing controller dependencies."""
-	tree = ast.parse(_CONTROLLER_PATH.read_text(encoding="utf-8"))
-	nodes = [
-		node
-		for node in tree.body
-		if (
-			isinstance(node, ast.ClassDef)
-			and node.name in {"_TemporaryPasteState", "_TemporaryPasteRequest"}
-			or isinstance(node, ast.FunctionDef)
-			and node.name
-			in {
-				"_getTextOrCharacterCount",
-				"_mapClipboardSelectionOffsets",
-				"_isTemporarySnapshot",
-				"_normalizeUnicodeText",
-				"_getPlainTextPasteRequest",
-				"_preparePngDib",
-				"_prepareTemporaryPngPaste",
-			}
-		)
-	]
+	"""Load temporary paste helpers without importing paste or formatting dependencies."""
 	namespace = {
 		"dataclass": dataclass,
 		"ClipboardContentType": clipboardMonitor.ClipboardContentType,
 		"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
 		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
 		"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
+		"normalizeUnicodeText": clipboardData.normalizeUnicodeText,
 		"replace": replace,
 		"log": Mock(),
 	}
-	exec(compile(ast.Module(body=nodes, type_ignores=[]), _CONTROLLER_PATH, "exec"), namespace)
+	for path, classNames, functionNames in (
+		(_FORMATTING_PATH, set(), {"getTextOrCharacterCount"}),
+		(
+			_PASTE_PATH,
+			{"_TemporaryPasteState", "_TemporaryPasteRequest"},
+			{
+				"_isTemporarySnapshot",
+				"_getPlainTextPasteRequest",
+				"preparePngDib",
+				"_prepareTemporaryPngPaste",
+			},
+		),
+	):
+		tree = ast.parse(path.read_text(encoding="utf-8"))
+		nodes = [
+			node
+			for node in tree.body
+			if (
+				isinstance(node, ast.ClassDef)
+				and node.name in classNames
+				or isinstance(node, ast.FunctionDef)
+				and node.name in functionNames
+			)
+		]
+		exec(compile(ast.Module(body=nodes, type_ignores=[]), path, "exec"), namespace)
 	return (
 		namespace["_TemporaryPasteState"],
 		namespace["_isTemporarySnapshot"],
-		namespace["_getTextOrCharacterCount"],
-		namespace["_mapClipboardSelectionOffsets"],
+		namespace["getTextOrCharacterCount"],
 		namespace["_TemporaryPasteRequest"],
 		namespace["_prepareTemporaryPngPaste"],
 	)
@@ -66,7 +71,6 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 	_TemporaryPasteState,
 	_isTemporarySnapshot,
 	_getTextOrCharacterCount,
-	_mapClipboardSelectionOffsets,
 	_TemporaryPasteRequest,
 	_prepareTemporaryPngPaste,
 ) = _loadTemporaryPasteHelpers()
@@ -116,16 +120,7 @@ class TemporaryPasteTests(unittest.TestCase):
 				self.assertFalse(prepared.snapshot.canUpload)
 				self.assertEqual(None if fails else b"png", prepared.snapshot.imageData)
 				self.assertEqual(None if fails else b"dib", prepared.preparedPngDib)
-
-	def testSelectionOffsetsFollowClipboardLineEndingNormalization(self) -> None:
-		"""Keep marked characters stable when Win32 expands LF to CRLF."""
-		self.assertEqual(
-			(3, 3),
-			_mapClipboardSelectionOffsets((2, 2), "a\nb", "a\r\nb"),
-		)
-		self.assertIsNone(
-			_mapClipboardSelectionOffsets((2, 2), "a\nb", "a\r\nc"),
-		)
+				self.assertEqual(fails, prepared.usedPlainTextFallback)
 
 	def testTextFeedbackUsesConfiguredCharacterLimit(self) -> None:
 		"""Replace lengthy selection and paste feedback with a character count."""

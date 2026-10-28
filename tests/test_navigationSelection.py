@@ -8,23 +8,35 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum, auto
+from functools import partial
 from time import monotonic
 from types import MethodType, SimpleNamespace
 import sys
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
-from tests._module_loader import addonSourcePath
+from tests._module_loader import addonSourcePath, createAddonPackage, loadAddonModule
 from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
 
 _NAVIGATION_PATH = addonSourcePath("navigation")
 _CONTROLLER_PATH = addonSourcePath("controller")
+_PASTE_PATH = addonSourcePath("paste")
+_HISTORY_WRITER_PATH = addonSourcePath("historyWriter")
+_FORMATTING_PATH = addonSourcePath("summary.formatting")
+_PACKAGE_NAME = "nvdaClipboardNavigationSelectionTests"
+createAddonPackage(_PACKAGE_NAME)
+background = loadAddonModule(
+	f"{_PACKAGE_NAME}.background",
+	injectedModules={"logHandler": SimpleNamespace(log=Mock()), "wx": SimpleNamespace()},
+)
 
 _UI = SimpleNamespace(message=Mock())
+_PLAIN_TEXT_FALLBACK_MESSAGE = "Pasted as plain text; formatting could not be kept"
 _SPEECH = SimpleNamespace(speakTextSelected=Mock())
 _BRAILLE = SimpleNamespace(handler=SimpleNamespace(message=Mock()))
 
@@ -76,111 +88,355 @@ def _loadClipboardNavigator() -> type:
 ClipboardNavigator = _loadClipboardNavigator()
 
 
-def _loadSelectionControllerMethods() -> tuple[object, ...]:
-	"""Load the selection controller path without importing NVDA dependencies."""
-	tree = ast.parse(_CONTROLLER_PATH.read_text(encoding="utf-8"))
-	controllerClass = next(
-		node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ClipboardController"
-	)
-	nodes = [
+def _extractNodes(
+	path: object,
+	*,
+	classNames: frozenset[str] = frozenset(),
+	functionNames: frozenset[str] = frozenset(),
+	assignNames: frozenset[str] = frozenset(),
+	methods: tuple[str, frozenset[str]] | None = None,
+) -> list[ast.stmt]:
+	"""Return selected module-level definitions and, optionally, methods of one class."""
+	tree = ast.parse(path.read_text(encoding="utf-8"))
+	nodes: list[ast.stmt] = [
 		node
 		for node in tree.body
 		if (
 			isinstance(node, ast.ClassDef)
-			and node.name
-			in {
-				"_TemporaryPasteRequest",
-				"_TemporaryPasteState",
-				"_ClipboardChangeSource",
-				"_ClipboardWriteFailedError",
-				"_TemporaryPasteApplyError",
-			}
+			and node.name in classNames
 			or isinstance(node, ast.FunctionDef)
-			and node.name
-			in {
-				"_getTextOrCharacterCount",
-				"_normalizeUnicodeText",
-				"_mapClipboardSelectionOffsets",
-				"_getPlainTextPasteRequest",
-			}
+			and node.name in functionNames
+			or isinstance(node, ast.Assign)
+			and any(isinstance(target, ast.Name) and target.id in assignNames for target in node.targets)
 		)
 	]
-	nodes.extend(
-		node
-		for node in controllerClass.body
-		if isinstance(node, ast.FunctionDef)
-		and node.name
-		in {
-			"_beginTemporaryPaste",
-			"_pasteTextTemporarily",
-			"_pasteSnapshotTemporarily",
-			"_restoreClipboardAfterTemporaryPaste",
-			"_restoreOriginalClipboardAfterTemporaryPaste",
-			"_moveStoredItem",
-			"cycleStoredItemCategory",
-			"_getSelectionText",
-			"markClipboardSelectionStart",
-			"markClipboardSelectionEnd",
-			"pasteClipboardSelection",
-			"pasteCurrentNavigationTarget",
-			"pasteCurrentStoredItem",
-		}
+	if methods is not None:
+		className, methodNames = methods
+		classNode = next(
+			node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == className
+		)
+		nodes.extend(
+			node for node in classNode.body if isinstance(node, ast.FunctionDef) and node.name in methodNames
+		)
+	return nodes
+
+
+def _execNodes(path: object, nodes: list[ast.stmt], namespace: dict[str, object]) -> dict[str, object]:
+	"""Execute extracted definitions in a namespace of small substitutes."""
+	exec(compile(ast.Module(body=nodes, type_ignores=[]), path, "exec"), namespace)
+	return namespace
+
+
+def _loadSelectionControllerMethods() -> tuple[object, ...]:
+	"""Load the selection controller and temporary paste paths without importing NVDA dependencies."""
+	formattingNamespace = _execNodes(
+		_FORMATTING_PATH,
+		_extractNodes(_FORMATTING_PATH, functionNames=frozenset({"getTextOrCharacterCount"})),
+		{"ngettext": lambda singular, plural, count: singular if count == 1 else plural},
 	)
-	namespace = {
-		"_": lambda message: message,
-		"_PASTE_KEY_RELEASE_TIMEOUT_SECONDS": 3.0,
-		"_TEMPORARY_CLIPBOARD_RESTORE_DELAY": 300,
-		"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
-		"ClipboardContentType": clipboardMonitor.ClipboardContentType,
-		"ClipboardSequenceChangedError": clipboardMonitor.ClipboardSequenceChangedError,
-		"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="text"),
-		"Enum": Enum,
-		"auto": auto,
-		"braille": _BRAILLE,
-		"dataclass": dataclass,
-		"monotonic": monotonic,
-		"log": Mock(),
-		"ngettext": lambda singular, plural, count: singular if count == 1 else plural,
-		"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
-		"replace": replace,
-		"speech": _SPEECH,
-		"api": SimpleNamespace(),
-		"textInfos": SimpleNamespace(POSITION_SELECTION="selection"),
-		"ui": _UI,
-	}
-	exec(compile(ast.Module(body=nodes, type_ignores=[]), _CONTROLLER_PATH, "exec"), namespace)
+	historyWriterNamespace = _execNodes(
+		_HISTORY_WRITER_PATH,
+		_extractNodes(_HISTORY_WRITER_PATH, assignNames=frozenset({"IMAGE_CONTENT_TYPES"})),
+		{"ClipboardContentType": clipboardMonitor.ClipboardContentType},
+	)
+	pasteNamespace = _execNodes(
+		_PASTE_PATH,
+		_extractNodes(
+			_PASTE_PATH,
+			classNames=frozenset(
+				{
+					"_TemporaryPasteRequest",
+					"_TemporaryPasteState",
+					"ClipboardChangeSource",
+					"ClipboardWriteFailedError",
+					"TemporaryPaster",
+				},
+			),
+			functionNames=frozenset(
+				{
+					"_getPlainTextPasteRequest",
+					"_isTemporarySnapshot",
+					"preparePngDib",
+					"_prepareTemporaryPngPaste",
+				},
+			),
+		),
+		{
+			"_": lambda message: message,
+			"PASTE_KEY_RELEASE_TIMEOUT_SECONDS": 3.0,
+			"_TEMPORARY_CLIPBOARD_RESTORE_DELAY": 300,
+			"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
+			"ClipboardContentType": clipboardMonitor.ClipboardContentType,
+			"ClipboardSequenceChangedError": clipboardMonitor.ClipboardSequenceChangedError,
+			"StorageError": type("StorageError", (Exception,), {}),
+			"LatestWorkerResult": background.LatestWorkerResult,
+			"Enum": Enum,
+			"auto": auto,
+			"dataclass": dataclass,
+			"monotonic": monotonic,
+			"log": Mock(),
+			"getTextOrCharacterCount": formattingNamespace["getTextOrCharacterCount"],
+			"normalizeNewlinesForWin32": clipboardData.normalizeNewlinesForWin32,
+			"normalizeUnicodeText": clipboardData.normalizeUnicodeText,
+			"replace": replace,
+			"ui": _UI,
+		},
+	)
+	controllerNamespace = _execNodes(
+		_CONTROLLER_PATH,
+		_extractNodes(
+			_CONTROLLER_PATH,
+			assignNames=frozenset({"_TEXT_CONTENT_TYPES"}),
+			methods=(
+				"ClipboardController",
+				frozenset(
+					{
+						"_captureOriginalClipboardForTemporaryPaste",
+						"_getCurrentTiantanUploadText",
+						"getCurrentNavigationOffsetForText",
+						"_applyLeftoverClipboardContent",
+						"_distrustRegisteredClipboardState",
+						"_writeSnapshot",
+						"_clearClipboard",
+						"_registerOwnWrite",
+						"_applyFailedLocalWrite",
+						"_onClipboardSnapshot",
+						"_consumePendingWrite",
+						"_moveStoredItem",
+						"cycleStoredItemCategory",
+						"_getSelectionText",
+						"markClipboardSelectionStart",
+						"markClipboardSelectionEnd",
+						"pasteClipboardSelection",
+						"pasteCurrentNavigationTarget",
+						"pasteCurrentStoredItem",
+					},
+				),
+			),
+		),
+		{
+			"_": lambda message: message,
+			"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
+			"ClipboardContentType": clipboardMonitor.ClipboardContentType,
+			"ClipboardSequenceChangedError": clipboardMonitor.ClipboardSequenceChangedError,
+			"ClipboardWriteError": clipboardMonitor.ClipboardWriteError,
+			"ClipboardChangeSource": pasteNamespace["ClipboardChangeSource"],
+			"ClipboardWriteFailedError": pasteNamespace["ClipboardWriteFailedError"],
+			"ClipboardItemType": SimpleNamespace(PLAIN_TEXT="text"),
+			"IMAGE_CONTENT_TYPES": historyWriterNamespace["IMAGE_CONTENT_TYPES"],
+			"braille": _BRAILLE,
+			"log": Mock(),
+			"getTextOrCharacterCount": formattingNamespace["getTextOrCharacterCount"],
+			"replace": replace,
+			"speech": _SPEECH,
+			"api": SimpleNamespace(),
+			"textInfos": SimpleNamespace(POSITION_SELECTION="selection"),
+			"ui": _UI,
+		},
+	)
+	temporaryPaster = pasteNamespace["TemporaryPaster"]
 	return (
-		namespace["_beginTemporaryPaste"],
-		namespace["_pasteTextTemporarily"],
-		namespace["_pasteSnapshotTemporarily"],
-		namespace["markClipboardSelectionEnd"],
-		namespace["pasteClipboardSelection"],
-		namespace["pasteCurrentNavigationTarget"],
-		namespace["pasteCurrentStoredItem"],
-		namespace["_restoreClipboardAfterTemporaryPaste"],
-		namespace["_restoreOriginalClipboardAfterTemporaryPaste"],
-		namespace["_moveStoredItem"],
-		namespace["cycleStoredItemCategory"],
-		namespace["_getSelectionText"],
-		namespace["markClipboardSelectionStart"],
+		temporaryPaster,
+		temporaryPaster._beginTemporaryPaste,
+		controllerNamespace["markClipboardSelectionEnd"],
+		controllerNamespace["pasteClipboardSelection"],
+		controllerNamespace["pasteCurrentNavigationTarget"],
+		controllerNamespace["pasteCurrentStoredItem"],
+		controllerNamespace["_moveStoredItem"],
+		controllerNamespace["cycleStoredItemCategory"],
+		controllerNamespace["_getSelectionText"],
+		controllerNamespace["markClipboardSelectionStart"],
+		controllerNamespace["_writeSnapshot"],
+		controllerNamespace["_clearClipboard"],
+		controllerNamespace["_registerOwnWrite"],
+		controllerNamespace["_applyFailedLocalWrite"],
+		controllerNamespace["_onClipboardSnapshot"],
+		controllerNamespace["_consumePendingWrite"],
+		pasteNamespace["ClipboardChangeSource"],
+		controllerNamespace["_captureOriginalClipboardForTemporaryPaste"],
+		controllerNamespace["_getCurrentTiantanUploadText"],
+		controllerNamespace["getCurrentNavigationOffsetForText"],
+		controllerNamespace["_applyLeftoverClipboardContent"],
+		controllerNamespace["_distrustRegisteredClipboardState"],
 	)
 
 
 (
+	TemporaryPaster,
 	_beginTemporaryPaste,
-	_pasteTextTemporarily,
-	_pasteSnapshotTemporarily,
 	_markClipboardSelectionEnd,
 	_pasteClipboardSelection,
 	_pasteCurrentNavigationTarget,
 	_pasteCurrentStoredItem,
-	_restoreClipboardAfterTemporaryPaste,
-	_restoreOriginalClipboardAfterTemporaryPaste,
 	_moveStoredItem,
 	_cycleStoredItemCategory,
 	_getSelectionText,
 	_markClipboardSelectionStart,
+	_writeSnapshot,
+	_clearClipboard,
+	_registerOwnWrite,
+	_applyFailedLocalWrite,
+	_onClipboardSnapshot,
+	_consumePendingWrite,
+	_ClipboardChangeSource,
+	_captureOriginalClipboardForTemporaryPaste,
+	_getCurrentTiantanUploadText,
+	_getCurrentNavigationOffsetForText,
+	_applyLeftoverClipboardContent,
+	_distrustRegisteredClipboardState,
 ) = _loadSelectionControllerMethods()
+
+
+def _attachTemporaryPaster(controller: SimpleNamespace) -> object:
+	"""Give a fake controller a real temporary paster wired to it the way the controller wires its own.
+
+	Controller operations are looked up when called, so a test may replace them on the fake controller.
+	"""
+	controller._paster = TemporaryPaster(
+		monitor=getattr(controller, "monitor", None),
+		storage=getattr(controller, "storage", None),
+		worker=Mock(),
+		isStarted=lambda: controller._isStarted,
+		getLastAppliedSequenceNumber=lambda: controller._lastAppliedSequenceNumber,
+		clearPendingWrites=lambda: controller._pendingWrites.clear(),
+		captureOriginalClipboard=lambda: controller._captureOriginalClipboardForTemporaryPaste(),
+		writeSnapshot=lambda *args, **kwargs: controller._writeSnapshot(*args, **kwargs),
+		clearClipboard=lambda **kwargs: controller._clearClipboard(**kwargs),
+		applyLeftoverClipboardContent=lambda *args: controller._applyLeftoverClipboardContent(*args),
+		distrustRegisteredClipboardState=lambda *args, **kwargs: controller._distrustRegisteredClipboardState(
+			*args,
+			**kwargs,
+		),
+		getClipboardOwnerHandle=lambda: controller._getClipboardOwnerHandle(),
+		isSameFocus=lambda expectedFocus: controller._isSameFocus(expectedFocus),
+		snapshotFromItem=lambda item: controller._snapshotFromItem(item),
+	)
+	return controller._paster
+
+
+class _FakeClipboardMonitor:
+	"""Model the monitor's sequence-checked clipboard writes at the OS boundary."""
+
+	def __init__(self, snapshot: object) -> None:
+		"""Start with one current clipboard snapshot."""
+		self.current = snapshot
+		self.invalidatePendingSnapshots = Mock()
+		self.handleClipboardUpdate = Mock()
+		self.getOwnerHandle = Mock(return_value=10)
+		self.failWrites = False
+		self.partialWriteFailures = 0
+		self.readError = False
+		self.readCount = 0
+
+	def getSequenceNumber(self) -> int:
+		"""Return the sequence number of the current clipboard content."""
+		return self.current.sequenceNumber
+
+	def readNow(self, **_kwargs: object) -> object:
+		"""Return the current clipboard content, or an error while the clipboard is locked."""
+		self.readCount += 1
+		if self.readError:
+			return clipboardMonitor.ClipboardSnapshot(clipboardMonitor.ClipboardContentType.ERROR)
+		return self.current
+
+	def writeSnapshot(
+		self,
+		snapshot: object,
+		_ownerHandle: int,
+		*,
+		expectedSequenceNumber: int | None = None,
+		preparedPngDib: bytes | None = None,
+	) -> int:
+		"""Replace the clipboard when it still has the expected sequence number."""
+		if expectedSequenceNumber is not None and expectedSequenceNumber != self.current.sequenceNumber:
+			raise clipboardMonitor.ClipboardSequenceChangedError()
+		if self.failWrites:
+			raise OSError("clipboard busy")
+		if self.partialWriteFailures:
+			self.partialWriteFailures -= 1
+			self.current = clipboardMonitor.ClipboardSnapshot(
+				clipboardMonitor.ClipboardContentType.TEXT,
+				text="partial",
+				sequenceNumber=self.current.sequenceNumber + 1,
+			)
+			raise clipboardMonitor.ClipboardWriteError(self.current.sequenceNumber)
+		self.current = replace(snapshot, sequenceNumber=self.current.sequenceNumber + 1)
+		return self.current.sequenceNumber
+
+	def clearClipboard(self, _ownerHandle: int, *, expectedSequenceNumber: int | None = None) -> int:
+		"""Empty the clipboard when it still has the expected sequence number."""
+		return self.writeSnapshot(
+			clipboardMonitor.ClipboardSnapshot(clipboardMonitor.ClipboardContentType.EMPTY),
+			_ownerHandle,
+			expectedSequenceNumber=expectedSequenceNumber,
+		)
+
+
+def _failWritesAfterFirst(
+	writeSnapshot: Callable[..., int],
+	writes: list[object],
+	snapshot: object,
+	ownerHandle: int,
+	**kwargs: object,
+) -> int:
+	"""Record clipboard writes and fail every write after the first one."""
+	writes.append(snapshot)
+	if len(writes) > 1:
+		raise OSError("clipboard busy")
+	return writeSnapshot(snapshot, ownerHandle, **kwargs)
+
+
+def _createTemporaryPasteController(originalText: str, navigator: object) -> SimpleNamespace:
+	"""Build a controller whose current state reflects one text clipboard, using real write paths."""
+	original = clipboardMonitor.ClipboardSnapshot(
+		clipboardMonitor.ClipboardContentType.TEXT,
+		text=originalText,
+		sequenceNumber=1,
+	)
+	controller = SimpleNamespace(
+		navigator=navigator,
+		monitor=_FakeClipboardMonitor(original),
+		storage=SimpleNamespace(getLatestHistoryItem=Mock(return_value=None)),
+		_text=originalText,
+		_contentType=clipboardMonitor.ClipboardContentType.TEXT,
+		_canUpload=True,
+		_summary="summary",
+		_lastAppliedSequenceNumber=1,
+		_pendingWrites=set(),
+		_pendingWritesWereApplied=True,
+		_awaitingInitialSnapshot=False,
+		_isStarted=True,
+		_ensureCurrentContentHasText=Mock(return_value=True),
+		_getClipboardOwnerHandle=Mock(return_value=10),
+		_isSameFocus=Mock(return_value=True),
+		_snapshotFromItem=lambda item: item,
+	)
+	paster = _attachTemporaryPaster(controller)
+	paster._getVerifiedTemporarySequenceNumber = lambda state: (
+		controller.monitor.getSequenceNumber()
+		if controller.monitor.getSequenceNumber() == state.temporarySequenceNumber
+		else None
+	)
+
+	def applySnapshot(snapshot: object, _source: object, **_kwargs: object) -> None:
+		"""Model the local state update performed for applied snapshots."""
+		controller._lastAppliedSequenceNumber = snapshot.sequenceNumber
+		controller._text = snapshot.text
+		navigator.setText(snapshot.text)
+
+	controller._applySnapshot = Mock(side_effect=applySnapshot)
+	for method in (
+		_captureOriginalClipboardForTemporaryPaste,
+		_writeSnapshot,
+		_clearClipboard,
+		_registerOwnWrite,
+		_applyFailedLocalWrite,
+		_applyLeftoverClipboardContent,
+		_distrustRegisteredClipboardState,
+		_consumePendingWrite,
+	):
+		setattr(controller, method.__name__, MethodType(method, controller))
+	return controller
 
 
 class ClipboardNavigationSelectionTests(unittest.TestCase):
@@ -280,31 +536,29 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 			navigator=navigator,
 			_lastAppliedSequenceNumber=7,
 			_text="abcdef",
-			_temporaryPasteInProgress=False,
 			_isStarted=True,
-			_captureOriginalClipboardForTemporaryPaste=Mock(return_value=(None, 7)),
+			_captureOriginalClipboardForTemporaryPaste=Mock(return_value=(None, 7, True)),
 			_writeSnapshot=Mock(),
 		)
-		controller._pasteTextTemporarily = MethodType(_pasteTextTemporarily, controller)
-		controller._pasteSnapshotTemporarily = MethodType(_pasteSnapshotTemporarily, controller)
-		controller._beginTemporaryPaste = Mock(wraps=MethodType(_beginTemporaryPaste, controller))
+		paster = _attachTemporaryPaster(controller)
+		paster._beginTemporaryPaste = Mock(wraps=paster._beginTemporaryPaste)
 		waitForKeys = Mock(side_effect=(None, True))
-		with patch.dict(_beginTemporaryPaste.__globals__, _waitForTriggerKeysReleased=waitForKeys):
+		with patch.dict(_beginTemporaryPaste.__globals__, waitForTriggerKeysReleased=waitForKeys):
 			_pasteClipboardSelection(controller, frozenset({1}))
 
-			self.assertTrue(controller._temporaryPasteInProgress)
+			self.assertTrue(controller._paster._temporaryPasteInProgress)
 			controller._captureOriginalClipboardForTemporaryPaste.assert_not_called()
 			controller._writeSnapshot.assert_not_called()
-			request = controller._beginTemporaryPaste.call_args.args[0]
+			request = paster._beginTemporaryPaste.call_args.args[0]
 			self.assertEqual("bcde", request.snapshot.text)
-			self.assertEqual((4, 1), request.originalSelectionOffsets)
+			self.assertEqual((4, 1), navigator.getSelectionOffsets())
 
-			controller._captureOriginalClipboardForTemporaryPaste.return_value = (None, 8)
+			controller._captureOriginalClipboardForTemporaryPaste.return_value = (None, 8, True)
 			waitForKeys.call_args.args[2]()
 
 		controller._captureOriginalClipboardForTemporaryPaste.assert_called_once_with()
 		controller._writeSnapshot.assert_not_called()
-		self.assertFalse(controller._temporaryPasteInProgress)
+		self.assertFalse(controller._paster._temporaryPasteInProgress)
 		_UI.message.assert_called_once_with("The clipboard changed. Paste cancelled.")
 
 	def testChangedFocusCancelsBeforeTemporaryClipboardWrite(self) -> None:
@@ -313,41 +567,29 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 		controller = SimpleNamespace(
 			_isStarted=True,
 			_isSameFocus=Mock(return_value=False),
-			_temporaryPasteInProgress=True,
 		)
+		paster = _attachTemporaryPaster(controller)
+		paster._temporaryPasteInProgress = True
 
 		_beginTemporaryPaste(
-			controller,
+			paster,
 			SimpleNamespace(expectedFocus=expectedFocus),
 			0,
 		)
 
 		controller._isSameFocus.assert_called_once_with(expectedFocus)
-		self.assertFalse(controller._temporaryPasteInProgress)
+		self.assertFalse(controller._paster._temporaryPasteInProgress)
 		_UI.message.assert_called_once_with("Focus changed. Paste cancelled.")
 
-	def testDeferredRestoreRespectsSelectionInvalidation(self) -> None:
-		"""Restore clipboard content without reviving a selection cleared during a pending paste."""
+	def testTemporaryPasteNeverChangesNavigationDuringOrAfterRestore(self) -> None:
+		"""Keep navigator text, position and selection while honoring navigation done during the paste."""
 		for navigation in (None, "item", "category", "startBeforePaste", "startAfterPaste"):
 			with self.subTest(navigation=navigation):
-				originalSnapshot = clipboardMonitor.ClipboardSnapshot(
-					clipboardMonitor.ClipboardContentType.TEXT,
-					text="abcdef",
-					sequenceNumber=1,
-				)
-				navigator = ClipboardNavigator(originalSnapshot.text)
+				navigator = ClipboardNavigator("abcdef")
+				navigator.setPosition(3)
 				navigator.setSelectionOffsets((4, 1))
-				controller = SimpleNamespace(
-					navigator=navigator,
-					_text=originalSnapshot.text,
-					_lastAppliedSequenceNumber=1,
-					_isStarted=True,
-					_temporaryPasteInProgress=False,
-					_shouldRestoreTemporaryPasteSelection=False,
-					_temporaryPasteState=None,
-					_ensureCurrentContentHasText=Mock(return_value=True),
-					_captureOriginalClipboardForTemporaryPaste=Mock(return_value=(originalSnapshot, 1)),
-					_getVerifiedTemporarySequenceNumber=Mock(return_value=2),
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				controller.__dict__.update(
 					_storedItemCategory="history",
 					_storedItemIndex=0,
 					getCategories=Mock(return_value=["history", "saved"]),
@@ -359,56 +601,43 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 							3,
 						),
 					),
-					_formatItemSummary=Mock(return_value="stored text"),
 					_reportStoredItemCategory=Mock(),
 					pasteClipboardSelection=Mock(),
 					pasteCurrentStoredItem=Mock(),
 				)
-				controller.monitor = SimpleNamespace(
-					getSequenceNumber=lambda: controller._lastAppliedSequenceNumber,
-				)
-
-				def writeSnapshot(
-					snapshot: object,
-					_source: object,
-					*,
-					expectedSequenceNumber: int,
-					**_kwargs,
-				) -> int:
-					"""Simulate clipboard writes and their local navigation update at the OS boundary."""
-					self.assertEqual(controller._lastAppliedSequenceNumber, expectedSequenceNumber)
-					controller._lastAppliedSequenceNumber += 1
-					controller._text = snapshot.text
-					navigator.setText(snapshot.text)
-					return controller._lastAppliedSequenceNumber
-
-				controller._writeSnapshot = Mock(side_effect=writeSnapshot)
-				for method in (
-					_pasteTextTemporarily,
-					_pasteSnapshotTemporarily,
-					_beginTemporaryPaste,
-					_restoreClipboardAfterTemporaryPaste,
-					_restoreOriginalClipboardAfterTemporaryPaste,
-				):
-					setattr(controller, method.__name__, MethodType(method, controller))
 				scheduleRestore = Mock()
 				waitForKeys = Mock(side_effect=(None, True) if navigation == "startBeforePaste" else (True,))
-				with patch.dict(
-					_beginTemporaryPaste.__globals__,
-					_waitForTriggerKeysReleased=waitForKeys,
-					callLater=scheduleRestore,
-					KeyboardInputGesture=Mock(),
-					ui=Mock(),
+				with (
+					patch.dict(
+						_beginTemporaryPaste.__globals__,
+						waitForTriggerKeysReleased=waitForKeys,
+						callLater=scheduleRestore,
+						KeyboardInputGesture=Mock(),
+						ui=Mock(),
+					),
+					patch.dict(
+						_moveStoredItem.__globals__,
+						formatItemSummary=Mock(return_value="stored text"),
+					),
 				):
 					_pasteClipboardSelection(controller, frozenset({1}))
 					if navigation == "startBeforePaste":
-						controller._writeSnapshot.assert_not_called()
+						self.assertEqual(1, controller.monitor.getSequenceNumber())
 						scheduleRestore.assert_not_called()
 						navigator.setPosition(5)
 						_markClipboardSelectionStart(controller)
 						self.assertIsNone(navigator.getSelectedText())
 						waitForKeys.call_args.args[2]()
-					self.assertEqual("bcde", controller._text)
+					# The temporary content is only registered as our own write, never applied.
+					self.assertEqual("bcde", controller.monitor.current.text)
+					self.assertEqual({2}, controller._pendingWrites)
+					self.assertFalse(controller._pendingWritesWereApplied)
+					self.assertEqual(2, controller._lastAppliedSequenceNumber)
+					self.assertEqual("abcdef", controller._text)
+					self.assertEqual("abcdef", navigator._owner.text)
+					if navigation in (None, "item", "category"):
+						self.assertEqual(3, navigator.getPosition())
+						self.assertEqual((4, 1), navigator.getSelectionOffsets())
 					scheduleRestore.assert_called_once()
 					_delay, restore, state = scheduleRestore.call_args.args
 					if navigation == "item":
@@ -418,20 +647,29 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 					elif navigation == "startAfterPaste":
 						navigator.setPosition(2)
 						_markClipboardSelectionStart(controller)
+					expectedPosition = navigator.getPosition()
+					expectedSelection = navigator.getSelectionOffsets()
 					storedPosition = controller._storedItemCategory, controller._storedItemIndex
 					restore(state)
 
-				self.assertEqual(2, controller._writeSnapshot.call_count)
-				self.assertEqual(originalSnapshot, controller._writeSnapshot.call_args.args[0])
-				self.assertEqual(originalSnapshot.text, controller._text)
-				self.assertFalse(controller._temporaryPasteInProgress)
-				self.assertIsNone(controller._temporaryPasteState)
+				controller._applySnapshot.assert_not_called()
+				self.assertEqual("abcdef", controller.monitor.current.text)
+				self.assertEqual({3}, controller._pendingWrites)
+				self.assertFalse(controller._pendingWritesWereApplied)
+				self.assertEqual(3, controller._lastAppliedSequenceNumber)
+				self.assertEqual("abcdef", controller._text)
+				self.assertEqual("abcdef", navigator._owner.text)
+				self.assertEqual(expectedPosition, navigator.getPosition())
+				self.assertEqual(expectedSelection, navigator.getSelectionOffsets())
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
+				self.assertIsNone(controller._paster._temporaryPasteState)
 				self.assertEqual(
 					storedPosition,
 					(controller._storedItemCategory, controller._storedItemIndex),
 				)
 				_pasteCurrentNavigationTarget(controller, frozenset({1}))
 				if navigation is None:
+					self.assertEqual(3, navigator.getPosition())
 					self.assertEqual("bcde", navigator.getSelectedText())
 					controller.pasteClipboardSelection.assert_called_once_with(frozenset({1}))
 					controller.pasteCurrentStoredItem.assert_not_called()
@@ -439,19 +677,459 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 					self.assertIsNone(navigator.getSelectedText())
 					controller.pasteCurrentStoredItem.assert_called_once_with(frozenset({1}))
 					controller.pasteClipboardSelection.assert_not_called()
+				if navigation in ("startBeforePaste", "startAfterPaste"):
+					self.assertEqual(5 if navigation == "startBeforePaste" else 2, navigator.getPosition())
+
+	def testEmptyOriginalRestoreIsOnlyRegistered(self) -> None:
+		"""Restore an empty original clipboard without replacing current navigation state."""
+		navigator = ClipboardNavigator("Clipboard is empty")
+		navigator.setPosition(4)
+		controller = _createTemporaryPasteController("", navigator)
+		controller.monitor.current = clipboardMonitor.ClipboardSnapshot(
+			clipboardMonitor.ClipboardContentType.EMPTY,
+			sequenceNumber=1,
+		)
+		schedule = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=schedule,
+			KeyboardInputGesture=Mock(),
+			ui=Mock(),
+		):
+			controller._paster.pasteTextTemporarily("spoken", frozenset())
+			_delay, restore, state = schedule.call_args.args
+			self.assertEqual("spoken", controller.monitor.current.text)
+			restore(state)
+
+		controller._applySnapshot.assert_not_called()
+		self.assertEqual(clipboardMonitor.ClipboardContentType.EMPTY, controller.monitor.current.contentType)
+		self.assertEqual({3}, controller._pendingWrites)
+		self.assertEqual(3, controller._lastAppliedSequenceNumber)
+		self.assertEqual("Clipboard is empty", navigator._owner.text)
+		self.assertEqual(4, navigator.getPosition())
+
+	def testUnrestorableTemporaryPasteAppliesTheRealClipboard(self) -> None:
+		"""Apply the newest history item, or the leftover content, when the original cannot be restored."""
+		for latestText in ("newest", None):
+			with self.subTest(latestText=latestText):
+				navigator = ClipboardNavigator("abcdef")
+				navigator.setPosition(3)
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				# Protected or unreadable originals are not retained for restoration.
+				controller._captureOriginalClipboardForTemporaryPaste = lambda: (None, 1, True)
+				controller.storage.getLatestHistoryItem.return_value = (
+					None
+					if latestText is None
+					else clipboardMonitor.ClipboardSnapshot(
+						clipboardMonitor.ClipboardContentType.TEXT,
+						text=latestText,
+					)
+				)
+				schedule = Mock()
+				ui = Mock()
+				with patch.dict(
+					_beginTemporaryPaste.__globals__,
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=schedule,
+					KeyboardInputGesture=Mock(),
+					ui=ui,
+				):
+					controller._paster.pasteTextTemporarily("temporary", frozenset())
+					controller._applySnapshot.assert_not_called()
+					self.assertEqual("abcdef", controller._text)
+					_delay, restore, state = schedule.call_args.args
+					restore(state)
+
+				expectedText = latestText or "temporary"
+				self.assertEqual(expectedText, controller.monitor.current.text)
+				controller._applySnapshot.assert_called_once()
+				appliedSnapshot, source = controller._applySnapshot.call_args.args
+				self.assertEqual(expectedText, appliedSnapshot.text)
+				self.assertEqual(controller.monitor.getSequenceNumber(), appliedSnapshot.sequenceNumber)
+				self.assertIs(_ClipboardChangeSource.NO_RECORD, source)
+				self.assertEqual(expectedText, controller._text)
+				self.assertEqual(expectedText, navigator._owner.text)
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
+				if latestText is None:
+					ui.message.assert_called_once_with(
+						"The content was pasted, but the original clipboard content could not be restored",
+					)
+				else:
+					self.assertTrue(controller._pendingWritesWereApplied)
+					ui.message.assert_not_called()
+
+	def testUnscheduledRestoreAppliesTheTemporaryContent(self) -> None:
+		"""Make temporary content current when its restoration cannot be scheduled."""
+		navigator = ClipboardNavigator("abcdef")
+		controller = _createTemporaryPasteController("abcdef", navigator)
+		ui = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=Mock(side_effect=RuntimeError("no timer")),
+			KeyboardInputGesture=Mock(),
+			ui=ui,
+		):
+			controller._paster.pasteTextTemporarily("temporary", frozenset())
+
+		self.assertEqual("temporary", controller.monitor.current.text)
+		controller._applySnapshot.assert_called_once()
+		self.assertIs(_ClipboardChangeSource.NO_RECORD, controller._applySnapshot.call_args.args[1])
+		self.assertEqual("temporary", controller._text)
+		self.assertFalse(controller._paster._temporaryPasteInProgress)
+		ui.message.assert_called_once_with(
+			"The content was pasted, but the original clipboard content could not be restored",
+		)
+
+	def testCaptureApplyFailureRestoresOriginalByApplyingIt(self) -> None:
+		"""Repair stale state on restore when applying the captured original failed partway."""
+		navigator = ClipboardNavigator("stale")
+		controller = _createTemporaryPasteController("stale", navigator)
+		controller._lastAppliedSequenceNumber = 0
+		controller.monitor.current = replace(controller.monitor.current, text="original")
+		applySnapshot = controller._applySnapshot.side_effect
+
+		def failFirstApply(snapshot: object, source: object, **kwargs: object) -> None:
+			"""Fail after the sequence number is recorded, as a partial local update would."""
+			if controller._applySnapshot.call_count == 1:
+				controller._lastAppliedSequenceNumber = snapshot.sequenceNumber
+				raise RuntimeError("apply failed")
+			applySnapshot(snapshot, source, **kwargs)
+
+		controller._applySnapshot.side_effect = failFirstApply
+		schedule = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=schedule,
+			KeyboardInputGesture=Mock(),
+			ui=Mock(),
+		):
+			controller._paster.pasteTextTemporarily("temporary", frozenset())
+			_delay, restore, state = schedule.call_args.args
+			self.assertFalse(state.originalIsCurrent)
+			self.assertEqual("stale", controller._text)
+			restore(state)
+
+		self.assertEqual(2, controller._applySnapshot.call_count)
+		appliedSnapshot, source = controller._applySnapshot.call_args.args
+		self.assertEqual("original", appliedSnapshot.text)
+		self.assertIs(_ClipboardChangeSource.NO_RECORD, source)
+		self.assertEqual("original", controller._text)
+		self.assertEqual("original", navigator._owner.text)
+
+	def testClipboardReadersUseRealContentDuringTemporaryPaste(self) -> None:
+		"""Read cloud upload text and manager offsets from the clipboard, not retained original state."""
+		navigator = ClipboardNavigator("abcdef")
+		navigator.setPosition(3)
+		controller = _createTemporaryPasteController("abcdef", navigator)
+		schedule = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=schedule,
+			KeyboardInputGesture=Mock(),
+			ui=Mock(),
+		):
+			self.assertEqual("abcdef", _getCurrentTiantanUploadText(controller))
+			self.assertEqual(3, _getCurrentNavigationOffsetForText(controller, "abcdef"))
+			controller._paster.pasteTextTemporarily("temporary", frozenset())
+			# Temporary content is written without upload permission, exactly as before this change.
+			with self.assertRaisesRegex(ValueError, "protected from cloud upload"):
+				_getCurrentTiantanUploadText(controller)
+			self.assertIsNone(_getCurrentNavigationOffsetForText(controller, "abcdef"))
+			self.assertIsNone(_getCurrentNavigationOffsetForText(controller, "temporary"))
+			_delay, restore, state = schedule.call_args.args
+			restore(state)
+
+		self.assertEqual("abcdef", _getCurrentTiantanUploadText(controller))
+		self.assertEqual(3, _getCurrentNavigationOffsetForText(controller, "abcdef"))
+
+	def testLeftoverTemporaryContentIsAppliedWithoutRereading(self) -> None:
+		"""Apply verified leftover temporary content from memory, even while the clipboard is locked."""
+		for scenario in ("restoreFailed", "unscheduled"):
+			with self.subTest(scenario=scenario):
+				navigator = ClipboardNavigator("abcdef")
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				schedule = Mock(side_effect=RuntimeError("no timer") if scenario == "unscheduled" else None)
+				with patch.dict(
+					_beginTemporaryPaste.__globals__,
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=schedule,
+					KeyboardInputGesture=Mock(),
+					ui=Mock(),
+				):
+					controller._paster.pasteTextTemporarily("temporary", frozenset())
+					controller.monitor.readError = True
+					readCount = controller.monitor.readCount
+					if scenario == "restoreFailed":
+						controller.monitor.failWrites = True
+						_delay, restore, state = schedule.call_args.args
+						restore(state)
+
+				self.assertEqual(readCount, controller.monitor.readCount)
+				controller._applySnapshot.assert_called_once()
+				appliedSnapshot, source = controller._applySnapshot.call_args.args
+				self.assertEqual("temporary", appliedSnapshot.text)
+				self.assertEqual(2, appliedSnapshot.sequenceNumber)
+				self.assertIs(_ClipboardChangeSource.NO_RECORD, source)
+				self.assertEqual("temporary", controller._text)
+				self.assertEqual(2, controller._lastAppliedSequenceNumber)
+
+	def testUnreadablePartialRestoreStopsTrustingState(self) -> None:
+		"""Apply a partial exact restore when readable, and otherwise force sequence checks to re-read."""
+		for readError in (False, True):
+			with self.subTest(readError=readError):
+				navigator = ClipboardNavigator("abcdef")
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				schedule = Mock()
+				with patch.dict(
+					_beginTemporaryPaste.__globals__,
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=schedule,
+					KeyboardInputGesture=Mock(),
+					ui=Mock(),
+				):
+					controller._paster.pasteTextTemporarily("temporary", frozenset())
+					controller.monitor.partialWriteFailures = 1
+					controller.monitor.readError = readError
+					_delay, restore, state = schedule.call_args.args
+					restore(state)
+
+				self.assertEqual("partial", controller.monitor.current.text)
+				self.assertEqual(3, controller.monitor.getSequenceNumber())
+				if readError:
+					controller._applySnapshot.assert_not_called()
+					self.assertEqual(0, controller._lastAppliedSequenceNumber)
+					self.assertEqual({3}, controller._pendingWrites)
+				else:
+					controller._applySnapshot.assert_called_once()
+					self.assertIs(
+						_ClipboardChangeSource.NO_RECORD,
+						controller._applySnapshot.call_args.args[1],
+					)
+					self.assertEqual("partial", controller._text)
+					self.assertEqual(3, controller._lastAppliedSequenceNumber)
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
+
+	def testUnverifiedTemporaryContentIsRereadInsteadOfTrusted(self) -> None:
+		"""Re-read the clipboard when restoration cannot verify content under our sequence number."""
+		navigator = ClipboardNavigator("abcdef")
+		controller = _createTemporaryPasteController("abcdef", navigator)
+		schedule = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=schedule,
+			KeyboardInputGesture=Mock(),
+			ui=Mock(),
+		):
+			controller._paster.pasteTextTemporarily("temporary", frozenset())
+			controller._paster._getVerifiedTemporarySequenceNumber = Mock(return_value=None)
+			_delay, restore, state = schedule.call_args.args
+			restore(state)
+
+		controller._applySnapshot.assert_not_called()
+		self.assertEqual("temporary", controller.monitor.current.text)
+		self.assertEqual(0, controller._lastAppliedSequenceNumber)
+		self.assertEqual(set(), controller._pendingWrites)
+		controller.monitor.handleClipboardUpdate.assert_called_once_with()
+		self.assertFalse(controller._paster._temporaryPasteInProgress)
+
+	def testPartialTemporaryWriteLeftoverIsRereadInsteadOfApplied(self) -> None:
+		"""Re-read content left by a partial temporary write rather than applying the intended payload."""
+		contentType = clipboardMonitor.ClipboardContentType
+		for variant, readError in (("text", False), ("text", True), ("fallback", False)):
+			with self.subTest(variant=variant, readError=readError):
+				navigator = ClipboardNavigator("abcdef")
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				monitor = controller.monitor
+				monitor.partialWriteFailures = 1
+				writes: list[object] = []
+				monitor.writeSnapshot = partial(
+					_failWritesAfterFirst,
+					monitor.writeSnapshot,
+					writes,
+				)
+				ui = Mock()
+				with patch.dict(
+					_beginTemporaryPaste.__globals__,
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=Mock(),
+					KeyboardInputGesture=Mock(),
+					ui=ui,
+				):
+					monitor.readError = readError
+					if variant == "fallback":
+						rich = clipboardMonitor.ClipboardSnapshot(
+							contentType.FORMATTED_TEXT,
+							text="temporary",
+							html=b"html",
+						)
+						controller._paster.pasteSnapshotTemporarily(rich, "entry", frozenset())
+					else:
+						controller._paster.pasteTextTemporarily("temporary", frozenset())
+
+				# Temporary write, plain-text fallback when available, then the failed exact restore.
+				# An unreadable clipboard retains no original, so nothing is restored exactly.
+				self.assertEqual((3 if variant == "fallback" else 2) - readError, len(writes))
+				self.assertEqual("partial", monitor.current.text)
+				self.assertEqual(2, monitor.getSequenceNumber())
+				if readError:
+					controller._applySnapshot.assert_not_called()
+					self.assertEqual(0, controller._lastAppliedSequenceNumber)
+					self.assertEqual("abcdef", controller._text)
+				else:
+					controller._applySnapshot.assert_called_once()
+					appliedSnapshot, source = controller._applySnapshot.call_args.args
+					self.assertEqual("partial", appliedSnapshot.text)
+					self.assertEqual(2, appliedSnapshot.sequenceNumber)
+					self.assertIs(_ClipboardChangeSource.NO_RECORD, source)
+					self.assertEqual("partial", controller._text)
+					self.assertEqual("partial", navigator._owner.text)
+					self.assertEqual(2, controller._lastAppliedSequenceNumber)
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
+				self.assertIsNone(controller._paster._temporaryPasteState)
+				ui.message.assert_called_once_with("Could not paste the content")
+
+	def testRepeatedSelectionPasteProceedsAfterRestore(self) -> None:
+		"""Paste the same clipboard selection again after the previous temporary paste was restored."""
+		navigator = ClipboardNavigator("abcdef")
+		navigator.setPosition(3)
+		navigator.setSelectionOffsets((4, 1))
+		controller = _createTemporaryPasteController("abcdef", navigator)
+		controller.pasteClipboardSelection = MethodType(_pasteClipboardSelection, controller)
+		controller.pasteCurrentStoredItem = Mock()
+		schedule = Mock()
+		ui = Mock()
+		with patch.dict(
+			_beginTemporaryPaste.__globals__,
+			waitForTriggerKeysReleased=Mock(return_value=True),
+			callLater=schedule,
+			KeyboardInputGesture=Mock(),
+			ui=ui,
+		):
+			for attempt in range(2):
+				with self.subTest(attempt=attempt):
+					_pasteCurrentNavigationTarget(controller, frozenset({1}))
+					self.assertEqual("bcde", controller.monitor.current.text)
+					self.assertEqual(attempt + 1, schedule.call_count)
+					_delay, restore, state = schedule.call_args.args
+					restore(state)
+					self.assertEqual("abcdef", controller.monitor.current.text)
+					self.assertEqual(
+						controller.monitor.getSequenceNumber(),
+						controller._lastAppliedSequenceNumber,
+					)
+
+		ui.message.assert_not_called()
+		self.assertEqual([call("bcde"), call("bcde")], ui.delayedMessage.call_args_list)
+		controller.pasteCurrentStoredItem.assert_not_called()
+		controller._applySnapshot.assert_not_called()
+		self.assertEqual("abcdef", controller._text)
+		self.assertEqual(3, navigator.getPosition())
+		self.assertEqual((4, 1), navigator.getSelectionOffsets())
+		self.assertFalse(controller._paster._temporaryPasteInProgress)
+
+	def testEarlyTemporaryPasteExitsOnlyRegisterTheRestore(self) -> None:
+		"""Restore the original without applying it when focus changes or Ctrl+V cannot be sent."""
+		for exitPoint in ("focus", "sendFailure"):
+			with self.subTest(exitPoint=exitPoint):
+				navigator = ClipboardNavigator("abcdef")
+				navigator.setPosition(3)
+				controller = _createTemporaryPasteController("abcdef", navigator)
+				# Focus is checked before writing, and again after the temporary content is written.
+				controller._isSameFocus = Mock(side_effect=(True, exitPoint != "focus"))
+				keyboard = Mock()
+				if exitPoint == "sendFailure":
+					keyboard.fromName.return_value.send.side_effect = RuntimeError("send failed")
+				schedule = Mock()
+				ui = Mock()
+				with patch.dict(
+					_beginTemporaryPaste.__globals__,
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=schedule,
+					KeyboardInputGesture=keyboard,
+					ui=ui,
+				):
+					controller._paster.pasteSnapshotTemporarily(
+						clipboardMonitor.ClipboardSnapshot(
+							clipboardMonitor.ClipboardContentType.TEXT,
+							text="temporary",
+						),
+						"entry",
+						frozenset(),
+						expectedFocus=object(),
+					)
+
+				schedule.assert_not_called()
+				if exitPoint == "focus":
+					keyboard.fromName.assert_not_called()
+					ui.message.assert_called_once_with("Focus changed. Paste cancelled.")
+				else:
+					ui.message.assert_called_once_with("Could not paste the content")
+				controller._applySnapshot.assert_not_called()
+				self.assertEqual("abcdef", controller.monitor.current.text)
+				self.assertEqual(3, controller.monitor.getSequenceNumber())
+				self.assertEqual({3}, controller._pendingWrites)
+				self.assertFalse(controller._pendingWritesWereApplied)
+				self.assertEqual(3, controller._lastAppliedSequenceNumber)
+				self.assertEqual("abcdef", controller._text)
+				self.assertEqual("abcdef", navigator._owner.text)
+				self.assertEqual(3, navigator.getPosition())
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
+				self.assertIsNone(controller._paster._temporaryPasteState)
+
+	def testRegisteredWritesDoNotRefreshImageSummary(self) -> None:
+		"""Refresh image summaries only for consumed writes that were applied locally."""
+		for applied in (True, False):
+			with self.subTest(applied=applied):
+				navigator = ClipboardNavigator("original summary")
+				controller = SimpleNamespace(
+					_isStarted=True,
+					_pendingWrites={5},
+					_pendingWritesWereApplied=applied,
+					_awaitingInitialSnapshot=True,
+					_summary="original summary",
+					_paster=SimpleNamespace(matchesTemporaryContent=Mock(return_value=False)),
+					navigator=navigator,
+					_applySnapshot=Mock(),
+				)
+				controller._consumePendingWrite = MethodType(_consumePendingWrite, controller)
+				snapshot = clipboardMonitor.ClipboardSnapshot(
+					clipboardMonitor.ClipboardContentType.IMAGE,
+					imageFormat="PNG",
+					imageData=b"png",
+					sequenceNumber=5,
+				)
+
+				with patch.dict(
+					_onClipboardSnapshot.__globals__,
+					formatCurrentSummary=Mock(return_value="image summary"),
+				):
+					_onClipboardSnapshot(controller, snapshot)
+
+				controller._applySnapshot.assert_not_called()
+				self.assertFalse(controller._awaitingInitialSnapshot)
+				expectedSummary = "image summary" if applied else "original summary"
+				self.assertEqual(expectedSummary, controller._summary)
+				self.assertEqual(expectedSummary, navigator._owner.text)
 
 	def testTemporaryPasteFallbackRetainsOriginalClipboardAndPosition(self) -> None:
 		"""Keep payload, ownership and restoration correct across one optional text fallback."""
-		for failure, expectedWrites in (
-			(None, 2),
-			("prepare", 3),
-			("partial", 3),
-			("fallback", 3),
-			("fallbackPartial", 3),
-			("plainFailure", 1),
-			("owner", 1),
-			("focus", 2),
-			("unmapped", 2),
+		registerOnly = _ClipboardChangeSource.REGISTER_ONLY
+		# A pasted text fallback says formatting was lost instead of the normal feedback.
+		fallbackFeedback = [call(_PLAIN_TEXT_FALLBACK_MESSAGE)]
+		for failure, expectedWrites, expectedFeedback in (
+			(None, 2, [call("entry")]),
+			("prepare", 3, fallbackFeedback),
+			("partial", 3, fallbackFeedback),
+			("fallback", 3, []),
+			("fallbackPartial", 3, []),
+			("plainFailure", 1, []),
+			("owner", 1, []),
+			("focus", 2, []),
 		):
 			with self.subTest(failure=failure):
 				contentType = clipboardMonitor.ClipboardContentType
@@ -469,24 +1147,23 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				navigator.setPosition(2)
 				controller = SimpleNamespace(
 					navigator=navigator,
-					_text="a\nb" if failure != "unmapped" else "different",
+					_text="a\nb",
 					_lastAppliedSequenceNumber=1,
 					_isStarted=True,
-					_temporaryPasteInProgress=False,
-					_temporaryPasteState=None,
-					_captureOriginalClipboardForTemporaryPaste=Mock(return_value=(original, 1)),
+					_captureOriginalClipboardForTemporaryPaste=Mock(return_value=(original, 1, True)),
 					_getClipboardOwnerHandle=Mock(return_value=10),
 					_isSameFocus=Mock(return_value=True),
 					monitor=SimpleNamespace(getOwnerHandle=Mock(return_value=10)),
 				)
 				currentSnapshot = original
 				controller.monitor.getSequenceNumber = lambda: currentSnapshot.sequenceNumber
-				controller._getVerifiedTemporarySequenceNumber = lambda _state: currentSnapshot.sequenceNumber
-				writeError = _beginTemporaryPaste.__globals__["_ClipboardWriteFailedError"]
+				paster = _attachTemporaryPaster(controller)
+				paster._getVerifiedTemporarySequenceNumber = lambda _state: currentSnapshot.sequenceNumber
+				writeError = _beginTemporaryPaste.__globals__["ClipboardWriteFailedError"]
 
 				def writeSnapshot(
 					snapshot: object,
-					_source: object,
+					source: object,
 					*,
 					expectedSequenceNumber: int,
 					**_kwargs,
@@ -515,30 +1192,35 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 						raise RuntimeError("write failed") from OSError("clipboard busy")
 					currentSnapshot = replace(snapshot, sequenceNumber=currentSnapshot.sequenceNumber + 1)
 					controller._lastAppliedSequenceNumber = currentSnapshot.sequenceNumber
-					controller._text = snapshot.text
-					navigator.setText(snapshot.text)
+					# Temporary content and the exact original restore are registered, never applied.
+					self.assertIs(registerOnly, source)
 					return currentSnapshot.sequenceNumber
 
 				controller._writeSnapshot = Mock(side_effect=writeSnapshot)
-				for method in (
-					_beginTemporaryPaste,
-					_restoreClipboardAfterTemporaryPaste,
-					_restoreOriginalClipboardAfterTemporaryPaste,
-				):
-					setattr(controller, method.__name__, MethodType(method, controller))
+				controller._distrustRegisteredClipboardState = MethodType(
+					_distrustRegisteredClipboardState,
+					controller,
+				)
 				# A changed owner must not be treated as a verified temporary payload during recovery.
 				if failure in ("owner", "focus", "fallback", "fallbackPartial"):
-					controller._getVerifiedTemporarySequenceNumber = Mock(return_value=None)
+					paster._getVerifiedTemporarySequenceNumber = Mock(return_value=None)
 				schedule = Mock()
 				keyboard = Mock()
+				ui = Mock()
 				with patch.dict(
 					_beginTemporaryPaste.__globals__,
-					_waitForTriggerKeysReleased=Mock(return_value=True),
+					waitForTriggerKeysReleased=Mock(return_value=True),
 					callLater=schedule,
 					KeyboardInputGesture=keyboard,
-					ui=Mock(),
+					ui=ui,
 				):
-					_pasteSnapshotTemporarily(controller, rich, "entry", frozenset(), expectedFocus=object())
+					controller._paster.pasteSnapshotTemporarily(
+						rich,
+						"entry",
+						frozenset(),
+						expectedFocus=object(),
+					)
+					self.assertEqual(expectedFeedback, ui.delayedMessage.call_args_list)
 					if failure in ("owner", "focus", "fallback", "fallbackPartial", "plainFailure"):
 						keyboard.fromName.assert_not_called()
 						schedule.assert_not_called()
@@ -549,22 +1231,78 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 						self.assertFalse(currentSnapshot.canIncludeInHistory)
 						self.assertFalse(currentSnapshot.canUpload)
 						self.assertEqual(
-							b"html" if failure in (None, "unmapped") else None,
+							b"html" if failure is None else None,
 							currentSnapshot.html,
 						)
 						schedule.assert_called_once()
 						_delay, restore, state = schedule.call_args.args
 						self.assertEqual(original, state.originalSnapshot)
+						self.assertTrue(state.originalIsCurrent)
+						self.assertEqual("a\nb", controller._text)
+						self.assertEqual(2, navigator.getPosition())
 						restore(state)
-				self.assertFalse(controller._temporaryPasteInProgress)
+				self.assertFalse(controller._paster._temporaryPasteInProgress)
 				if failure == "owner":
 					self.assertEqual(1, controller._writeSnapshot.call_count)
 					self.assertEqual(3, currentSnapshot.sequenceNumber)
 				else:
 					self.assertEqual(original.text, currentSnapshot.text)
-					if failure not in ("unmapped", "plainFailure"):
-						self.assertEqual(3, navigator.getPosition())
+				self.assertEqual("a\nb", controller._text)
+				self.assertEqual("a\nb", navigator._owner.text)
+				self.assertEqual(2, navigator.getPosition())
 				self.assertEqual(expectedWrites, controller._writeSnapshot.call_count)
+
+	def testImagePreparationFallbackAnnouncesPlainTextPaste(self) -> None:
+		"""Say formatting was lost only when a mixed entry's image could not be prepared."""
+		namespace = _beginTemporaryPaste.__globals__
+		contentType = clipboardMonitor.ClipboardContentType
+		mixed = clipboardMonitor.ClipboardSnapshot(
+			contentType.TEXT_AND_IMAGE,
+			text="mixed\ntext",
+			html=b"html",
+			imageFormat="PNG",
+			imageData=b"png",
+			canIncludeInHistory=False,
+			canUpload=False,
+		)
+		for fails in (False, True):
+			with self.subTest(fails=fails):
+				controller = _createTemporaryPasteController("abcdef", ClipboardNavigator("abcdef"))
+				controller._paster._temporaryPasteInProgress = True
+				request = namespace["_TemporaryPasteRequest"](
+					mixed,
+					"mixed entry",
+					frozenset(),
+					monotonic() + 3.0,
+					expectedFocus=object(),
+				)
+				keyboard = Mock()
+				ui = Mock()
+				with patch.dict(
+					namespace,
+					pngToPackedDib=Mock(
+						return_value=b"dib",
+						side_effect=ValueError("decode failed") if fails else None,
+					),
+					waitForTriggerKeysReleased=Mock(return_value=True),
+					callLater=Mock(),
+					KeyboardInputGesture=keyboard,
+					ui=ui,
+				):
+					prepared = namespace["_prepareTemporaryPngPaste"](request)
+					controller._paster._beginTemporaryPaste(prepared, 0)
+				self.assertEqual(fails, prepared.usedPlainTextFallback)
+				keyboard.fromName.return_value.send.assert_called_once_with()
+				pasted = controller.monitor.current
+				self.assertEqual(
+					contentType.TEXT if fails else contentType.TEXT_AND_IMAGE,
+					pasted.contentType,
+				)
+				self.assertEqual(mixed.text, pasted.text)
+				ui.delayedMessage.assert_called_once_with(
+					_PLAIN_TEXT_FALLBACK_MESSAGE if fails else "mixed entry",
+				)
+				ui.message.assert_not_called()
 
 	def testPasteTargetUsesSelectionOnlyWhenTheRangeIsComplete(self) -> None:
 		"""Prefer marked text and otherwise route the shared gesture to stored-item navigation."""
@@ -607,17 +1345,17 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 			_getStoredItemSummaryAt=Mock(return_value=(summary, 3, 5)),
 			_getStoredItemById=Mock(return_value=item),
 			_snapshotFromItem=Mock(return_value=snapshot),
-			_formatItemSummary=Mock(return_value="summary"),
-			_pasteSnapshotTemporarily=Mock(),
+			_paster=SimpleNamespace(pasteSnapshotTemporarily=Mock()),
 			_reportEmptyStoredItemCategory=Mock(),
 		)
 		triggerKeyCodes = frozenset({1, 2})
 
-		_pasteCurrentStoredItem(controller, triggerKeyCodes)
+		with patch.dict(_pasteCurrentStoredItem.__globals__, formatItemSummary=Mock(return_value="summary")):
+			_pasteCurrentStoredItem(controller, triggerKeyCodes)
 
 		self.assertEqual(3, controller._storedItemIndex)
 		controller._getStoredItemById.assert_called_once_with(category, 42)
-		controller._pasteSnapshotTemporarily.assert_called_once_with(
+		controller._paster.pasteSnapshotTemporarily.assert_called_once_with(
 			snapshot,
 			"summary",
 			triggerKeyCodes,

@@ -26,13 +26,13 @@ class TiantanSdkTests(unittest.TestCase):
 	"""Verify the SDK loader picks the expected architecture-specific DLL."""
 
 	def testArm64SelectsArmSdkDll(self) -> None:
-		"""Use the ARM64 SDK DLL when the current machine reports ARM64."""
-		with patch.object(cloudClipboard.platform, "machine", return_value="ARM64"):
+		"""Use the ARM64 SDK DLL when NVDA itself is an ARM64 process."""
+		with patch.object(cloudClipboard.sysconfig, "get_platform", return_value="win-arm64"):
 			self.assertEqual(cloudClipboard._getSdkDllName(), "ClipDataCloud.SDK.ARM.dll")
 
 	def testAmd64KeepsDefaultSdkDll(self) -> None:
-		"""Keep the original SDK DLL name on AMD64."""
-		with patch.object(cloudClipboard.platform, "machine", return_value="AMD64"):
+		"""Keep the original SDK DLL name for an AMD64 process, including x64 NVDA emulated on ARM64."""
+		with patch.object(cloudClipboard.sysconfig, "get_platform", return_value="win-amd64"):
 			self.assertEqual(cloudClipboard._getSdkDllName(), "ClipDataCloud.SDK.dll")
 
 

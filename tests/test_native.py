@@ -27,17 +27,17 @@ class NativeFilePathTests(unittest.TestCase):
 
 	def testNativeFilesResolveForEachArchitecture(self) -> None:
 		"""Return existing bundled files for AMD64 and ARM64 machines."""
-		for machine, fileName in (
-			("AMD64", "_sqlite3.pyd"),
-			("ARM64", "_sqlite3.pyd"),
-			("AMD64", "ClipDataCloud.SDK.dll"),
-			("ARM64", "ClipDataCloud.SDK.ARM.dll"),
+		for processPlatform, directory, fileName in (
+			("win-amd64", "amd64", "_sqlite3.pyd"),
+			("win-arm64", "arm64", "_sqlite3.pyd"),
+			("win-amd64", "amd64", "ClipDataCloud.SDK.dll"),
+			("win-arm64", "arm64", "ClipDataCloud.SDK.ARM.dll"),
 		):
-			with self.subTest(machine=machine, fileName=fileName):
-				with patch.object(native.platform, "machine", return_value=machine):
+			with self.subTest(processPlatform=processPlatform, fileName=fileName):
+				with patch.object(native.sysconfig, "get_platform", return_value=processPlatform):
 					path = native.getNativeFilePath(fileName)
 				self.assertTrue(path.is_file(), path)
-				self.assertEqual(machine.lower(), path.parent.name)
+				self.assertEqual(directory, path.parent.name)
 
 
 if __name__ == "__main__":

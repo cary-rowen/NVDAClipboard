@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 import sys
 from types import ModuleType
 from unittest.mock import Mock
@@ -63,11 +63,14 @@ class _PlaceholderModule(ModuleType):
 
 def fakeNvdaModules(
 	attributes: Mapping[str, Mapping[str, object]] | None = None,
+	*,
+	extraModuleNames: Iterable[str] = (),
 ) -> dict[str, object]:
 	"""Return fake wx, GUI, and NVDA modules needed to import the manager modules.
 
 	``attributes`` maps a fake module name (``"wx"``, ``"textUtils"`` ...) to extra
-	attributes to set on that module.
+	attributes to set on that module. ``extraModuleNames`` adds further placeholder
+	modules for importers that need more NVDA modules than the manager does.
 	"""
 	modules: dict[str, ModuleType] = {
 		name: _PlaceholderModule(name)
@@ -84,6 +87,7 @@ def fakeNvdaModules(
 			"ui",
 			"winUser",
 			"wx",
+			*extraModuleNames,
 		)
 	}
 	modules["addonHandler"].initTranslation = _initTranslation
