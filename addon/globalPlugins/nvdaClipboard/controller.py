@@ -8,20 +8,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
 from enum import Enum, auto
-from functools import partial
 from pathlib import Path
-from threading import BoundedSemaphore, Event, Thread
+from threading import Event, Thread
 from time import monotonic
 from typing import TYPE_CHECKING, Literal, Never
 
 import addonHandler
 import api
 import braille
-import colors
 import controlTypes
 from core import callLater
 import eventHandler
@@ -32,7 +30,6 @@ import speech
 from speech import CHUNK_SEPARATOR
 import textInfos
 import ui
-import winUser
 import wx
 
 from .clipboardMonitor import (
@@ -47,19 +44,30 @@ from .clipboardData import (
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,
 	isImageSizeSafe,
-	normalizeNewlinesForWin32,
-)
-from .imageCodec import (
-	ImageDataTooLargeError,
-	normalizeImageDataToPng,
-	pngToPackedDib,
+	normalizeUnicodeText,
 )
 from .fileSize import FileSizeCalculation
 from .cloudSync import TiantanSyncManager, TiantanWriteError, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
 from .oneDriveSync import OneDriveSyncManager
+from .paste import (
+	PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
+	PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
+	ClipboardChangeSource,
+	ClipboardWriteFailedError,
+	TemporaryPaster,
+	preparePngDib,
+	waitForTriggerKeysReleased,
+)
 from .search import matchesSearchKeywords, normalizeSearchText
 from .cues import playBoundary, playCopy, playLineBoundary, playNonPlainText
+from .historyWriter import (
+	IMAGE_CONTENT_TYPES,
+	HistoryWriter,
+	HistoryWriteResult,
+	clipboardItemFromSnapshot,
+	normalizeImageSnapshot,
+)
 from .images import (
 	ScreenCurtainCaptureUnavailableError,
 	captureNavigatorObjectPng,
@@ -78,8 +86,24 @@ from .storage import (
 	StorageError,
 	StorageFormatError,
 )
-from .storageModels import ClipboardItem, ClipboardItemContent, ClipboardItemSummary, ClipboardItemType
-from .textStats import TextStatistics, TextStatisticsCalculation
+from .storageModels import (
+	TEXT_ITEM_TYPES,
+	ClipboardItem,
+	ClipboardItemContent,
+	ClipboardItemSummary,
+	ClipboardItemType,
+)
+from .summary.formatting import (
+	formatCurrentSummary,
+	formatFileNavigationText,
+	formatFileSizeSummary,
+	formatImageDetails,
+	formatItemSummary,
+	formatPutOnClipboardConfirmation,
+	formatTextStatisticsReport,
+	getTextOrCharacterCount,
+)
+from .textStats import TextStatisticsCalculation
 
 if TYPE_CHECKING:
 	from .cloudDialog import TiantanDialog
@@ -89,11 +113,6 @@ if TYPE_CHECKING:
 
 addonHandler.initTranslation()
 
-_PASTE_KEY_RELEASE_POLL_INTERVAL_MS = 25
-_PASTE_KEY_RELEASE_TIMEOUT_SECONDS = 3.0
-_TEMPORARY_PASTE_RETRY_DELAY_MS = 50
-_TEMPORARY_PASTE_MAX_RETRIES = 2
-_TEMPORARY_CLIPBOARD_RESTORE_DELAY = 300
 _SUMMARY_REPORT_TIMEOUT_MS = 2000
 
 # Translators: Error shown when an add-on window cannot open because NVDA's main window is unavailable.
@@ -106,21 +125,6 @@ _HISTORY_CATEGORY_NAME = _("Clipboard history")
 _TIANTAN_DISABLED_MESSAGE = _(
 	"Tiantan Cloud Clipboard is disabled. Enable it in settings, then restart NVDA.",
 )
-
-_CANONICAL_SOLID_COLOR_NAMES = {
-	# Translators: Exact name of the RGB color (255, 0, 0).
-	(255, 0, 0): _("red"),
-	# Translators: Exact name of the RGB color (0, 255, 0).
-	(0, 255, 0): _("green"),
-	# Translators: Exact name of the RGB color (0, 0, 255).
-	(0, 0, 255): _("blue"),
-	# Translators: Exact name of the RGB color (255, 255, 0).
-	(255, 255, 0): _("yellow"),
-	# Translators: Exact name of the RGB color (0, 255, 255).
-	(0, 255, 255): _("cyan"),
-	# Translators: Exact name of the RGB color (255, 0, 255).
-	(255, 0, 255): _("magenta"),
-}
 
 
 class _BuiltinCategory(Enum):
@@ -139,25 +143,6 @@ _HISTORY_CATEGORY_ID = _BuiltinCategory.HISTORY
 _TEXT_CONTENT_TYPES = frozenset(
 	{ClipboardContentType.TEXT, ClipboardContentType.FORMATTED_TEXT, ClipboardContentType.TEXT_AND_IMAGE},
 )
-_TEXT_ITEM_TYPES = frozenset(
-	{ClipboardItemType.PLAIN_TEXT, ClipboardItemType.FORMATTED_TEXT, ClipboardItemType.TEXT_AND_IMAGE},
-)
-# Content types whose snapshots carry an image.
-_IMAGE_CONTENT_TYPES = frozenset({ClipboardContentType.IMAGE, ClipboardContentType.TEXT_AND_IMAGE})
-
-
-def _waitForTriggerKeysReleased(
-	triggerKeyCodes: frozenset[int],
-	deadline: float,
-	retry: Callable[[], None],
-) -> bool | None:
-	"""Return key-release status, scheduling another check while keys remain held."""
-	if not any(winUser.getAsyncKeyState(vkCode) & 0x8000 for vkCode in triggerKeyCodes):
-		return True
-	if monotonic() >= deadline:
-		return False
-	callLater(_PASTE_KEY_RELEASE_POLL_INTERVAL_MS, retry)
-	return None
 
 
 @contextmanager
@@ -172,20 +157,6 @@ def _popup(mainFrame: gui.MainFrame | None) -> Iterator[None]:
 			mainFrame.postPopup()
 
 
-def _normalizeUnicodeText(text: str) -> str:
-	"""Replace isolated UTF-16 surrogate code units at the clipboard boundary."""
-	return text.encode("utf-16-le", errors="surrogatepass").decode("utf-16-le", errors="replace")
-
-
-def _getTextOrCharacterCount(text: str, maxLength: int = 1024) -> str:
-	"""Return text shorter than ``maxLength``, or its localized character count."""
-	textLength = len(text)
-	if textLength < maxLength:
-		return text
-	# Translators: Presented instead of lengthy text in clipboard feedback.
-	return ngettext("%d character", "%d characters", textLength) % textLength
-
-
 def _getLastSpokenText() -> str | None:
 	"""Return the text from NVDA's most recent speech sequence."""
 	# NVDA 2026.3 private record: (speechSequence, symbolLevel).
@@ -197,22 +168,6 @@ def _getLastSpokenText() -> str | None:
 	if lastSpeech is None:
 		return None
 	return CHUNK_SEPARATOR.join(item for item in lastSpeech[0] if isinstance(item, str))
-
-
-class _ClipboardChangeSource(Enum):
-	"""Identify how one clipboard snapshot updates current state, history, and cloud sync."""
-
-	# Apply as the current clipboard and record it in history and cloud sync.
-	RECORD = auto()
-	# Apply as the current clipboard without recording it.
-	NO_RECORD = auto()
-	# Record appended text, replacing the history entry of the text it extends.
-	APPEND_TEXT = auto()
-	# Record manager editor text, ignoring its history result if the text became stale.
-	MANAGER_TEXT_REPLACEMENT = auto()
-	# Only register the write as the add-on's own; current clipboard state stays unchanged.
-	# Used for temporary paste content and for restoring the exact original afterwards.
-	REGISTER_ONLY = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,117 +192,14 @@ class MissingFileCleanupResult:
 
 
 @dataclass(frozen=True, slots=True)
-class _HistoryWriteResult:
-	itemId: int | None
-	imageWasDropped: bool = False
-	imageWasTooLarge: bool = False
-
-
-@dataclass(frozen=True, slots=True)
 class _PreparedPngClipboardWrite:
 	"""Retain one worker-prepared PNG clipboard write until its main-thread commit."""
 
 	snapshot: ClipboardSnapshot
-	source: _ClipboardChangeSource
+	source: ClipboardChangeSource
 	expectedSequenceNumber: int
 	confirmation: str
 	dibData: bytes
-
-
-@dataclass(frozen=True, slots=True)
-class _TemporaryPasteRequest:
-	"""Carry one immutable temporary paste through deferred preparation and retries."""
-
-	snapshot: ClipboardSnapshot
-	feedbackText: str
-	triggerKeyCodes: frozenset[int]
-	keyReleaseDeadline: float
-	sourceSequenceNumber: int | None = None
-	expectedFocus: object | None = None
-	preparedPngDib: bytes | None = None
-	# Whether rich content was degraded to plain text, so feedback must say formatting was lost.
-	usedPlainTextFallback: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class _TemporaryPasteState:
-	"""Retain the data needed to restore one temporary clipboard paste."""
-
-	originalSnapshot: ClipboardSnapshot | None
-	temporarySequenceNumber: int
-	temporarySnapshot: ClipboardSnapshot
-	allowsPartialWrite: bool = False
-	# Whether current clipboard state already reflects originalSnapshot, so restoring it needs no update.
-	originalIsCurrent: bool = False
-
-
-def _isTemporarySnapshot(
-	snapshot: ClipboardSnapshot,
-	state: _TemporaryPasteState,
-) -> bool:
-	"""Match temporary content after Windows has synthesized additional clipboard formats."""
-	expected = state.temporarySnapshot
-	return (
-		snapshot.contentType == expected.contentType
-		and snapshot.text == normalizeNewlinesForWin32(expected.text)
-		and snapshot.html == expected.html
-		and snapshot.rtf == expected.rtf
-		and snapshot.imageFormat == expected.imageFormat
-		and snapshot.imageData == expected.imageData
-		and snapshot.imageWidth == expected.imageWidth
-		and snapshot.imageHeight == expected.imageHeight
-		and snapshot.imageBitDepth == expected.imageBitDepth
-		and snapshot.files == expected.files
-		and not snapshot.canIncludeInHistory
-		and not snapshot.canUpload
-		and bool(snapshot.sequenceNumber)
-	)
-
-
-def _preparePngDib(snapshot: ClipboardSnapshot) -> bytes:
-	"""Decode a validated PNG snapshot into its DIB clipboard fallback."""
-	imageData = snapshot.imageData
-	if snapshot.imageFormat != "PNG" or imageData is None:
-		raise ValueError(snapshot.imageFormat)
-	dibData = pngToPackedDib(
-		imageData,
-		(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
-	)
-	if dibData is None:
-		raise ValueError(snapshot.imageFormat)
-	return dibData
-
-
-def _prepareTemporaryPngPaste(request: _TemporaryPasteRequest) -> _TemporaryPasteRequest:
-	"""Attach a worker-prepared DIB fallback to one temporary PNG paste."""
-	try:
-		return replace(request, preparedPngDib=_preparePngDib(request.snapshot))
-	except (OSError, ValueError):
-		fallback = _getPlainTextPasteRequest(request)
-		if fallback is None:
-			raise
-		log.debugWarning("Could not prepare the image; retaining temporary paste text.", exc_info=True)
-		return fallback
-
-
-def _getPlainTextPasteRequest(request: _TemporaryPasteRequest) -> _TemporaryPasteRequest | None:
-	"""Retain actual text when a rich temporary paste cannot be prepared or written."""
-	if not request.snapshot.text or request.snapshot.contentType not in (
-		ClipboardContentType.FORMATTED_TEXT,
-		ClipboardContentType.TEXT_AND_IMAGE,
-	):
-		return None
-	return replace(
-		request,
-		snapshot=ClipboardSnapshot(
-			ClipboardContentType.TEXT,
-			text=_normalizeUnicodeText(request.snapshot.text),
-			canIncludeInHistory=False,
-			canUpload=False,
-		),
-		preparedPngDib=None,
-		usedPlainTextFallback=True,
-	)
 
 
 def _isMissingFilePath(filePath: str) -> bool:
@@ -356,13 +208,6 @@ def _isMissingFilePath(filePath: str) -> bool:
 		return not Path(filePath).exists()
 	except OSError:
 		return True
-
-
-class _ClipboardWriteFailedError(RuntimeError):
-	def __init__(self, sequenceNumber: int) -> None:
-		# Translators: Error shown when supported formats cannot be written to the clipboard.
-		super().__init__(_("Could not write to the system clipboard"))
-		self.sequenceNumber = sequenceNumber
 
 
 class ClipboardController:
@@ -388,11 +233,11 @@ class ClipboardController:
 				onDataChanged=self._onOneDriveDataChanged,
 			)
 			self.monitor = ClipboardMonitor(onSnapshot=self._onClipboardSnapshot)
-			self._historyExecutor = ThreadPoolExecutor(
-				max_workers=1,
-				thread_name_prefix="nvdaClipboard.historyWrite",
+			self._historyWriter = HistoryWriter(
+				self.storage,
+				isStarted=lambda: self._isStarted,
+				onItemStored=self._onHistoryItemStored,
 			)
-			self._imageHistorySlots = BoundedSemaphore(2)
 		except Exception:
 			oneDriveSync = getattr(self, "oneDriveSync", None)
 			if oneDriveSync is not None:
@@ -422,11 +267,23 @@ class ClipboardController:
 		self._pendingPngClipboardWrite: Future[_PreparedPngClipboardWrite] | None = None
 		self._awaitingInitialSnapshot = False
 		self._lastAppliedSequenceNumber = 0
-		self._historySaveFailureReported = False
 		self._tiantanFetchInProgress = False
-		self._temporaryPasteInProgress = False
-		self._temporaryPasteState: _TemporaryPasteState | None = None
-		self._pendingTemporaryPngPaste: Future[_TemporaryPasteRequest] | None = None
+		self._paster = TemporaryPaster(
+			monitor=self.monitor,
+			storage=self.storage,
+			worker=self._historyWriter,
+			isStarted=lambda: self._isStarted,
+			getLastAppliedSequenceNumber=lambda: self._lastAppliedSequenceNumber,
+			clearPendingWrites=lambda: self._pendingWrites.clear(),
+			captureOriginalClipboard=self._captureOriginalClipboardForTemporaryPaste,
+			writeSnapshot=self._writeSnapshot,
+			clearClipboard=self._clearClipboard,
+			applyLeftoverClipboardContent=self._applyLeftoverClipboardContent,
+			distrustRegisteredClipboardState=self._distrustRegisteredClipboardState,
+			getClipboardOwnerHandle=self._getClipboardOwnerHandle,
+			isSameFocus=self._isSameFocus,
+			snapshotFromItem=self._snapshotFromItem,
+		)
 		self._isStarted = False
 
 	def start(self) -> None:
@@ -455,10 +312,8 @@ class ClipboardController:
 		self._awaitingInitialSnapshot = False
 		self._pendingWrites.clear()
 		self._cancelPendingPngClipboardWrite()
-		self._cancelPendingTemporaryPngPaste()
+		self._paster.cancel()
 		self._tiantanFetchInProgress = False
-		self._temporaryPasteInProgress = False
-		self._temporaryPasteState = None
 		self._pendingSummaryReport = None
 		if self._summaryCalculation is not None:
 			self._summaryCalculation.cancel()
@@ -482,7 +337,7 @@ class ClipboardController:
 		self.manager = None
 		if manager is not None:
 			manager.terminate()
-		self._historyExecutor.shutdown(wait=True)
+		self._historyWriter.shutdown()
 		self.storage.close()
 
 	def showManager(self) -> None:
@@ -584,15 +439,15 @@ class ClipboardController:
 				raise TiantanWriteError(
 					_("Focus changed. Tiantan Cloud Clipboard paste was cancelled."),
 				)
-			sequenceNumber = self._writeClipboardText(text, _ClipboardChangeSource.NO_RECORD)
+			sequenceNumber = self._writeClipboardText(text, ClipboardChangeSource.NO_RECORD)
 			callLater(
-				_PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
+				PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
 				self._sendTiantanPasteGesture,
 				focusObject,
 				sequenceNumber,
 				text,
 				triggerKeyCodes,
-				monotonic() + _PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
+				monotonic() + PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
 			)
 
 		tiantanSync.fetchToClipboard(
@@ -617,7 +472,7 @@ class ClipboardController:
 
 		def writeFetchedText(text: str) -> None:
 			"""Write received Tiantan Cloud Clipboard text without recording or resending it."""
-			self._writeClipboardText(text, _ClipboardChangeSource.NO_RECORD)
+			self._writeClipboardText(text, ClipboardChangeSource.NO_RECORD)
 
 		tiantanSync.fetchToClipboard(
 			writeFetchedText,
@@ -667,7 +522,7 @@ class ClipboardController:
 			snapshot,
 			# Translators: Title of the browse mode window showing clipboard content.
 			_("Clipboard content"),
-			self._formatCurrentSummary(snapshot),
+			formatCurrentSummary(snapshot),
 			showAsPlainText=getShowClipboardContentAsPlainText(),
 		)
 
@@ -693,74 +548,13 @@ class ClipboardController:
 
 	def _reportFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
 		"""Report the latest size and item counts for the current clipboard files."""
-		progress = calculation.getProgress()
-		hasResults = bool(progress.fileCount or progress.directoryCount)
-		if hasResults:
-			details = [self._formatDataSize(progress.byteCount)]
-			if progress.fileCount:
-				details.append(
-					ngettext(
-						# Translators: Number of regular files included in a clipboard size calculation.
-						"{count} file",
-						"{count} files",
-						progress.fileCount,
-					).format(count=progress.fileCount),
-				)
-			if progress.directoryCount:
-				details.append(
-					ngettext(
-						# Translators: Number of folders included in a clipboard size calculation.
-						"{count} folder",
-						"{count} folders",
-						progress.directoryCount,
-					).format(count=progress.directoryCount),
-				)
-			# Translators: Separator between file size, file count, and folder count.
-			detailsText = _(", ").join(details)
-			if progress.isComplete:
-				if progress.isIncomplete:
-					# Translators: Clipboard file calculation with partial size and item counts.
-					summary = _("{summary}; contents total about {details}").format(
-						details=detailsText,
-						summary=self._summary,
-					)
-				else:
-					# Translators: Completed clipboard file calculation with size and item counts.
-					summary = _("{summary}; contents total {details}").format(
-						details=detailsText,
-						summary=self._summary,
-					)
-			else:
-				# Translators: Clipboard file calculation with size and item counts accumulated so far.
-				summary = _("{summary}; calculating contents, {details}").format(
-					details=detailsText,
-					summary=self._summary,
-				)
-		else:
-			if progress.isComplete:
-				# Translators: Clipboard file calculation where no content details were available.
-				summary = _("{summary}; could not calculate contents").format(summary=self._summary)
-			else:
-				# Translators: Clipboard file calculation before any content details are available.
-				summary = _("{summary}; calculating contents").format(summary=self._summary)
-		ui.message(summary)
+		ui.message(formatFileSizeSummary(self._summary, calculation.getProgress()))
 
 	def _reportTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
 		"""Report exact completed text statistics or the current calculation state."""
 		progress = calculation.getProgress()
 		lineNumber, columnNumber = self.navigator.getLineAndColumn()
-		summary = _(
-			# Translators: Clipboard text type followed by the current one-based navigation line and column.
-			"{summary}: line {line}, column {column}",
-		).format(summary=self._summary, line=lineNumber, column=columnNumber)
-		if not progress.isComplete:
-			summary = _(
-				# Translators: Clipboard text summary with its position while exact statistics are calculated.
-				"{summary}; calculating; check again shortly",
-			).format(summary=summary)
-		elif progress.statistics is not None:
-			summary = self._formatTextStatisticsSummary(summary, progress.statistics)
-		ui.message(summary)
+		ui.message(formatTextStatisticsReport(self._summary, lineNumber, columnNumber, progress))
 
 	def moveToFirstLine(self) -> None:
 		"""Move to and report the first clipboard line."""
@@ -849,7 +643,7 @@ class ClipboardController:
 			ui.message(_("No start marker set"))
 			return
 		# Translators: Braille message showing text selected in clipboard navigation.
-		selectionMessage = _("%s selected") % _getTextOrCharacterCount(selectedText, 512)
+		selectionMessage = _("%s selected") % getTextOrCharacterCount(selectedText, 512)
 		speech.speakTextSelected(selectedText)
 		braille.handler.message(selectionMessage)
 
@@ -863,7 +657,7 @@ class ClipboardController:
 			# Translators: Message shown when a command requires selected text.
 			ui.message(_("No text is selected"))
 			return
-		self._pasteTextTemporarily(
+		self._paster.pasteTextTemporarily(
 			selectedText,
 			triggerKeyCodes,
 			sourceSequenceNumber=self._lastAppliedSequenceNumber,
@@ -880,7 +674,7 @@ class ClipboardController:
 		"""Append the most recent NVDA speech text to the clipboard."""
 		text = self._requireLastSpokenText()
 		self._appendTextToClipboard(text)
-		spokenText = _getTextOrCharacterCount(text)
+		spokenText = getTextOrCharacterCount(text)
 		ui.message(
 			# Translators: Announced after text is appended to the clipboard.
 			_("Appended to clipboard: {text}").format(text=spokenText),
@@ -890,7 +684,7 @@ class ClipboardController:
 
 	def pasteLastSpokenText(self, triggerKeyCodes: frozenset[int]) -> None:
 		"""Schedule a temporary paste of the most recent NVDA speech text."""
-		self._pasteTextTemporarily(self._requireLastSpokenText(), triggerKeyCodes)
+		self._paster.pasteTextTemporarily(self._requireLastSpokenText(), triggerKeyCodes)
 
 	def appendSelectedText(self) -> None:
 		"""Append the focused selection to existing clipboard text."""
@@ -934,7 +728,7 @@ class ClipboardController:
 				imageHeight=imageInfo[1],
 				imageBitDepth=imageInfo[2],
 			),
-			_ClipboardChangeSource.RECORD,
+			ClipboardChangeSource.RECORD,
 		)
 		# Translators: Confirmation after a navigator object screenshot is copied.
 		ui.message(_("Navigator object image copied to the clipboard"))
@@ -991,9 +785,9 @@ class ClipboardController:
 			self._reportEmptyStoredItemCategory(category)
 			return
 		item = self._getStoredItemById(category, summary.itemId)
-		self._pasteSnapshotTemporarily(
+		self._paster.pasteSnapshotTemporarily(
 			self._snapshotFromItem(item),
-			self._formatItemSummary(summary),
+			formatItemSummary(summary),
 			triggerKeyCodes,
 			expectedFocus=focusObject,
 		)
@@ -1022,7 +816,7 @@ class ClipboardController:
 	) -> tuple[tuple[int, str, ClipboardItemType], ...]:
 		"""Return stable identifiers, concise summaries, and types in one metadata query."""
 		return tuple(
-			(item.itemId, self._formatItemSummary(item), item.contentType)
+			(item.itemId, formatItemSummary(item), item.contentType)
 			for item in self._getCategorySummaries(category)
 		)
 
@@ -1049,7 +843,7 @@ class ClipboardController:
 					if visibleSummary is None:
 						continue
 					fields = [visibleSummary]
-					if item.contentType in _TEXT_ITEM_TYPES:
+					if item.contentType in TEXT_ITEM_TYPES:
 						fields.append(item.text)
 					elif item.contentType == ClipboardItemType.FILES:
 						fields.extend(item.files)
@@ -1066,17 +860,17 @@ class ClipboardController:
 	def getItemDetails(self, category: CategoryId, itemId: int) -> ClipboardItemDetails:
 		"""Load the selected entry only and describe it for the manager content control."""
 		item = self._getStoredItemContentById(category, itemId)
-		if item.contentType in _TEXT_ITEM_TYPES:
+		if item.contentType in TEXT_ITEM_TYPES:
 			content = item.text
 		elif item.contentType == ClipboardItemType.FILES:
 			content = "\n".join(item.files)
 		else:
-			content = self._formatImageDetails(item)
+			content = formatImageDetails(item)
 		return ClipboardItemDetails(
 			key=item.itemId,
 			kind=item.contentType,
 			content=content,
-			isEditable=item.contentType in _TEXT_ITEM_TYPES,
+			isEditable=item.contentType in TEXT_ITEM_TYPES,
 			hasImage=item.hasImage,
 			canUpload=item.canUpload,
 		)
@@ -1086,7 +880,7 @@ class ClipboardController:
 		# During a temporary paste, current state keeps the original while the clipboard holds other content.
 		if not (
 			text
-			and self._temporaryPasteState is None
+			and not self._paster.hasPendingRestore
 			and self._contentType in _TEXT_CONTENT_TYPES
 			and text == self._text
 			and self._lastAppliedSequenceNumber
@@ -1100,7 +894,7 @@ class ClipboardController:
 		if text:
 			self._writeClipboardText(
 				text,
-				_ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
+				ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
 				canUpload=canUpload,
 			)
 			return True
@@ -1118,7 +912,7 @@ class ClipboardController:
 		notifyManager: bool = True,
 	) -> None:
 		"""Save an immutable plain-text copy and optionally queue a manager refresh."""
-		text = _normalizeUnicodeText(text)
+		text = normalizeUnicodeText(text)
 		if self.isHistoryCategory(category):
 			# Translators: Error shown when a draft is saved directly to history.
 			raise ValueError(_("Clipboard history can only be changed through the system clipboard"))
@@ -1143,8 +937,8 @@ class ClipboardController:
 		self._cancelPendingPngClipboardWrite()
 		item = self._getStoredItemById(category, itemId)
 		snapshot = self._snapshotFromItem(item)
-		source = _ClipboardChangeSource.RECORD
-		confirmation = self._formatPutOnClipboardConfirmation(item)
+		source = ClipboardChangeSource.RECORD
+		confirmation = formatPutOnClipboardConfirmation(item)
 		if snapshot.imageFormat != "PNG":
 			try:
 				self._writeSnapshot(
@@ -1158,7 +952,7 @@ class ClipboardController:
 				return
 			ui.message(confirmation)
 			return
-		future = self._historyExecutor.submit(
+		future = self._historyWriter.submit(
 			self._preparePngClipboardWrite,
 			snapshot,
 			source,
@@ -1178,7 +972,7 @@ class ClipboardController:
 	@staticmethod
 	def _preparePngClipboardWrite(
 		snapshot: ClipboardSnapshot,
-		source: _ClipboardChangeSource,
+		source: ClipboardChangeSource,
 		expectedSequenceNumber: int,
 		confirmation: str,
 	) -> _PreparedPngClipboardWrite:
@@ -1188,7 +982,7 @@ class ClipboardController:
 			source=source,
 			expectedSequenceNumber=expectedSequenceNumber,
 			confirmation=confirmation,
-			dibData=_preparePngDib(snapshot),
+			dibData=preparePngDib(snapshot),
 		)
 
 	def _queuePngClipboardWriteCompletion(self, future: Future[_PreparedPngClipboardWrite]) -> None:
@@ -1380,11 +1174,11 @@ class ClipboardController:
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			# Translators: Error shown when the current clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
-		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
+		if snapshot.contentType not in IMAGE_CONTENT_TYPES:
 			# Translators: Message shown when no clipboard image is available to save.
 			ui.message(_("There is no clipboard image to save"))
 			return
-		snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
+		snapshot, _imageWasTooLarge = normalizeImageSnapshot(snapshot)
 		if snapshot.imageData is None:
 			# Translators: Error shown when an expected clipboard image cannot be read.
 			raise RuntimeError(_("Could not read the clipboard image"))
@@ -1427,20 +1221,17 @@ class ClipboardController:
 			return
 		if self._consumePendingWrite(snapshot):
 			self._awaitingInitialSnapshot = False
-			if self._pendingWritesWereApplied and snapshot.contentType in _IMAGE_CONTENT_TYPES:
-				self._summary = self._formatCurrentSummary(snapshot)
+			if self._pendingWritesWereApplied and snapshot.contentType in IMAGE_CONTENT_TYPES:
+				self._summary = formatCurrentSummary(snapshot)
 				if snapshot.contentType == ClipboardContentType.IMAGE:
 					self.navigator.setText(self._summary)
 			return
-		state = self._temporaryPasteState
-		if state is not None and _isTemporarySnapshot(snapshot, state):
+		if self._paster.matchesTemporaryContent(snapshot):
 			self._awaitingInitialSnapshot = False
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 			return
 		source = (
-			_ClipboardChangeSource.NO_RECORD
-			if self._awaitingInitialSnapshot
-			else _ClipboardChangeSource.RECORD
+			ClipboardChangeSource.NO_RECORD if self._awaitingInitialSnapshot else ClipboardChangeSource.RECORD
 		)
 		self._awaitingInitialSnapshot = False
 		self._applySnapshot(snapshot, source)
@@ -1455,7 +1246,7 @@ class ClipboardController:
 	def _applySnapshot(
 		self,
 		snapshot: ClipboardSnapshot,
-		source: _ClipboardChangeSource,
+		source: ClipboardChangeSource,
 		*,
 		historyPreviousText: str | None = None,
 	) -> None:
@@ -1463,26 +1254,26 @@ class ClipboardController:
 		if snapshot.contentType == ClipboardContentType.ERROR:
 			return
 		shouldRecord = source in {
-			_ClipboardChangeSource.RECORD,
-			_ClipboardChangeSource.APPEND_TEXT,
-			_ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
+			ClipboardChangeSource.RECORD,
+			ClipboardChangeSource.APPEND_TEXT,
+			ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
 		}
 		if snapshot.sequenceNumber:
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 		self._applyCurrentSnapshot(snapshot)
 		if shouldRecord and snapshot.canIncludeInHistory:
-			if snapshot.contentType in _IMAGE_CONTENT_TYPES:
-				self._queueImageHistorySnapshot(snapshot)
+			if snapshot.contentType in IMAGE_CONTENT_TYPES:
+				self._historyWriter.queueImageSnapshot(snapshot)
 			else:
-				item = self._clipboardItemFromSnapshot(snapshot)
+				item = clipboardItemFromSnapshot(snapshot)
 				if item is not None:
-					self._queueHistoryItem(
+					self._historyWriter.queueItem(
 						item,
 						replaceText=historyPreviousText
-						if source == _ClipboardChangeSource.APPEND_TEXT
+						if source == ClipboardChangeSource.APPEND_TEXT
 						else None,
 						expectedText=item.text
-						if source == _ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT
+						if source == ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT
 						else None,
 					)
 		if shouldRecord and snapshot.canUpload and snapshot.text:
@@ -1513,151 +1304,17 @@ class ClipboardController:
 		self._contentType = snapshot.contentType
 		self._text = snapshot.text
 		self._canUpload = snapshot.canUpload
-		self._summary = self._formatCurrentSummary(snapshot)
+		self._summary = formatCurrentSummary(snapshot)
 		if snapshot.contentType in _TEXT_CONTENT_TYPES and snapshot.text:
 			navigationText = snapshot.text
 		elif snapshot.contentType == ClipboardContentType.FILES:
-			navigationText = self._formatFileNavigationText(snapshot.files)
+			navigationText = formatFileNavigationText(snapshot.files)
 		else:
 			navigationText = self._summary
 		self.navigator.setText(navigationText)
 
-	def _queueHistoryItem(
-		self,
-		item: ClipboardItem,
-		imageWasDropped: bool = False,
-		*,
-		replaceText: str | None = None,
-		expectedText: str | None = None,
-	) -> None:
-		"""Queue one immutable item for ordered history storage."""
-		future = self._historyExecutor.submit(self._storeHistoryItem, item, imageWasDropped, replaceText)
-		future.add_done_callback(
-			partial(self._queueHistoryWriteCompletion, expectedText=expectedText),
-		)
-
-	def _queueImageHistorySnapshot(self, snapshot: ClipboardSnapshot) -> None:
-		"""Queue one image snapshot without allowing unbounded retained image data."""
-		imageDataMissing = snapshot.imageData is None
-		if imageDataMissing or not self._imageHistorySlots.acquire(blocking=False):
-			item = self._clipboardItemFromSnapshot(
-				replace(snapshot, imageFormat=None, imageData=None),
-			)
-			if item is None and imageDataMissing:
-				# Translators: Message shown when a clipboard image could not be normalized for history.
-				ui.message(_("The image could not be added to clipboard history"))
-			elif item is not None:
-				self._queueHistoryItem(item, imageWasDropped=imageDataMissing)
-			return
-		try:
-			future = self._historyExecutor.submit(self._storeImageHistorySnapshot, snapshot)
-		except Exception:
-			self._imageHistorySlots.release()
-			raise
-		future.add_done_callback(self._queueImageHistoryWriteCompletion)
-
-	def _storeImageHistorySnapshot(self, snapshot: ClipboardSnapshot) -> _HistoryWriteResult:
-		"""Normalize and store one retained image snapshot on the serial worker."""
-		snapshot, imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
-		item = self._clipboardItemFromSnapshot(snapshot)
-		if item is None:
-			return _HistoryWriteResult(
-				None,
-				imageWasDropped=True,
-				imageWasTooLarge=imageWasTooLarge,
-			)
-		return self._storeHistoryItem(
-			item,
-			imageWasDropped=snapshot.imageData is None,
-			imageWasTooLarge=imageWasTooLarge,
-		)
-
-	def _storeHistoryItem(
-		self,
-		item: ClipboardItem,
-		imageWasDropped: bool,
-		replaceText: str | None = None,
-		imageWasTooLarge: bool = False,
-	) -> _HistoryWriteResult:
-		"""Write history on the serial worker, preserving text when a mixed image is rejected."""
-		itemId = self.storage.addHistory(item, replaceText=replaceText)
-		if itemId is not None or item.contentType != ClipboardItemType.TEXT_AND_IMAGE:
-			return _HistoryWriteResult(
-				itemId,
-				imageWasDropped=imageWasDropped,
-				imageWasTooLarge=imageWasTooLarge or len(item.imageData or b"") > MAX_IMAGE_BYTES,
-			)
-		fallbackType = (
-			ClipboardItemType.FORMATTED_TEXT
-			if item.html is not None or item.rtf is not None
-			else ClipboardItemType.PLAIN_TEXT
-		)
-		fallbackId = self.storage.addHistory(
-			ClipboardItem(
-				fallbackType,
-				text=item.text,
-				html=item.html,
-				rtf=item.rtf,
-				canUpload=item.canUpload,
-			),
-			replaceText=replaceText,
-		)
-		return _HistoryWriteResult(
-			fallbackId,
-			imageWasDropped=True,
-			imageWasTooLarge=imageWasTooLarge or len(item.imageData or b"") > MAX_IMAGE_BYTES,
-		)
-
-	def _queueHistoryWriteCompletion(
-		self,
-		future: Future[_HistoryWriteResult],
-		*,
-		expectedText: str | None = None,
-	) -> None:
-		try:
-			wx.CallAfter(self._finishHistoryWrite, future, expectedText)
-		except RuntimeError:
-			if self._isStarted:
-				log.debugWarning("Could not schedule a clipboard history write result.", exc_info=True)
-
-	def _queueImageHistoryWriteCompletion(self, future: Future[_HistoryWriteResult]) -> None:
-		"""Release one image slot before reporting its history result."""
-		self._imageHistorySlots.release()
-		self._queueHistoryWriteCompletion(future)
-
-	def _finishHistoryWrite(
-		self,
-		future: Future[_HistoryWriteResult],
-		expectedText: str | None = None,
-	) -> None:
-		"""Report history write results and refresh visible metadata on the main thread."""
-		if not self._isStarted:
-			return
-		try:
-			result = future.result()
-		except Exception:
-			if not self._historySaveFailureReported:
-				self._historySaveFailureReported = True
-				log.exception("Failed to save clipboard history.")
-				# Translators: Error shown when clipboard content changed but history could not be saved.
-				ui.message(_("Clipboard updated, but history could not be saved"))
-			return
-		self._historySaveFailureReported = False
-		if result.itemId is None:
-			if result.imageWasTooLarge:
-				# Translators: Message shown when a clipboard image exceeds the single-image history limit.
-				ui.message(
-					_("The image was not added because it exceeds the {limit} MB history limit").format(
-						limit=MAX_IMAGE_BYTES // (1024 * 1024),
-					),
-				)
-			elif result.imageWasDropped:
-				# Translators: Message shown when a clipboard image could not be normalized for history.
-				ui.message(_("The image could not be added to clipboard history"))
-			else:
-				# Translators: Message shown when an image exceeds the total history storage limit.
-				ui.message(_("The image was not added because image history storage is full"))
-			return
+	def _onHistoryItemStored(self, result: HistoryWriteResult, expectedText: str | None) -> None:
+		"""Reset the history position and refresh visible metadata after a history record is stored."""
 		if self.isHistoryCategory(self._storedItemCategory):
 			self._storedItemIndex = 0
 		if result.imageWasDropped:
@@ -1671,92 +1328,6 @@ class ClipboardController:
 				preferredHistoryItemId=result.itemId,
 				expectedText=expectedText,
 			)
-
-	def _clipboardItemFromSnapshot(self, snapshot: ClipboardSnapshot) -> ClipboardItem | None:
-		"""Convert one supported snapshot to the fixed immutable storage model."""
-		if snapshot.contentType == ClipboardContentType.FILES and snapshot.files:
-			return ClipboardItem(
-				ClipboardItemType.FILES,
-				files=snapshot.files,
-				canUpload=snapshot.canUpload,
-			)
-		if snapshot.contentType not in (
-			ClipboardContentType.TEXT,
-			ClipboardContentType.FORMATTED_TEXT,
-			ClipboardContentType.TEXT_AND_IMAGE,
-			ClipboardContentType.IMAGE,
-		):
-			return None
-		if snapshot.imageData is not None:
-			assert snapshot.imageFormat == "PNG"
-			hasText = bool(snapshot.text)
-			contentType = ClipboardItemType.TEXT_AND_IMAGE if hasText else ClipboardItemType.IMAGE
-			return ClipboardItem(
-				contentType,
-				text=snapshot.text,
-				html=snapshot.html if hasText else None,
-				rtf=snapshot.rtf if hasText else None,
-				imageData=snapshot.imageData,
-				imageWidth=snapshot.imageWidth,
-				imageHeight=snapshot.imageHeight,
-				imageBitDepth=snapshot.imageBitDepth,
-				canUpload=snapshot.canUpload,
-			)
-		if not snapshot.text:
-			return None
-		contentType = (
-			ClipboardItemType.FORMATTED_TEXT
-			if snapshot.html is not None or snapshot.rtf is not None
-			else ClipboardItemType.PLAIN_TEXT
-		)
-		return ClipboardItem(
-			contentType,
-			text=snapshot.text,
-			html=snapshot.html,
-			rtf=snapshot.rtf,
-			canUpload=snapshot.canUpload,
-		)
-
-	def _normalizeImageSnapshot(self, snapshot: ClipboardSnapshot) -> tuple[ClipboardSnapshot, bool]:
-		"""Return a PNG-backed snapshot and whether normalization exceeded the byte limit.
-
-		The monitor has already verified PNG data and applied its DIB and bitmap fallbacks.
-		"""
-		if snapshot.contentType not in _IMAGE_CONTENT_TYPES:
-			return snapshot, False
-		canDecodeSafely = isImageSizeSafe(
-			snapshot.imageWidth,
-			snapshot.imageHeight,
-			max(32, snapshot.imageBitDepth),
-		)
-		if not canDecodeSafely:
-			return replace(snapshot, imageFormat=None, imageData=None), False
-		try:
-			pngData = (
-				normalizeImageDataToPng(
-					snapshot.imageFormat,
-					snapshot.imageData,
-					(snapshot.imageWidth, snapshot.imageHeight, snapshot.imageBitDepth),
-				)
-				if snapshot.imageData is not None
-				else None
-			)
-		except ImageDataTooLargeError:
-			return replace(snapshot, imageFormat=None, imageData=None), True
-		info = getPngImageInfo(pngData) if pngData is not None else None
-		if pngData is not None and info is not None and isImageSizeSafe(info[0], info[1], max(32, info[2])):
-			return (
-				replace(
-					snapshot,
-					imageFormat="PNG",
-					imageData=pngData,
-					imageWidth=info[0],
-					imageHeight=info[1],
-					imageBitDepth=info[2],
-				),
-				False,
-			)
-		return replace(snapshot, imageFormat=None, imageData=None), False
 
 	def _requireLastSpokenText(self) -> str:
 		text = _getLastSpokenText()
@@ -1774,316 +1345,17 @@ class ClipboardController:
 		if not snapshot.sequenceNumber or snapshot.sequenceNumber != self._lastAppliedSequenceNumber:
 			self._pendingWrites.clear()
 			self._awaitingInitialSnapshot = False
-			self._applySnapshot(snapshot, _ClipboardChangeSource.RECORD)
+			self._applySnapshot(snapshot, ClipboardChangeSource.RECORD)
 		clipboardText = snapshot.text if snapshot.contentType in _TEXT_CONTENT_TYPES else ""
 		separator = "\n" if clipboardText and not clipboardText.endswith(("\r", "\n")) else ""
 		self._writeClipboardText(
 			f"{clipboardText}{separator}{text}",
-			_ClipboardChangeSource.APPEND_TEXT,
+			ClipboardChangeSource.APPEND_TEXT,
 			expectedSequenceNumber=snapshot.sequenceNumber,
 			canIncludeInHistory=snapshot.canIncludeInHistory,
 			canUpload=snapshot.canUpload,
 			historyPreviousText=clipboardText or None,
 		)
-
-	def _pasteTextTemporarily(
-		self,
-		text: str,
-		triggerKeyCodes: frozenset[int],
-		*,
-		sourceSequenceNumber: int | None = None,
-	) -> None:
-		"""Schedule a temporary text paste, optionally tied to the current clipboard."""
-		text = _normalizeUnicodeText(text)
-		self._pasteSnapshotTemporarily(
-			ClipboardSnapshot(ClipboardContentType.TEXT, text=text),
-			text,
-			triggerKeyCodes,
-			sourceSequenceNumber=sourceSequenceNumber,
-		)
-
-	def _pasteSnapshotTemporarily(
-		self,
-		snapshot: ClipboardSnapshot,
-		feedbackText: str,
-		triggerKeyCodes: frozenset[int],
-		*,
-		sourceSequenceNumber: int | None = None,
-		expectedFocus: object | None = None,
-	) -> None:
-		"""Schedule one temporary clipboard paste, preparing PNG data off-thread."""
-		if self._temporaryPasteInProgress:
-			# Translators: Message shown when another temporary clipboard paste is still running.
-			raise RuntimeError(_("Pasting is in progress. Please wait."))
-		request = _TemporaryPasteRequest(
-			snapshot=replace(snapshot, canIncludeInHistory=False, canUpload=False),
-			feedbackText=_getTextOrCharacterCount(feedbackText),
-			triggerKeyCodes=triggerKeyCodes,
-			keyReleaseDeadline=monotonic() + _PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
-			sourceSequenceNumber=sourceSequenceNumber,
-			expectedFocus=expectedFocus,
-		)
-		self._temporaryPasteInProgress = True
-		if request.snapshot.imageFormat != "PNG":
-			self._beginTemporaryPaste(request, 0)
-			return
-		if request.expectedFocus is None:
-			self._temporaryPasteInProgress = False
-			# Translators: Temporary clipboard paste cancellation because keyboard focus could not be identified.
-			ui.message(_("Keyboard focus could not be identified. Paste cancelled."))
-			return
-		try:
-			future = self._historyExecutor.submit(_prepareTemporaryPngPaste, request)
-		except Exception:
-			fallback = _getPlainTextPasteRequest(request)
-			if fallback is not None:
-				log.debugWarning(
-					"Could not queue image preparation; retaining temporary paste text.",
-					exc_info=True,
-				)
-				self._beginTemporaryPaste(fallback, 0)
-				return
-			self._temporaryPasteInProgress = False
-			log.exception("Failed to queue temporary PNG paste preparation.")
-			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		self._pendingTemporaryPngPaste = future
-		future.add_done_callback(self._queueTemporaryPngPasteCompletion)
-
-	def _cancelPendingTemporaryPngPaste(self) -> None:
-		"""Cancel a queued temporary PNG paste and make any running result stale."""
-		future = self._pendingTemporaryPngPaste
-		self._pendingTemporaryPngPaste = None
-		if future is not None:
-			future.cancel()
-
-	def _queueTemporaryPngPasteCompletion(self, future: Future[_TemporaryPasteRequest]) -> None:
-		"""Queue one prepared temporary PNG paste for the NVDA thread."""
-		if future is not self._pendingTemporaryPngPaste:
-			return
-		try:
-			wx.CallAfter(self._finishTemporaryPngPastePreparation, future)
-		except RuntimeError:
-			if future is self._pendingTemporaryPngPaste:
-				self._pendingTemporaryPngPaste = None
-				self._temporaryPasteInProgress = False
-			if self._isStarted:
-				log.debugWarning("Could not schedule a prepared temporary PNG paste.", exc_info=True)
-
-	def _finishTemporaryPngPastePreparation(self, future: Future[_TemporaryPasteRequest]) -> None:
-		"""Start the latest temporary PNG paste after worker preparation."""
-		if future is not self._pendingTemporaryPngPaste:
-			return
-		self._pendingTemporaryPngPaste = None
-		if not self._isStarted:
-			self._temporaryPasteInProgress = False
-			return
-		try:
-			request = future.result()
-		except ValueError as error:
-			self._temporaryPasteInProgress = False
-			log.debugWarning("Stored PNG data could not be prepared for temporary paste.", exc_info=error)
-			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		except Exception as error:
-			self._temporaryPasteInProgress = False
-			log.exception("Failed to prepare stored PNG data for temporary paste.", exc_info=error)
-			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		self._beginTemporaryPaste(request, 0)
-
-	def _beginTemporaryPaste(  # noqa: C901 - ordered recovery branches keep clipboard ownership explicit.
-		self,
-		request: _TemporaryPasteRequest,
-		retryCount: int,
-	) -> None:
-		"""Write and paste temporary clipboard content, retrying brief clipboard races."""
-		if not self._isStarted:
-			self._temporaryPasteInProgress = False
-			return
-		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
-			self._temporaryPasteInProgress = False
-			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-			ui.message(_("Focus changed. Paste cancelled."))
-			return
-		originalSnapshot: ClipboardSnapshot | None = None
-		originalIsCurrent = False
-		try:
-			keyReleaseState = _waitForTriggerKeysReleased(
-				request.triggerKeyCodes,
-				request.keyReleaseDeadline,
-				lambda: self._beginTemporaryPaste(request, retryCount),
-			)
-		except Exception:
-			self._temporaryPasteInProgress = False
-			log.exception("Failed while waiting for the temporary paste keys to be released.")
-			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		if keyReleaseState is None:
-			return
-		if not keyReleaseState:
-			self._temporaryPasteInProgress = False
-			# Translators: Message shown when a paste shortcut remains held until timeout.
-			ui.message(_("The keyboard shortcut was not released, so the paste was cancelled"))
-			return
-		try:
-			originalSnapshot, expectedSequenceNumber, originalWasApplied = (
-				self._captureOriginalClipboardForTemporaryPaste()
-			)
-			if (
-				request.sourceSequenceNumber is not None
-				and expectedSequenceNumber != request.sourceSequenceNumber
-			):
-				self._temporaryPasteInProgress = False
-				# Translators: Message shown when a clipboard navigation selection becomes stale before pasting.
-				ui.message(_("The clipboard changed. Paste cancelled."))
-				return
-			originalIsCurrent = (
-				originalWasApplied
-				and originalSnapshot is not None
-				and originalSnapshot.sequenceNumber
-				== expectedSequenceNumber
-				== self._lastAppliedSequenceNumber
-				== self.monitor.getSequenceNumber()
-			)
-		except Exception:
-			self._temporaryPasteInProgress = False
-			log.exception("Failed to capture the original clipboard before a temporary paste.")
-			# Translators: Error shown when clipboard content cannot be prepared for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		try:
-			partialWriteError: _ClipboardWriteFailedError | None = None
-			# At most two writes: the plain-text fallback has no further fallback of its own.
-			while True:
-				try:
-					temporarySequenceNumber = self._writeSnapshot(
-						request.snapshot,
-						_ClipboardChangeSource.REGISTER_ONLY,
-						expectedSequenceNumber=expectedSequenceNumber,
-						preparedPngDib=request.preparedPngDib,
-					)
-					break
-				except ClipboardSequenceChangedError as error:
-					raise partialWriteError or error
-				except RuntimeError as error:
-					if isinstance(error, _ClipboardWriteFailedError):
-						partialWriteError = error
-					fallback = _getPlainTextPasteRequest(request)
-					if (
-						fallback is None
-						or not isinstance(error, _ClipboardWriteFailedError)
-						and not isinstance(error.__cause__, (OSError, ValueError))
-						or request.expectedFocus is not None
-						and not self._isSameFocus(request.expectedFocus)
-						# Never recapture a partial write as the original clipboard for the fallback.
-						or partialWriteError is not None
-						and (
-							not partialWriteError.sequenceNumber
-							or self.monitor.getSequenceNumber() != partialWriteError.sequenceNumber
-							or self.monitor.getOwnerHandle() != self._getClipboardOwnerHandle()
-						)
-					):
-						raise partialWriteError or error
-					if partialWriteError is not None:
-						expectedSequenceNumber = partialWriteError.sequenceNumber
-					log.debugWarning(
-						"Could not write rich formats; retrying temporary paste as text.",
-						exc_info=True,
-					)
-					request = fallback
-		except ClipboardSequenceChangedError:
-			if retryCount < _TEMPORARY_PASTE_MAX_RETRIES:
-				callLater(
-					_TEMPORARY_PASTE_RETRY_DELAY_MS,
-					self._beginTemporaryPaste,
-					request,
-					retryCount + 1,
-				)
-				return
-			self._temporaryPasteInProgress = False
-			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
-			ui.message(_("The clipboard kept changing. Paste cancelled."))
-			return
-		except _ClipboardWriteFailedError as error:
-			state = _TemporaryPasteState(
-				originalSnapshot,
-				error.sequenceNumber,
-				request.snapshot,
-				allowsPartialWrite=True,
-				originalIsCurrent=originalIsCurrent,
-			)
-			self._temporaryPasteState = state
-			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			log.debugWarning("Failed to write temporary clipboard content.", exc_info=True)
-			# Translators: Error shown when clipboard content cannot be written for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		except Exception:
-			self._temporaryPasteInProgress = False
-			log.exception("Failed to write temporary clipboard content.")
-			# Translators: Error shown when clipboard content cannot be written for pasting.
-			ui.message(_("Could not paste the content"))
-			return
-		state = _TemporaryPasteState(
-			originalSnapshot,
-			temporarySequenceNumber,
-			request.snapshot,
-			originalIsCurrent=originalIsCurrent,
-		)
-		self._temporaryPasteState = state
-		verifiedSequenceNumber = self._getVerifiedTemporarySequenceNumber(state)
-		if verifiedSequenceNumber is None:
-			self._pendingWrites.clear()
-			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			self.monitor.handleClipboardUpdate()
-			# Translators: Error shown when the clipboard keeps changing before a temporary paste.
-			ui.message(_("The clipboard kept changing. Paste cancelled."))
-			return
-		if verifiedSequenceNumber != temporarySequenceNumber:
-			state = replace(state, temporarySequenceNumber=verifiedSequenceNumber)
-			self._temporaryPasteState = state
-		if request.expectedFocus is not None and not self._isSameFocus(request.expectedFocus):
-			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			# Translators: Temporary clipboard paste cancellation because focus changed before pasting.
-			ui.message(_("Focus changed. Paste cancelled."))
-			return
-		try:
-			KeyboardInputGesture.fromName("control+v").send()
-		except Exception:
-			log.exception("Failed to send the temporary clipboard paste gesture.")
-			self._restoreClipboardAfterTemporaryPaste(state, reportFailure=False)
-			# Translators: Error shown when the temporary clipboard paste gesture cannot be sent.
-			ui.message(_("Could not paste the content"))
-			return
-		try:
-			callLater(
-				_TEMPORARY_CLIPBOARD_RESTORE_DELAY,
-				self._restoreClipboardAfterTemporaryPaste,
-				state,
-			)
-		except Exception:
-			log.debugWarning("Could not schedule temporary clipboard restoration.", exc_info=True)
-			self._temporaryPasteState = None
-			self._temporaryPasteInProgress = False
-			# The verified temporary content stays on the clipboard, so it becomes the current content.
-			self._applyLeftoverClipboardContent(state.temporarySequenceNumber, state.temporarySnapshot)
-			# Translators: Error shown after content was pasted but clipboard restoration could not be scheduled.
-			ui.message(_("The content was pasted, but the original clipboard content could not be restored"))
-			return
-		feedbackText = request.feedbackText
-		if request.usedPlainTextFallback:
-			# Translators: Spoken when formatted clipboard content had to be pasted as plain text.
-			feedbackText = _("Pasted as plain text; formatting could not be kept")
-		try:
-			ui.delayedMessage(feedbackText)
-		except Exception:
-			log.debugWarning("Could not delay temporary paste feedback.", exc_info=True)
-			ui.message(feedbackText)
 
 	def _captureOriginalClipboardForTemporaryPaste(self) -> tuple[ClipboardSnapshot | None, int, bool]:
 		"""Capture the restorable clipboard, its sequence number, and whether applying it succeeded."""
@@ -2091,9 +1363,9 @@ class ClipboardController:
 		applied = True
 		sequenceNumber = snapshot.sequenceNumber or self.monitor.getSequenceNumber()
 		imageNormalizationFailed = False
-		if snapshot.contentType in _IMAGE_CONTENT_TYPES and snapshot.imageData is None:
+		if snapshot.contentType in IMAGE_CONTENT_TYPES and snapshot.imageData is None:
 			try:
-				snapshot, _imageWasTooLarge = self._normalizeImageSnapshot(snapshot)
+				snapshot, _imageWasTooLarge = normalizeImageSnapshot(snapshot)
 			except Exception:
 				imageNormalizationFailed = True
 				log.debugWarning(
@@ -2110,7 +1382,7 @@ class ClipboardController:
 			self._pendingWrites.clear()
 			self._awaitingInitialSnapshot = False
 			try:
-				self._applySnapshot(snapshot, _ClipboardChangeSource.RECORD)
+				self._applySnapshot(snapshot, ClipboardChangeSource.RECORD)
 			except Exception:
 				applied = False
 				log.debugWarning("Could not apply the original clipboard before pasting.", exc_info=True)
@@ -2123,144 +1395,10 @@ class ClipboardController:
 			return None, sequenceNumber, applied
 		return snapshot, sequenceNumber, applied
 
-	def _getVerifiedTemporarySequenceNumber(
-		self,
-		state: _TemporaryPasteState,
-	) -> int | None:
-		"""Return a stable sequence only while the temporary clipboard content remains current."""
-		try:
-			expectedOwnerHandle = self._getClipboardOwnerHandle()
-		except RuntimeError:
-			return None
-		if self.monitor.getOwnerHandle() != expectedOwnerHandle:
-			return None
-		# Re-read only if Windows may have synthesized formats after our write.
-		if (
-			state.temporarySequenceNumber
-			and self.monitor.getSequenceNumber() == state.temporarySequenceNumber
-		):
-			return state.temporarySequenceNumber
-		temporarySnapshot = self.monitor.readNow()
-		if (
-			not _isTemporarySnapshot(temporarySnapshot, state)
-			or self.monitor.getOwnerHandle() != expectedOwnerHandle
-			or self.monitor.getSequenceNumber() != temporarySnapshot.sequenceNumber
-		):
-			return None
-		return temporarySnapshot.sequenceNumber
-
-	def _restoreClipboardAfterTemporaryPaste(
-		self,
-		state: _TemporaryPasteState,
-		*,
-		reportFailure: bool = True,
-	) -> None:
-		"""Restore the original clipboard, then fall back to newest history."""
-		if self._temporaryPasteState is not state:
-			return
-		ownedSequenceNumber = state.temporarySequenceNumber
-		# Known content at ownedSequenceNumber, and whether it was only registered rather than applied.
-		ownedSnapshot: ClipboardSnapshot | None = None
-		ownedContentNeedsApply = True
-		try:
-			verifiedSequenceNumber = self._getVerifiedTemporarySequenceNumber(state)
-			if verifiedSequenceNumber is not None:
-				ownedSequenceNumber = verifiedSequenceNumber
-				# A partial temporary write left unknown content under our sequence number, so it is re-read.
-				ownedSnapshot = None if state.allowsPartialWrite else state.temporarySnapshot
-			elif (
-				not state.allowsPartialWrite
-				or not ownedSequenceNumber
-				or self.monitor.getSequenceNumber() != ownedSequenceNumber
-			):
-				# Unverified content under our registered sequence number is re-read instead of trusted.
-				self._distrustRegisteredClipboardState(ownedSequenceNumber, reread=True)
-				return
-			try:
-				if self._restoreOriginalClipboardAfterTemporaryPaste(state, ownedSequenceNumber):
-					return
-			except _ClipboardWriteFailedError as error:
-				ownedSequenceNumber = error.sequenceNumber
-				ownedSnapshot = None
-				# A failed exact restore is registered only, while a failed applied restore was applied.
-				ownedContentNeedsApply = state.originalIsCurrent
-			if self.monitor.getSequenceNumber() != ownedSequenceNumber:
-				return
-			try:
-				latestItem = self.storage.getLatestHistoryItem()
-			except StorageError:
-				latestItem = None
-				log.debugWarning("Could not load the newest clipboard history item.", exc_info=True)
-			if latestItem is not None:
-				try:
-					self._writeSnapshot(
-						self._snapshotFromItem(latestItem),
-						_ClipboardChangeSource.NO_RECORD,
-						expectedSequenceNumber=ownedSequenceNumber,
-					)
-					return
-				except ClipboardSequenceChangedError:
-					return
-				except _ClipboardWriteFailedError as error:
-					ownedSequenceNumber = error.sequenceNumber
-					ownedSnapshot = None
-					ownedContentNeedsApply = False
-					log.debugWarning("Could not restore the newest clipboard history item.", exc_info=True)
-				except Exception:
-					log.debugWarning("Could not restore the newest clipboard history item.", exc_info=True)
-			if ownedContentNeedsApply:
-				# Content written only as our own remains on the clipboard, so it becomes the current content.
-				self._applyLeftoverClipboardContent(ownedSequenceNumber, ownedSnapshot)
-			if reportFailure and self.monitor.getSequenceNumber() == ownedSequenceNumber:
-				# Translators: Error shown after content was pasted but no clipboard content could be restored.
-				ui.message(
-					_("The content was pasted, but the original clipboard content could not be restored"),
-				)
-		finally:
-			if self._temporaryPasteState is state:
-				self._temporaryPasteState = None
-				self._temporaryPasteInProgress = False
-
-	def _restoreOriginalClipboardAfterTemporaryPaste(
-		self,
-		state: _TemporaryPasteState,
-		expectedSequenceNumber: int,
-	) -> bool:
-		"""Try to restore every retained format captured before a temporary paste."""
-		snapshot = state.originalSnapshot
-		if snapshot is None:
-			return False
-		# Current state still shows the original, so an exact restore only needs registering.
-		source = (
-			_ClipboardChangeSource.REGISTER_ONLY
-			if state.originalIsCurrent
-			else _ClipboardChangeSource.NO_RECORD
-		)
-		try:
-			if snapshot.contentType == ClipboardContentType.EMPTY:
-				_restoredSequenceNumber = self._clearClipboard(
-					source=source,
-					expectedSequenceNumber=expectedSequenceNumber,
-				)
-			else:
-				_restoredSequenceNumber = self._writeSnapshot(
-					snapshot,
-					source,
-					expectedSequenceNumber=expectedSequenceNumber,
-				)
-			return True
-		except ClipboardSequenceChangedError:
-			return False
-		except _ClipboardWriteFailedError:
-			raise
-		except Exception:
-			log.debugWarning("Could not restore the original clipboard snapshot.", exc_info=True)
-			return False
-
 	def _writeClipboardText(
 		self,
 		text: str,
-		source: _ClipboardChangeSource,
+		source: ClipboardChangeSource,
 		expectedSequenceNumber: int | None = None,
 		*,
 		canIncludeInHistory: bool = True,
@@ -2268,7 +1406,7 @@ class ClipboardController:
 		historyPreviousText: str | None = None,
 	) -> int:
 		"""Write non-empty text and synchronously apply its source semantics."""
-		text = _normalizeUnicodeText(text)
+		text = normalizeUnicodeText(text)
 		if not text:
 			raise ValueError(text)
 		try:
@@ -2290,7 +1428,7 @@ class ClipboardController:
 	def _writeSnapshot(
 		self,
 		snapshot: ClipboardSnapshot,
-		source: _ClipboardChangeSource,
+		source: ClipboardChangeSource,
 		*,
 		expectedSequenceNumber: int | None = None,
 		preparedPngDib: bytes | None = None,
@@ -2316,20 +1454,20 @@ class ClipboardController:
 				) from error
 			raise
 		except ClipboardWriteError as error:
-			if source is _ClipboardChangeSource.REGISTER_ONLY:
+			if source is ClipboardChangeSource.REGISTER_ONLY:
 				self._registerOwnWrite(error.sequenceNumber)
 			else:
 				self._pendingWrites = {error.sequenceNumber} if error.sequenceNumber else set()
 				self._pendingWritesWereApplied = True
 				self._applyFailedLocalWrite(error.sequenceNumber)
 			self.monitor.handleClipboardUpdate()
-			raise _ClipboardWriteFailedError(error.sequenceNumber) from error
+			raise ClipboardWriteFailedError(error.sequenceNumber) from error
 		except (OSError, ValueError) as error:
 			self.monitor.handleClipboardUpdate()
 			# Translators: Error shown when supported formats cannot be written to the clipboard.
 			raise RuntimeError(_("Could not write to the system clipboard")) from error
 		self._awaitingInitialSnapshot = False
-		if source is _ClipboardChangeSource.REGISTER_ONLY:
+		if source is ClipboardChangeSource.REGISTER_ONLY:
 			self._registerOwnWrite(sequenceNumber)
 			return sequenceNumber
 		appliedSnapshot = replace(snapshot, sequenceNumber=sequenceNumber)
@@ -2362,7 +1500,7 @@ class ClipboardController:
 			if knownSnapshot is not None:
 				self._applySnapshot(
 					replace(knownSnapshot, sequenceNumber=sequenceNumber),
-					_ClipboardChangeSource.NO_RECORD,
+					ClipboardChangeSource.NO_RECORD,
 				)
 				return
 			snapshot = self.monitor.readNow()
@@ -2371,7 +1509,7 @@ class ClipboardController:
 				and snapshot.sequenceNumber == sequenceNumber
 				and self.monitor.getSequenceNumber() == sequenceNumber
 			):
-				self._applySnapshot(snapshot, _ClipboardChangeSource.NO_RECORD)
+				self._applySnapshot(snapshot, ClipboardChangeSource.NO_RECORD)
 				return
 		except Exception:
 			log.debugWarning("Could not apply clipboard content left by a temporary paste.", exc_info=True)
@@ -2399,14 +1537,14 @@ class ClipboardController:
 				and snapshot.sequenceNumber == sequenceNumber
 				and self.monitor.getSequenceNumber() == sequenceNumber
 			):
-				self._applySnapshot(snapshot, _ClipboardChangeSource.NO_RECORD)
+				self._applySnapshot(snapshot, ClipboardChangeSource.NO_RECORD)
 		except Exception:
 			log.debugWarning("Could not apply clipboard content left by a failed write.", exc_info=True)
 
 	def _clearClipboard(
 		self,
 		*,
-		source: _ClipboardChangeSource = _ClipboardChangeSource.NO_RECORD,
+		source: ClipboardChangeSource = ClipboardChangeSource.NO_RECORD,
 		expectedSequenceNumber: int | None = None,
 	) -> int:
 		"""Clear the clipboard through the monitor and apply local semantics."""
@@ -2431,7 +1569,7 @@ class ClipboardController:
 			# Translators: Error shown when the system clipboard cannot be cleared.
 			raise RuntimeError(_("Could not clear the system clipboard")) from error
 		self._awaitingInitialSnapshot = False
-		if source is _ClipboardChangeSource.REGISTER_ONLY:
+		if source is ClipboardChangeSource.REGISTER_ONLY:
 			self._registerOwnWrite(sequenceNumber)
 			return sequenceNumber
 		self._pendingWrites = {sequenceNumber}
@@ -2575,7 +1713,7 @@ class ClipboardController:
 		ui.message(
 			_("{index}. {summary}").format(
 				index=newIndex + 1,
-				summary=self._formatItemSummary(item),
+				summary=formatItemSummary(item),
 			),
 		)
 
@@ -2625,249 +1763,6 @@ class ClipboardController:
 		"""Load displayable content by stable identifier without payload BLOBs."""
 		with self._userStorageErrors(reraiseItemNotFound=True):
 			return self.storage.getItemContentById(self._storageCategory(category), itemId)
-
-	def _formatItemSummary(self, item: ClipboardItemSummary) -> str:
-		"""Return a concise content summary without a type prefix."""
-		if item.contentType in _TEXT_ITEM_TYPES:
-			if item.textPreview:
-				return item.textPreview
-			# Translators: Clipboard list summary when text contains no visible characters.
-			return _("No visible text")
-		if item.contentType == ClipboardItemType.IMAGE:
-			return self._formatImageSummary(item)
-		names = ", ".join(item.filesPreview)
-		if item.fileCount > len(item.filesPreview):
-			# Translators: Clipboard file summary when additional file names are omitted.
-			return _("{names}, …").format(names=names)
-		return names
-
-	def _formatImageSummary(self, item: ClipboardItemSummary) -> str:
-		# Translators: Concise image metadata used inside clipboard list labels.
-		return _("{width} by {height} pixels, {size}").format(
-			width=item.imageWidth or 0,
-			height=item.imageHeight or 0,
-			size=self._formatDataSize(item.imageByteCount),
-		)
-
-	def _formatImageDetails(self, item: ClipboardItemContent) -> str:
-		# Translators: Multiline details shown for a stored clipboard image.
-		return _(
-			"Image\nDimensions: {width} by {height} pixels\nColor depth: {depth} bits\nStored size: {size}",
-		).format(
-			width=item.imageWidth or 0,
-			height=item.imageHeight or 0,
-			depth=item.imageBitDepth or 0,
-			size=self._formatDataSize(item.imageByteCount),
-		)
-
-	def _formatDataSize(self, byteCount: int) -> str:
-		"""Return a compact localized binary-data size."""
-		if byteCount >= 1024 * 1024 * 1024 * 1024:
-			# Translators: Binary data size in terabytes.
-			return _("{size:.1f} TB").format(size=byteCount / (1024 * 1024 * 1024 * 1024))
-		if byteCount >= 1024 * 1024 * 1024:
-			# Translators: Binary data size in gigabytes.
-			return _("{size:.1f} GB").format(size=byteCount / (1024 * 1024 * 1024))
-		if byteCount >= 1024 * 1024:
-			# Translators: Binary data size in megabytes.
-			return _("{size:.1f} MB").format(size=byteCount / (1024 * 1024))
-		if byteCount >= 1024:
-			# Translators: Binary data size in kilobytes.
-			return _("{size:.1f} KB").format(size=byteCount / 1024)
-		return ngettext(
-			# Translators: Binary data size in bytes.
-			"{count} byte",
-			"{count} bytes",
-			byteCount,
-		).format(count=byteCount)
-
-	def _formatTextStatisticsSummary(self, summary: str, statistics: TextStatistics) -> str:
-		"""Append exact, non-zero Unicode statistics to a positioned text summary."""
-		details = [
-			ngettext(
-				# Translators: Number of user-perceived Unicode characters including whitespace; line breaks are excluded.
-				"{count} character (including whitespace)",
-				"{count} characters (including whitespace)",
-				statistics.characterCount,
-			).format(count=statistics.characterCount),
-			ngettext(
-				# Translators: Number of user-perceived Unicode characters excluding whitespace and line breaks.
-				"{count} character (excluding whitespace)",
-				"{count} characters (excluding whitespace)",
-				statistics.nonWhitespaceCharacterCount,
-			).format(count=statistics.nonWhitespaceCharacterCount),
-		]
-		attributes = []
-		if statistics.hanCharacterCount:
-			attributes.append(
-				ngettext(
-					# Translators: Number of Han ideographic code points in clipboard text.
-					"{count} Han character",
-					"{count} Han characters",
-					statistics.hanCharacterCount,
-				).format(count=statistics.hanCharacterCount),
-			)
-		if statistics.punctuationCount:
-			attributes.append(
-				ngettext(
-					# Translators: Number of Unicode punctuation grapheme clusters in clipboard text.
-					"{count} punctuation mark",
-					"{count} punctuation marks",
-					statistics.punctuationCount,
-				).format(count=statistics.punctuationCount),
-			)
-		if statistics.symbolCount:
-			attributes.append(
-				ngettext(
-					# Translators: Number of Unicode symbol grapheme clusters in clipboard text.
-					"{count} symbol",
-					"{count} symbols",
-					statistics.symbolCount,
-				).format(count=statistics.symbolCount),
-			)
-		# Translators: Separator between exact clipboard text statistics.
-		detailsText = _(", ").join(details)
-		if attributes:
-			# Translators: Selected character attributes follow the main, additive text statistics.
-			detailsText = _("{details}; including {attributes}").format(
-				details=detailsText,
-				attributes=_(", ").join(attributes),
-			)
-		return ngettext(
-			# Translators: Total explicit lines and exact statistics after the clipboard type and current position.
-			"{summary}, {count} line in total; {details}",
-			"{summary}, {count} lines in total; {details}",
-			statistics.lineCount,
-		).format(
-			summary=summary,
-			count=statistics.lineCount,
-			details=detailsText,
-		)
-
-	def _formatCurrentSummary(self, snapshot: ClipboardSnapshot) -> str:
-		"""Return a concise description of the current system clipboard."""
-		if snapshot.contentType == ClipboardContentType.TEXT:
-			# Translators: Type-only summary of plain text before exact statistics are available.
-			return _("Plain text")
-		if snapshot.contentType == ClipboardContentType.FORMATTED_TEXT:
-			# Translators: Type-only summary of formatted text before exact statistics are available.
-			return _("Formatted text")
-		if snapshot.contentType == ClipboardContentType.TEXT_AND_IMAGE:
-			# Translators: Type of clipboard content containing both text and an image.
-			return self._formatCurrentImageSummary(snapshot, _("Text and image"))
-		if snapshot.contentType == ClipboardContentType.FILES:
-			itemCount = len(snapshot.files)
-			if snapshot.filesWereCut:
-				return ngettext(
-					# Translators: Number of top-level file system items cut to the clipboard.
-					"Cut files: {count} item",
-					"Cut files: {count} items",
-					itemCount,
-				).format(count=itemCount)
-			if snapshot.filesWereLinked:
-				return ngettext(
-					# Translators: Number of top-level file system items linked from the clipboard.
-					"Linked files: {count} item",
-					"Linked files: {count} items",
-					itemCount,
-				).format(count=itemCount)
-			return ngettext(
-				# Translators: Number of top-level file system items copied to the clipboard.
-				"Copied files: {count} item",
-				"Copied files: {count} items",
-				itemCount,
-			).format(count=itemCount)
-		if snapshot.contentType == ClipboardContentType.IMAGE:
-			# Translators: Type of image-only clipboard content.
-			return self._formatCurrentImageSummary(snapshot, _("Image"))
-		if snapshot.contentType == ClipboardContentType.PROTECTED:
-			# Translators: Summary for clipboard content excluded from monitoring by its source application.
-			return _("Protected clipboard content is not available")
-		if snapshot.contentType == ClipboardContentType.EMPTY:
-			# Translators: Summary used when the system clipboard is empty.
-			return _("Clipboard is empty")
-		# Translators: Summary used for clipboard data this add-on cannot navigate.
-		return _("Unsupported clipboard content")
-
-	def _formatCurrentImageSummary(self, snapshot: ClipboardSnapshot, contentType: str) -> str:
-		"""Return image metadata and trustworthy pixel properties for the current clipboard."""
-		if not snapshot.imageWidth or not snapshot.imageHeight:
-			return contentType
-		if snapshot.imageWidth == snapshot.imageHeight:
-			# Translators: Orientation of an image whose width and height are equal.
-			orientation = _("square")
-		elif snapshot.imageWidth > snapshot.imageHeight:
-			# Translators: Orientation of an image wider than it is tall.
-			orientation = _("landscape")
-		else:
-			# Translators: Orientation of an image taller than it is wide.
-			orientation = _("portrait")
-		# Translators: Clipboard image type, dimensions, and orientation.
-		summary = _("{summary}: {width} by {height} pixels, {orientation}").format(
-			summary=contentType,
-			width=snapshot.imageWidth,
-			height=snapshot.imageHeight,
-			orientation=orientation,
-		)
-		if snapshot.imageTransparentPercentage == 100:
-			# Translators: Exact image property indicating that every pixel is fully transparent.
-			return _("{summary}; fully transparent").format(summary=summary)
-		if snapshot.imageColor is not None and snapshot.imageColorPercentage == 100:
-			# Translators: Exact image property indicating that every pixel has the same color.
-			return _("{summary}; solid {color}").format(
-				summary=summary,
-				color=_CANONICAL_SOLID_COLOR_NAMES.get(snapshot.imageColor)
-				or colors.RGB(*snapshot.imageColor).name,
-			)
-		if snapshot.imageTransparentPercentage:
-			# Translators: Image summary followed by the percentage of fully transparent pixels.
-			return _("{summary}; fully transparent pixels: {percentage}%").format(
-				summary=summary,
-				percentage=f"{snapshot.imageTransparentPercentage:g}",
-			)
-		if snapshot.imageColor is not None and snapshot.imageColorPercentage:
-			# Translators: Image summary followed by the percentage of black or white pixels.
-			return _("{summary}; {color} pixels: {percentage}%").format(
-				summary=summary,
-				color=_CANONICAL_SOLID_COLOR_NAMES.get(snapshot.imageColor)
-				or colors.RGB(*snapshot.imageColor).name,
-				percentage=f"{snapshot.imageColorPercentage:g}",
-			)
-		return summary
-
-	def _formatPutOnClipboardConfirmation(self, item: ClipboardItem) -> str:
-		"""Return a type-specific confirmation after putting a stored entry on the clipboard."""
-		if item.contentType == ClipboardItemType.FILES:
-			return ngettext(
-				# Translators: Confirmation after putting one or multiple files on the clipboard.
-				"{count} file put on the clipboard",
-				"{count} files put on the clipboard",
-				len(item.files),
-			).format(count=len(item.files))
-		if item.contentType == ClipboardItemType.IMAGE:
-			# Translators: Confirmation after putting an image on the clipboard.
-			return _("Image put on the clipboard")
-		if item.contentType == ClipboardItemType.TEXT_AND_IMAGE:
-			# Translators: Confirmation after putting mixed text and image content on the clipboard.
-			return _("Text and image put on the clipboard")
-		# Translators: Confirmation after putting plain or formatted text on the clipboard.
-		return _("Text put on the clipboard")
-
-	def _formatFileNavigationText(self, files: tuple[str, ...]) -> str:
-		"""Return one navigable line for each file path on the clipboard."""
-		lines: list[str] = []
-		for index, filePath in enumerate(files, start=1):
-			name = Path(filePath).name or filePath
-			# Translators: Navigable clipboard file entry with name, position, and full path.
-			line = _("{name}, item {index} of {count}, {path}").format(
-				name=name,
-				index=index,
-				count=len(files),
-				path=filePath,
-			)
-			lines.append(line)
-		# Translators: Summary used when a file-list clipboard format contains no paths.
-		return "\n".join(lines) or _("No files in clipboard")
 
 	def _formatItemError(self, error: Exception) -> str:
 		"""Return a translated description for a storage operation error."""
@@ -2977,7 +1872,7 @@ class ClipboardController:
 		canUpload = self._canUpload
 		# During a temporary paste, current state keeps the original while the clipboard holds other content.
 		if (
-			self._temporaryPasteState is not None
+			self._paster.hasPendingRestore
 			or self.monitor.getSequenceNumber() != self._lastAppliedSequenceNumber
 		):
 			snapshot = self.monitor.readNow(includeRichFormats=False, includeImages=False)
@@ -3075,7 +1970,7 @@ class ClipboardController:
 				# Translators: Cloud paste cancellation because another application changed the clipboard.
 				ui.message(_("Clipboard changed. Tiantan Cloud Clipboard paste was cancelled."))
 				return
-			keyReleaseState = _waitForTriggerKeysReleased(
+			keyReleaseState = waitForTriggerKeysReleased(
 				triggerKeyCodes,
 				keyReleaseDeadline,
 				lambda: self._sendTiantanPasteGesture(

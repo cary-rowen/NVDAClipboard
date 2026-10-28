@@ -795,7 +795,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 		)
 		namespace = {
 			"ClipboardSnapshot": clipboardMonitor.ClipboardSnapshot,
-			"_ClipboardChangeSource": object,
+			"ClipboardChangeSource": object,
 			"ClipboardSequenceChangedError": clipboardMonitor.ClipboardSequenceChangedError,
 			"ClipboardWriteError": clipboardMonitor.ClipboardWriteError,
 			"_": lambda message: message,

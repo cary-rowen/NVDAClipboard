@@ -22,6 +22,11 @@ def normalizeNewlinesForWin32(text: str) -> str:
 	return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
 
 
+def normalizeUnicodeText(text: str) -> str:
+	"""Replace isolated UTF-16 surrogate code units at the clipboard boundary."""
+	return text.encode("utf-16-le", errors="surrogatepass").decode("utf-16-le", errors="replace")
+
+
 def getPngImageInfo(data: bytes) -> tuple[int, int, int] | None:
 	"""Return PNG image information after validating its complete chunk stream."""
 	if len(data) < 45 or data[:8] != b"\x89PNG\r\n\x1a\n":

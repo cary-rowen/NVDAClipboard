@@ -21,6 +21,12 @@ class ClipboardItemType(StrEnum):
 	FILES = "files"
 
 
+# Stored entry types that carry navigable clipboard text.
+TEXT_ITEM_TYPES = frozenset(
+	{ClipboardItemType.PLAIN_TEXT, ClipboardItemType.FORMATTED_TEXT, ClipboardItemType.TEXT_AND_IMAGE},
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ClipboardItem:
 	"""A complete immutable clipboard entry with image payloads normalized to PNG."""
