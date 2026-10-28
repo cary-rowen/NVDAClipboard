@@ -7,16 +7,38 @@
 
 from __future__ import annotations
 
+from importlib import import_module
+import inspect
 import re
 import tracemalloc
+from types import ModuleType, SimpleNamespace
+from typing import Any
 import unittest
+from unittest.mock import Mock
 
 from tests._module_loader import createAddonPackage, loadAddonModule
 
 
 _PACKAGE_NAME = "nvdaClipboardSearchTests"
 createAddonPackage(_PACKAGE_NAME)
-search = loadAddonModule(f"{_PACKAGE_NAME}.textSearch")
+search = loadAddonModule(
+	f"{_PACKAGE_NAME}.textSearch",
+	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
+)
+
+
+def _loadSearchWithoutPrivateRegexApi(
+	packageName: str,
+	privateModules: dict[str, object],
+) -> tuple[Any, Mock]:
+	"""Load a fresh search module while the given ``re`` private modules are replaced, plus its log."""
+	createAddonPackage(packageName)
+	log = Mock()
+	module = loadAddonModule(
+		f"{packageName}.textSearch",
+		injectedModules={"logHandler": SimpleNamespace(log=log), **privateModules},
+	)
+	return module, log
 
 
 class SearchTests(unittest.TestCase):
@@ -113,6 +135,54 @@ class SearchTests(unittest.TestCase):
 						if expected is not None:
 							self.assertEqual(expected.span(), actual.span())
 							self.assertEqual(expected.groups(), actual.groups())
+
+	def testPrivateRegexApiIsAvailableOnRunningPython(self) -> None:
+		"""Fail loudly when a Python upgrade removes a private ``re`` name used by selection matching."""
+		usedNames = {
+			moduleName: set(
+				re.findall(rf"\b{moduleName}\.(\w+)", inspect.getsource(search._matchWithPrivateRegexApi)),
+			)
+			for moduleName in ("_parser", "_compiler")
+		}
+		self.assertTrue(usedNames["_parser"])
+		self.assertTrue(usedNames["_compiler"])
+		self.assertLessEqual(usedNames["_parser"], set(search.PRIVATE_PARSER_NAMES))
+		self.assertLessEqual(usedNames["_compiler"], set(search.PRIVATE_COMPILER_NAMES))
+		for moduleName, names in (
+			("re._parser", search.PRIVATE_PARSER_NAMES),
+			("re._compiler", search.PRIVATE_COMPILER_NAMES),
+		):
+			module = import_module(moduleName)
+			for name in names:
+				with self.subTest(module=module.__name__, name=name):
+					self.assertTrue(hasattr(module, name))
+		self.assertIsNone(search._privateRegexError)
+		self.assertIsNotNone(search._privateRegexModules)
+
+	def testRegexSelectionFallsBackWithoutPrivateRegexApi(self) -> None:
+		"""Match the bare selection and log once when a private ``re`` module or name is missing."""
+		compilerWithoutSimple = ModuleType("re._compiler")
+		setattr(compilerWithoutSimple, "compile", Mock())
+		for packageName, privateModules, errorType in (
+			("nvdaClipboardSearchNoParserTests", {"re._parser": None}, ImportError),
+			("nvdaClipboardSearchOldCompilerTests", {"re._compiler": compilerWithoutSimple}, AttributeError),
+		):
+			with self.subTest(errorType=errorType.__name__):
+				fallbackSearch, log = _loadSearchWithoutPrivateRegexApi(packageName, privateModules)
+				self.assertIsNone(fallbackSearch._privateRegexModules)
+				self.assertIsInstance(fallbackSearch._privateRegexError, errorType)
+				self._assertFallbackMatches(fallbackSearch, log)
+
+	def _assertFallbackMatches(self, module: Any, log: Mock) -> None:
+		"""Check that ``module`` matches selections with ``fullmatch`` and logs the fallback exactly once."""
+		text = "abc suffix"
+		match = module.matchRegexSelection(re.compile(r"a(b)c"), text, 0, 3)
+		self.assertIsNotNone(match)
+		self.assertEqual((0, 3), match.span())
+		self.assertEqual(("b",), match.groups())
+		self.assertIsNone(module.matchRegexSelection(re.compile(r"(?=abc suffix)abc"), text, 0, 3))
+		self.assertIsNotNone(module.matchRegexSelection(re.compile(r"abc suffix"), text, 0, len(text)))
+		log.debugWarning.assert_called_once()
 
 	def testPreviousLiteralMatch(self) -> None:
 		"""Find the nearest previous literal across case, Unicode, and chunk boundaries."""

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import re
+from typing import override
 
 import addonHandler
+from gui import guiHelper
 from gui.message import displayDialogAsModal
 import textUtils
 import wx
@@ -21,7 +23,47 @@ from ..textSearch import findPreviousLiteralMatch, matchRegexSelection
 addonHandler.initTranslation()
 
 
-class _FindDialog(wx.Dialog):
+class _TextSearchDialog(wx.Dialog):
+	"""Lay out the controls shared by the find and replace dialogs."""
+
+	def __init__(
+		self,
+		parent: wx.Window,
+		*,
+		title: str,
+		findLabel: str,
+		findText: str,
+		matchCaseLabel: str,
+		matchCase: bool,
+	) -> None:
+		"""Create the search field, extra fields, options, and buttons in Tab order."""
+		super().__init__(parent, title=title)
+		mainSizer = wx.BoxSizer(wx.VERTICAL)
+		sHelper = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
+		self.findCtrl: wx.TextCtrl = sHelper.addLabeledControl(findLabel, wx.TextCtrl, value=findText)
+		self._addTextFields(sHelper)
+		self.matchCaseCheckBox: wx.CheckBox = sHelper.addItem(wx.CheckBox(self, label=matchCaseLabel))
+		self.matchCaseCheckBox.SetValue(matchCase)
+		self._addOptions(sHelper)
+		self._addButtons(sHelper)
+		mainSizer.Add(sHelper.sizer, border=guiHelper.BORDER_FOR_DIALOGS, flag=wx.ALL | wx.EXPAND)
+		self.SetSizerAndFit(mainSizer)
+		self.SetMinSize((400, self.GetBestSize().height))
+		self.findCtrl.SetFocus()
+
+	def _addTextFields(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add text fields that follow the search field; none by default."""
+
+	def _addOptions(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the check boxes that follow the case option."""
+		raise NotImplementedError
+
+	def _addButtons(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the buttons that dismiss the dialog."""
+		raise NotImplementedError
+
+
+class _FindDialog(_TextSearchDialog):
 	"""Collect literal text search options for manager content."""
 
 	def __init__(
@@ -35,35 +77,29 @@ class _FindDialog(wx.Dialog):
 			parent,
 			# Translators: Title of the text search dialog in the clipboard manager.
 			title=_("Find Text"),
-		)
-		mainSizer = wx.BoxSizer(wx.VERTICAL)
-		findLabel = wx.StaticText(
-			self,
 			# Translators: Label for the text to find in clipboard manager content.
-			label=_("&Find:"),
-		)
-		self.findCtrl = wx.TextCtrl(self, value=findText)
-		mainSizer.Add(findLabel, flag=wx.LEFT | wx.RIGHT | wx.TOP, border=10)
-		mainSizer.Add(self.findCtrl, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
-		self.matchCaseCheckBox = wx.CheckBox(
-			self,
+			findLabel=_("&Find:"),
+			findText=findText,
 			# Translators: Checkbox enabling case-sensitive text search.
-			label=_("Match &case"),
+			matchCaseLabel=_("Match &case"),
+			matchCase=matchCase,
 		)
-		self.matchCaseCheckBox.SetValue(matchCase)
-		self.backwardCheckBox = wx.CheckBox(
-			self,
-			# Translators: Checkbox selecting backward text search.
-			label=_("Search &backward"),
+
+	@override
+	def _addOptions(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the search direction option."""
+		self.backwardCheckBox: wx.CheckBox = sHelper.addItem(
+			wx.CheckBox(
+				self,
+				# Translators: Checkbox selecting backward text search.
+				label=_("Search &backward"),
+			),
 		)
-		mainSizer.Add(self.matchCaseCheckBox, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
-		mainSizer.Add(self.backwardCheckBox, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
-		buttonSizer = self.CreateSeparatedButtonSizer(wx.OK | wx.CANCEL)
-		if buttonSizer is not None:
-			mainSizer.Add(buttonSizer, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
-		self.SetSizerAndFit(mainSizer)
-		self.SetMinSize((400, self.GetBestSize().height))
-		self.findCtrl.SetFocus()
+
+	@override
+	def _addButtons(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the standard OK and Cancel buttons; OK is the default button."""
+		sHelper.addDialogDismissButtons(wx.OK | wx.CANCEL, separated=True)
 
 	def getValues(self) -> tuple[str, bool, bool]:
 		"""Return the entered text, case option, and search direction."""
@@ -74,7 +110,7 @@ class _FindDialog(wx.Dialog):
 		)
 
 
-class _ReplaceDialog(wx.Dialog):
+class _ReplaceDialog(_TextSearchDialog):
 	"""Collect literal or regular-expression replacement options."""
 
 	def __init__(
@@ -88,63 +124,53 @@ class _ReplaceDialog(wx.Dialog):
 			parent,
 			# Translators: Title of the text replacement dialog.
 			title=_("Replace Text"),
-		)
-		mainSizer = wx.BoxSizer(wx.VERTICAL)
-		findLabel = wx.StaticText(
-			self,
 			# Translators: Label for the text to find in the replacement dialog.
-			label=_("&Find:"),
-		)
-		self.findCtrl = wx.TextCtrl(self, value=findText)
-		mainSizer.Add(findLabel, flag=wx.LEFT | wx.RIGHT | wx.TOP, border=10)
-		mainSizer.Add(self.findCtrl, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
-
-		replaceLabel = wx.StaticText(
-			self,
-			# Translators: Label for replacement text in the replacement dialog.
-			label=_("&Replace with:"),
-		)
-		self.replaceCtrl = wx.TextCtrl(self)
-		mainSizer.Add(replaceLabel, flag=wx.LEFT | wx.RIGHT, border=10)
-		mainSizer.Add(self.replaceCtrl, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
-
-		self.matchCaseCheckBox = wx.CheckBox(
-			self,
+			findLabel=_("&Find:"),
+			findText=findText,
 			# Translators: Checkbox enabling case-sensitive replacement matching.
-			label=_("Match &case"),
+			matchCaseLabel=_("Match &case"),
+			matchCase=matchCase,
 		)
-		self.matchCaseCheckBox.SetValue(matchCase)
-		mainSizer.Add(self.matchCaseCheckBox, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
-		self.regexCheckBox = wx.CheckBox(
-			self,
-			# Translators: Checkbox enabling regular expressions in replacement.
-			label=_("Use regular e&xpressions"),
-		)
-		mainSizer.Add(self.regexCheckBox, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
-		buttonSizer = wx.StdDialogButtonSizer()
-		replaceButton = wx.Button(
+	@override
+	def _addTextFields(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the replacement text field after the search field."""
+		self.replaceCtrl: wx.TextCtrl = sHelper.addLabeledControl(
+			# Translators: Label for replacement text in the replacement dialog.
+			_("&Replace with:"),
+			wx.TextCtrl,
+		)
+
+	@override
+	def _addOptions(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add the regular expression option."""
+		self.regexCheckBox: wx.CheckBox = sHelper.addItem(
+			wx.CheckBox(
+				self,
+				# Translators: Checkbox enabling regular expressions in replacement.
+				label=_("Use regular e&xpressions"),
+			),
+		)
+
+	@override
+	def _addButtons(self, sHelper: guiHelper.BoxSizerHelper) -> None:
+		"""Add Replace, Replace All, and Cancel without a default button."""
+		buttonHelper = guiHelper.ButtonHelper(wx.HORIZONTAL)
+		replaceButton = buttonHelper.addButton(
 			self,
 			wx.ID_APPLY,
 			# Translators: Button replacing one text match.
 			_("Re&place"),
 		)
-		replaceAllButton = wx.Button(
+		buttonHelper.addButton(
 			self,
 			wx.ID_OK,
 			# Translators: Button replacing all text matches.
 			_("Replace &All"),
 		)
-		cancelButton = wx.Button(self, wx.ID_CANCEL)
-		buttonSizer.AddButton(replaceButton)
-		buttonSizer.AddButton(replaceAllButton)
-		buttonSizer.AddButton(cancelButton)
-		buttonSizer.Realize()
+		buttonHelper.addButton(self, wx.ID_CANCEL)
 		replaceButton.Bind(wx.EVT_BUTTON, self._onReplace)
-		mainSizer.Add(buttonSizer, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
-		self.SetSizerAndFit(mainSizer)
-		self.SetMinSize((400, self.GetBestSize().height))
-		self.findCtrl.SetFocus()
+		sHelper.addDialogDismissButtons(buttonHelper, separated=True)
 
 	def getValues(self) -> tuple[str, str, bool, bool]:
 		"""Return the search text, replacement, and matching options."""

@@ -48,8 +48,10 @@ def trimLeadingAndTrailingSpaces(text: str) -> str:
 
 
 def replaceLineBreaksWithSpaces(text: str) -> str:
-	"""Replace all line breaks with single spaces."""
-	return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+	"""Replace line breaks with single spaces, keeping a final line break like the line transforms."""
+	ending = next((ending for ending in ("\r\n", "\n", "\r") if text.endswith(ending)), "")
+	text = text[: len(text) - len(ending)]
+	return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ") + ending
 
 
 def segmentChineseWords(text: str) -> str:

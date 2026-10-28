@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import addonHandler
+from gui import guiHelper
 import wx
 
 if TYPE_CHECKING:
@@ -18,6 +19,15 @@ if TYPE_CHECKING:
 
 
 addonHandler.initTranslation()
+
+
+def _associateTexts(label: wx.StaticText, value: wx.StaticText) -> wx.BoxSizer:
+	"""Stack a static label above the static text it describes."""
+	sizer = wx.BoxSizer(wx.VERTICAL)
+	sizer.Add(label)
+	sizer.AddSpacer(guiHelper.SPACE_BETWEEN_ASSOCIATED_CONTROL_VERTICAL)
+	sizer.Add(value, flag=wx.EXPAND)
+	return sizer
 
 
 class TiantanDialog(wx.Dialog):
@@ -48,89 +58,92 @@ class TiantanDialog(wx.Dialog):
 		self.CentreOnParent()
 
 	def _makeUi(self) -> None:
+		"""Create the status texts, account panels, and Close button in Tab order."""
 		self._mainSizer = wx.BoxSizer(wx.VERTICAL)
+		sHelper = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
 		statusLabel = wx.StaticText(
 			self,
 			# Translators: Label for the current Tiantan Cloud Clipboard status.
 			label=_("Status:"),
 		)
-		self._mainSizer.Add(statusLabel, flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, border=10)
 		self.statusText = wx.StaticText(self, label="")
-		self._mainSizer.Add(self.statusText, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		sHelper.addItem(_associateTexts(statusLabel, self.statusText), flag=wx.EXPAND)
 		self.privacyText = wx.StaticText(
 			self,
 			# Translators: Description shown in the Tiantan Cloud Clipboard dialog.
 			label=_("Synchronizes clipboard text between this computer and Tiantan Cloud Clipboard."),
 		)
-		self._mainSizer.Add(self.privacyText, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		sHelper.addItem(self.privacyText, flag=wx.EXPAND)
 
 		self.loginPanel = wx.Panel(self)
-		loginSizer = wx.BoxSizer(wx.VERTICAL)
+		loginHelper = guiHelper.BoxSizerHelper(self.loginPanel, orientation=wx.VERTICAL)
 		self.phoneCtrl = self._addTextRow(
-			loginSizer,
+			loginHelper,
 			# Translators: Label for the Tiantan Cloud Clipboard phone number field.
 			_("&Phone number:"),
 			style=0,
 		)
 		self.passwordCtrl = self._addTextRow(
-			loginSizer,
+			loginHelper,
 			# Translators: Label for the Tiantan Cloud Clipboard password field.
 			_("Pass&word:"),
 			style=wx.TE_PASSWORD,
 		)
-		self.loginButton = wx.Button(
-			self.loginPanel,
-			# Translators: Button to log in to Tiantan Cloud Clipboard.
-			label=_("Sign &in"),
+		self.loginButton = loginHelper.addItem(
+			wx.Button(
+				self.loginPanel,
+				# Translators: Button to log in to Tiantan Cloud Clipboard.
+				label=_("Sign &in"),
+			),
 		)
-		loginSizer.Add(self.loginButton, flag=wx.TOP | wx.ALIGN_RIGHT, border=10)
-		self.loginPanel.SetSizer(loginSizer)
-		self._mainSizer.Add(self.loginPanel, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		self.loginPanel.SetSizer(loginHelper.sizer)
+		sHelper.addItem(self.loginPanel, flag=wx.EXPAND)
 
 		self.loggedInPanel = wx.Panel(self)
-		loggedInSizer = wx.BoxSizer(wx.VERTICAL)
+		loggedInHelper = guiHelper.BoxSizerHelper(self.loggedInPanel, orientation=wx.VERTICAL)
 		accountLabel = wx.StaticText(
 			self.loggedInPanel,
 			# Translators: Label for the signed-in Tiantan Cloud Clipboard account.
 			label=_("Account:"),
 		)
-		loggedInSizer.Add(accountLabel, flag=wx.BOTTOM | wx.EXPAND, border=2)
 		self.loginStatusText = wx.StaticText(self.loggedInPanel, label="")
-		loggedInSizer.Add(self.loginStatusText, flag=wx.BOTTOM | wx.EXPAND, border=10)
-		self.logoutButton = wx.Button(
-			self.loggedInPanel,
-			# Translators: Button to log out of Tiantan Cloud Clipboard.
-			label=_("Sign &out"),
+		loggedInHelper.addItem(_associateTexts(accountLabel, self.loginStatusText), flag=wx.EXPAND)
+		self.logoutButton = loggedInHelper.addItem(
+			wx.Button(
+				self.loggedInPanel,
+				# Translators: Button to log out of Tiantan Cloud Clipboard.
+				label=_("Sign &out"),
+			),
 		)
-		loggedInSizer.Add(self.logoutButton)
-		self.loggedInPanel.SetSizer(loggedInSizer)
-		self._mainSizer.Add(self.loggedInPanel, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		self.loggedInPanel.SetSizer(loggedInHelper.sizer)
+		sHelper.addItem(self.loggedInPanel, flag=wx.EXPAND)
 
-		self._mainSizer.Add(wx.StaticLine(self), flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
-		closeSizer = wx.BoxSizer(wx.HORIZONTAL)
+		# The separator is created before the Close button to keep the window order unchanged.
+		sHelper.addItem(wx.StaticLine(self), flag=wx.EXPAND)
 		self.closeButton = wx.Button(
 			self,
 			wx.ID_CLOSE,
 			# Translators: Button to close the Tiantan Cloud Clipboard account dialog.
 			label=_("&Close"),
 		)
-		closeSizer.AddStretchSpacer()
-		closeSizer.Add(self.closeButton)
-		self._mainSizer.Add(closeSizer, flag=wx.ALL | wx.EXPAND, border=10)
+		sHelper.addDialogDismissButtons(self.closeButton)
+		self._mainSizer.Add(sHelper.sizer, border=guiHelper.BORDER_FOR_DIALOGS, flag=wx.ALL | wx.EXPAND)
 		self.SetSizer(self._mainSizer)
 
 		self.loginButton.Bind(wx.EVT_BUTTON, self._onLogin)
 		self.logoutButton.Bind(wx.EVT_BUTTON, self._onLogout)
 		self.closeButton.Bind(wx.EVT_BUTTON, self._onClose)
 
-	def _addTextRow(self, parentSizer: wx.BoxSizer, label: str, style: int) -> wx.TextCtrl:
-		rowSizer = wx.BoxSizer(wx.HORIZONTAL)
+	def _addTextRow(self, sHelper: guiHelper.BoxSizerHelper, label: str, style: int) -> wx.TextCtrl:
+		"""Add a labelled text field to the sign-in panel.
+
+		The label and field are created as plain controls and paired with
+		``guiHelper.associateElements`` rather than ``addLabeledControl``, so the
+		label keeps its enabled state when the field is disabled while busy.
+		"""
 		labelCtrl = wx.StaticText(self.loginPanel, label=label)
 		textCtrl = wx.TextCtrl(self.loginPanel, style=style)
-		rowSizer.Add(labelCtrl, flag=wx.ALIGN_CENTER_VERTICAL)
-		rowSizer.AddSpacer(8)
-		rowSizer.Add(textCtrl, proportion=1, flag=wx.EXPAND)
-		parentSizer.Add(rowSizer, flag=wx.BOTTOM | wx.EXPAND, border=8)
+		sHelper.addItem(guiHelper.associateElements(labelCtrl, textCtrl))
 		return textCtrl
 
 	def _refreshUi(self, updateStatus: bool = True) -> None:
