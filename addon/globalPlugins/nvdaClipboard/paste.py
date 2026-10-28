@@ -20,8 +20,8 @@ from keyboardHandler import KeyboardInputGesture
 from logHandler import log
 import ui
 import winUser
-import wx
 
+from .background import LatestWorkerResult
 from .clipboardData import normalizeNewlinesForWin32, normalizeUnicodeText
 from .clipboardMonitor import ClipboardContentType, ClipboardSequenceChangedError, ClipboardSnapshot
 from .imageCodec import pngToPackedDib
@@ -266,7 +266,13 @@ class TemporaryPaster:
 		self._snapshotFromItem = snapshotFromItem
 		self._temporaryPasteInProgress = False
 		self._temporaryPasteState: _TemporaryPasteState | None = None
-		self._pendingTemporaryPngPaste: Future[_TemporaryPasteRequest] | None = None
+		self._temporaryPngPreparation: LatestWorkerResult[_TemporaryPasteRequest] = LatestWorkerResult(
+			self._finishTemporaryPngPastePreparation,
+			isOwnerActive=isStarted,
+			scheduleFailureMessage="Could not schedule a prepared temporary PNG paste.",
+			onScheduleFailure=self._endTemporaryPaste,
+			queueStaleResults=False,
+		)
 
 	@property
 	def hasPendingRestore(self) -> bool:
@@ -280,7 +286,7 @@ class TemporaryPaster:
 
 	def cancel(self) -> None:
 		"""Cancel pending preparation and forget any temporary paste without restoring it."""
-		self._cancelPendingTemporaryPngPaste()
+		self._temporaryPngPreparation.cancel()
 		self._temporaryPasteInProgress = False
 		self._temporaryPasteState = None
 
@@ -346,34 +352,14 @@ class TemporaryPaster:
 			# Translators: Error shown when clipboard content cannot be prepared for pasting.
 			ui.message(_("Could not paste the content"))
 			return
-		self._pendingTemporaryPngPaste = future
-		future.add_done_callback(self._queueTemporaryPngPasteCompletion)
+		self._temporaryPngPreparation.track(future)
 
-	def _cancelPendingTemporaryPngPaste(self) -> None:
-		"""Cancel a queued temporary PNG paste and make any running result stale."""
-		future = self._pendingTemporaryPngPaste
-		self._pendingTemporaryPngPaste = None
-		if future is not None:
-			future.cancel()
-
-	def _queueTemporaryPngPasteCompletion(self, future: Future[_TemporaryPasteRequest]) -> None:
-		"""Queue one prepared temporary PNG paste for the NVDA thread."""
-		if future is not self._pendingTemporaryPngPaste:
-			return
-		try:
-			wx.CallAfter(self._finishTemporaryPngPastePreparation, future)
-		except RuntimeError:
-			if future is self._pendingTemporaryPngPaste:
-				self._pendingTemporaryPngPaste = None
-				self._temporaryPasteInProgress = False
-			if self._isControllerStarted():
-				log.debugWarning("Could not schedule a prepared temporary PNG paste.", exc_info=True)
+	def _endTemporaryPaste(self) -> None:
+		"""Allow another temporary paste after the pending one was abandoned."""
+		self._temporaryPasteInProgress = False
 
 	def _finishTemporaryPngPastePreparation(self, future: Future[_TemporaryPasteRequest]) -> None:
 		"""Start the latest temporary PNG paste after worker preparation."""
-		if future is not self._pendingTemporaryPngPaste:
-			return
-		self._pendingTemporaryPngPaste = None
 		if not self._isControllerStarted():
 			self._temporaryPasteInProgress = False
 			return

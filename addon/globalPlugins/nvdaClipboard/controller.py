@@ -46,6 +46,7 @@ from .clipboardData import (
 	isImageSizeSafe,
 	normalizeUnicodeText,
 )
+from .background import LatestWorkerResult, queueMainThread
 from .fileSize import FileSizeCalculation
 from .cloudSync import TiantanSyncManager, TiantanWriteError, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
@@ -264,7 +265,11 @@ class ClipboardController:
 		self._pendingWrites: set[int] = set()
 		# Whether the pending writes were applied locally, rather than only registered as our own.
 		self._pendingWritesWereApplied = True
-		self._pendingPngClipboardWrite: Future[_PreparedPngClipboardWrite] | None = None
+		self._pngClipboardWrite: LatestWorkerResult[_PreparedPngClipboardWrite] = LatestWorkerResult(
+			self._finishPngClipboardWrite,
+			isOwnerActive=lambda: self._isStarted,
+			scheduleFailureMessage="Could not schedule a prepared PNG clipboard write.",
+		)
 		self._awaitingInitialSnapshot = False
 		self._lastAppliedSequenceNumber = 0
 		self._tiantanFetchInProgress = False
@@ -311,7 +316,7 @@ class ClipboardController:
 		self._isStarted = False
 		self._awaitingInitialSnapshot = False
 		self._pendingWrites.clear()
-		self._cancelPendingPngClipboardWrite()
+		self._pngClipboardWrite.cancel()
 		self._paster.cancel()
 		self._tiantanFetchInProgress = False
 		self._pendingSummaryReport = None
@@ -934,7 +939,7 @@ class ClipboardController:
 	def putItemOnClipboard(self, category: CategoryId, itemId: int) -> None:
 		"""Put every supported format of one stored item on the clipboard."""
 		expectedSequenceNumber = self.monitor.getSequenceNumber()
-		self._cancelPendingPngClipboardWrite()
+		self._pngClipboardWrite.cancel()
 		item = self._getStoredItemById(category, itemId)
 		snapshot = self._snapshotFromItem(item)
 		source = ClipboardChangeSource.RECORD
@@ -959,15 +964,7 @@ class ClipboardController:
 			expectedSequenceNumber,
 			confirmation,
 		)
-		self._pendingPngClipboardWrite = future
-		future.add_done_callback(self._queuePngClipboardWriteCompletion)
-
-	def _cancelPendingPngClipboardWrite(self) -> None:
-		"""Cancel a queued PNG clipboard write and make any running result stale."""
-		future = self._pendingPngClipboardWrite
-		self._pendingPngClipboardWrite = None
-		if future is not None:
-			future.cancel()
+		self._pngClipboardWrite.track(future)
 
 	@staticmethod
 	def _preparePngClipboardWrite(
@@ -985,21 +982,8 @@ class ClipboardController:
 			dibData=preparePngDib(snapshot),
 		)
 
-	def _queuePngClipboardWriteCompletion(self, future: Future[_PreparedPngClipboardWrite]) -> None:
-		"""Queue one prepared PNG clipboard write for main-thread validation and commit."""
-		try:
-			wx.CallAfter(self._finishPngClipboardWrite, future)
-		except RuntimeError:
-			if future is self._pendingPngClipboardWrite:
-				self._pendingPngClipboardWrite = None
-			if self._isStarted:
-				log.debugWarning("Could not schedule a prepared PNG clipboard write.", exc_info=True)
-
 	def _finishPngClipboardWrite(self, future: Future[_PreparedPngClipboardWrite]) -> None:
 		"""Commit the latest prepared PNG clipboard write without replacing newer clipboard data."""
-		if future is not self._pendingPngClipboardWrite:
-			return
-		self._pendingPngClipboardWrite = None
 		if not self._isStarted:
 			return
 		try:
@@ -1109,12 +1093,18 @@ class ClipboardController:
 					)
 			except Exception as error:
 				result = error
-			try:
-				wx.CallAfter(self._finishMissingFileCleanup, onComplete, result)
-			except RuntimeError:
-				self._missingFileCleanupInProgress = False
-				if self._isStarted:
-					log.debugWarning("Could not schedule a missing-file cleanup result.", exc_info=True)
+			_ = queueMainThread(
+				self._finishMissingFileCleanup,
+				onComplete,
+				result,
+				onFailure=releaseAfterScheduleFailure,
+				failureMessage="Could not schedule a missing-file cleanup result.",
+			)
+
+		def releaseAfterScheduleFailure() -> bool:
+			"""Allow another cleanup after its result could not be scheduled and return whether started."""
+			self._missingFileCleanupInProgress = False
+			return self._isStarted
 
 		try:
 			worker = Thread(

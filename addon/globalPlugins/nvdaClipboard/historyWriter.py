@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 import addonHandler
 from logHandler import log
 import ui
-import wx
 
+from .background import queueMainThread
 from .clipboardData import MAX_IMAGE_BYTES, getPngImageInfo, isImageSizeSafe
 from .clipboardMonitor import ClipboardContentType, ClipboardSnapshot
 from .imageCodec import ImageDataTooLargeError, normalizeImageDataToPng
@@ -258,11 +258,13 @@ class HistoryWriter:
 		expectedText: str | None = None,
 	) -> None:
 		"""Queue one history write result for reporting on the main thread."""
-		try:
-			wx.CallAfter(self._finishWrite, future, expectedText)
-		except RuntimeError:
-			if self._isControllerStarted():
-				log.debugWarning("Could not schedule a clipboard history write result.", exc_info=True)
+		_ = queueMainThread(
+			self._finishWrite,
+			future,
+			expectedText,
+			onFailure=self._isControllerStarted,
+			failureMessage="Could not schedule a clipboard history write result.",
+		)
 
 	def _queueImageWriteCompletion(self, future: Future[HistoryWriteResult]) -> None:
 		"""Release one image slot before reporting its history result."""

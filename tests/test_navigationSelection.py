@@ -18,7 +18,7 @@ import sys
 import unittest
 from unittest.mock import Mock, call, patch
 
-from tests._module_loader import addonSourcePath
+from tests._module_loader import addonSourcePath, createAddonPackage, loadAddonModule
 from tests.test_clipboardData import clipboardData
 from tests.test_clipboardMonitor import clipboardMonitor
 
@@ -28,6 +28,12 @@ _CONTROLLER_PATH = addonSourcePath("controller")
 _PASTE_PATH = addonSourcePath("paste")
 _HISTORY_WRITER_PATH = addonSourcePath("historyWriter")
 _FORMATTING_PATH = addonSourcePath("summary.formatting")
+_PACKAGE_NAME = "nvdaClipboardNavigationSelectionTests"
+createAddonPackage(_PACKAGE_NAME)
+background = loadAddonModule(
+	f"{_PACKAGE_NAME}.background",
+	injectedModules={"logHandler": SimpleNamespace(log=Mock()), "wx": SimpleNamespace()},
+)
 
 _UI = SimpleNamespace(message=Mock())
 _PLAIN_TEXT_FALLBACK_MESSAGE = "Pasted as plain text; formatting could not be kept"
@@ -163,6 +169,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 			"ClipboardContentType": clipboardMonitor.ClipboardContentType,
 			"ClipboardSequenceChangedError": clipboardMonitor.ClipboardSequenceChangedError,
 			"StorageError": type("StorageError", (Exception,), {}),
+			"LatestWorkerResult": background.LatestWorkerResult,
 			"Enum": Enum,
 			"auto": auto,
 			"dataclass": dataclass,
