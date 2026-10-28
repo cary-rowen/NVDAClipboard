@@ -403,7 +403,9 @@ class ClipboardController:
 			"oneDriveDialog",
 			parent,
 			lambda dialogParent: OneDriveSyncDialog(
-				dialogParent, self.oneDriveSync, self._clearOneDriveDialog
+				dialogParent,
+				self.oneDriveSync,
+				self._clearOneDriveDialog,
 			),
 		)
 

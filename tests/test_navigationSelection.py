@@ -150,7 +150,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 					"ClipboardChangeSource",
 					"ClipboardWriteFailedError",
 					"TemporaryPaster",
-				}
+				},
 			),
 			functionNames=frozenset(
 				{
@@ -158,7 +158,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 					"_isTemporarySnapshot",
 					"preparePngDib",
 					"_prepareTemporaryPngPaste",
-				}
+				},
 			),
 		),
 		{
@@ -210,7 +210,7 @@ def _loadSelectionControllerMethods() -> tuple[object, ...]:
 						"pasteClipboardSelection",
 						"pasteCurrentNavigationTarget",
 						"pasteCurrentStoredItem",
-					}
+					},
 				),
 			),
 		),
@@ -304,7 +304,8 @@ def _attachTemporaryPaster(controller: SimpleNamespace) -> object:
 		clearClipboard=lambda **kwargs: controller._clearClipboard(**kwargs),
 		applyLeftoverClipboardContent=lambda *args: controller._applyLeftoverClipboardContent(*args),
 		distrustRegisteredClipboardState=lambda *args, **kwargs: controller._distrustRegisteredClipboardState(
-			*args, **kwargs
+			*args,
+			**kwargs,
 		),
 		getClipboardOwnerHandle=lambda: controller._getClipboardOwnerHandle(),
 		isSameFocus=lambda expectedFocus: controller._isSameFocus(expectedFocus),
@@ -615,7 +616,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 						ui=Mock(),
 					),
 					patch.dict(
-						_moveStoredItem.__globals__, formatItemSummary=Mock(return_value="stored text")
+						_moveStoredItem.__globals__,
+						formatItemSummary=Mock(return_value="stored text"),
 					),
 				):
 					_pasteClipboardSelection(controller, frozenset({1}))
@@ -904,7 +906,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				else:
 					controller._applySnapshot.assert_called_once()
 					self.assertIs(
-						_ClipboardChangeSource.NO_RECORD, controller._applySnapshot.call_args.args[1]
+						_ClipboardChangeSource.NO_RECORD,
+						controller._applySnapshot.call_args.args[1],
 					)
 					self.assertEqual("partial", controller._text)
 					self.assertEqual(3, controller._lastAppliedSequenceNumber)
@@ -1016,7 +1019,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 					restore(state)
 					self.assertEqual("abcdef", controller.monitor.current.text)
 					self.assertEqual(
-						controller.monitor.getSequenceNumber(), controller._lastAppliedSequenceNumber
+						controller.monitor.getSequenceNumber(),
+						controller._lastAppliedSequenceNumber,
 					)
 
 		ui.message.assert_not_called()
@@ -1194,7 +1198,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 
 				controller._writeSnapshot = Mock(side_effect=writeSnapshot)
 				controller._distrustRegisteredClipboardState = MethodType(
-					_distrustRegisteredClipboardState, controller
+					_distrustRegisteredClipboardState,
+					controller,
 				)
 				# A changed owner must not be treated as a verified temporary payload during recovery.
 				if failure in ("owner", "focus", "fallback", "fallbackPartial"):
@@ -1210,7 +1215,10 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 					ui=ui,
 				):
 					controller._paster.pasteSnapshotTemporarily(
-						rich, "entry", frozenset(), expectedFocus=object()
+						rich,
+						"entry",
+						frozenset(),
+						expectedFocus=object(),
 					)
 					self.assertEqual(expectedFeedback, ui.delayedMessage.call_args_list)
 					if failure in ("owner", "focus", "fallback", "fallbackPartial", "plainFailure"):
@@ -1287,7 +1295,8 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				keyboard.fromName.return_value.send.assert_called_once_with()
 				pasted = controller.monitor.current
 				self.assertEqual(
-					contentType.TEXT if fails else contentType.TEXT_AND_IMAGE, pasted.contentType
+					contentType.TEXT if fails else contentType.TEXT_AND_IMAGE,
+					pasted.contentType,
 				)
 				self.assertEqual(mixed.text, pasted.text)
 				ui.delayedMessage.assert_called_once_with(

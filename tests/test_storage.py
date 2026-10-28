@@ -1073,7 +1073,7 @@ class TextPreviewTests(unittest.TestCase):
 			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
 			try:
 				storage.addHistory(
-					ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="\r\n" * 200 + "visible text")
+					ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="\r\n" * 200 + "visible text"),
 				)
 				self.assertEqual("visible text", storage.history[0].textPreview)
 			finally:

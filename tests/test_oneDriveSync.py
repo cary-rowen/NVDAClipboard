@@ -194,7 +194,7 @@ class _FakeStorage:
 	def addText(self, text: str) -> bytes:
 		"""Add one dirty local plain-text history item and return its payload hash."""
 		return self.addItem(
-			storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text)
+			storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text),
 		)
 
 	def addItem(self, item: storageModels.ClipboardItem) -> bytes:

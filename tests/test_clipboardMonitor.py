@@ -360,14 +360,16 @@ class ClipboardMonitorTests(unittest.TestCase):
 			droppedResult = monitor._readImageFromOpenClipboard()
 
 		self.assertEqual(
-			(clipboardMonitor._ClipboardImage("PNG", b"png", (1, 1, 24)), None, False), pngResult
+			(clipboardMonitor._ClipboardImage("PNG", b"png", (1, 1, 24)), None, False),
+			pngResult,
 		)
 		self.assertEqual(
 			(clipboardMonitor._ClipboardImage("DIBV5", dibV5Data, (1, 1, 32)), None, False),
 			dibV5Result,
 		)
 		self.assertEqual(
-			(clipboardMonitor._ClipboardImage("DIB", dibData, (1, 1, 32)), None, False), dibResult
+			(clipboardMonitor._ClipboardImage("DIB", dibData, (1, 1, 32)), None, False),
+			dibResult,
 		)
 		self.assertEqual((bitmapImage, (1, 1, 24), False), bitmapResult)
 		self.assertEqual((None, (1, 1, 8), True), droppedResult)
@@ -386,7 +388,8 @@ class ClipboardMonitorTests(unittest.TestCase):
 		result = monitor._readImageFromOpenClipboard()
 
 		self.assertEqual(
-			(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)), None, False), result
+			(clipboardMonitor._ClipboardImage("DIBV5", dibData, (1, 1, 32)), None, False),
+			result,
 		)
 		monitor._readBitmapImageFromOpenClipboard.assert_not_called()
 
@@ -413,7 +416,8 @@ class ClipboardMonitorTests(unittest.TestCase):
 			_missingImage, missingInfo = monitor._readBitmapImageFromOpenClipboard()
 
 		self.assertEqual(
-			clipboardMonitor._ClipboardImage("DIB", b"converted", (2, 1, 24), fromBitmap=True), image
+			clipboardMonitor._ClipboardImage("DIB", b"converted", (2, 1, 24), fromBitmap=True),
+			image,
 		)
 		self.assertEqual((2, 1, 24), imageInfo)
 		self.assertEqual((2, 1, 32), missingInfo)
@@ -685,10 +689,12 @@ class ClipboardMonitorTests(unittest.TestCase):
 		"""Decode Unicode path lists in order, replacing lone surrogates like the old UTF-16 round trip."""
 		files = (r"C:\b.txt", r"D:\😀\a.txt", r"\\server\share\é")
 		self.assertEqual(
-			list(files), clipboardMonitor._parseDropFilesPaths(clipboardMonitor._buildDropFilesData(files))
+			list(files),
+			clipboardMonitor._parseDropFilesPaths(clipboardMonitor._buildDropFilesData(files)),
 		)
 		data = _buildRawDropFilesData(
-			"C:\\x\ud800y\0\0".encode("utf-16-le", errors="surrogatepass"), isWide=True
+			"C:\\x\ud800y\0\0".encode("utf-16-le", errors="surrogatepass"),
+			isWide=True,
 		)
 		self.assertEqual(["C:\\x\ufffdy"], clipboardMonitor._parseDropFilesPaths(data))
 
@@ -706,11 +712,13 @@ class ClipboardMonitorTests(unittest.TestCase):
 	def testParseDropFilesReturnsNoPathsForAnEmptyList(self) -> None:
 		"""Stop at an immediate list terminator, as DragQueryFileW reports zero files."""
 		self.assertEqual(
-			[], clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0\0\0", isWide=True))
+			[],
+			clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0\0\0", isWide=True)),
 		)
 		with patch.object(clipboardMonitor, "_ANSI_PATH_ENCODING", "cp1252"):
 			self.assertEqual(
-				[], clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0", isWide=False))
+				[],
+				clipboardMonitor._parseDropFilesPaths(_buildRawDropFilesData(b"\0\0", isWide=False)),
 			)
 		data = _buildRawDropFilesData("a\0\0\0b\0\0".encode("utf-16-le"), isWide=True)
 		self.assertEqual(["a"], clipboardMonitor._parseDropFilesPaths(data))
@@ -726,7 +734,9 @@ class ClipboardMonitorTests(unittest.TestCase):
 			"unterminatedAnsi": _buildRawDropFilesData(b"C:\\a\0", isWide=False),
 			"offsetBeforeHeader": _buildRawDropFilesData(valid[headerSize:], isWide=True, offset=-2),
 			"oddWideOffset": _buildRawDropFilesData(
-				b"\0" + "a\0\0".encode("utf-16-le"), isWide=True, offset=1
+				b"\0" + "a\0\0".encode("utf-16-le"),
+				isWide=True,
+				offset=1,
 			),
 			"offsetPastEnd": _buildRawDropFilesData(b"\0\0\0\0", isWide=True, offset=8),
 		}

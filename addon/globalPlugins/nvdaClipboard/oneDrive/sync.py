@@ -1203,7 +1203,10 @@ class OneDriveSyncManager:
 			if self._isTerminated:
 				return
 		self._invokeCallback(
-			callback, success, message, failureMessage="OneDrive completion callback failed."
+			callback,
+			success,
+			message,
+			failureMessage="OneDrive completion callback failed.",
 		)
 
 	def _deliverOperationResult(

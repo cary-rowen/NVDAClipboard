@@ -242,7 +242,8 @@ class TextTransformTests(unittest.TestCase):
 				editor.GetInsertionPoint.return_value = 0
 				with patch.object(textTransforms, "_replaceEditorRange") as replaceEditorRange:
 					textTransforms.applyEditorTextTransform(
-						editor, textTransforms.replaceLineBreaksWithSpaces
+						editor,
+						textTransforms.replaceLineBreaksWithSpaces,
 					)
 				text = editor.GetValue.return_value
 				if replaceEditorRange.called:

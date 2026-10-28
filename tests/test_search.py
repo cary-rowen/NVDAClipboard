@@ -28,7 +28,8 @@ search = loadAddonModule(
 
 
 def _loadSearchWithoutPrivateRegexApi(
-	packageName: str, privateModules: dict[str, object]
+	packageName: str,
+	privateModules: dict[str, object],
 ) -> tuple[Any, Mock]:
 	"""Load a fresh search module while the given ``re`` private modules are replaced, plus its log."""
 	createAddonPackage(packageName)
@@ -139,7 +140,7 @@ class SearchTests(unittest.TestCase):
 		"""Fail loudly when a Python upgrade removes a private ``re`` name used by selection matching."""
 		usedNames = {
 			moduleName: set(
-				re.findall(rf"\b{moduleName}\.(\w+)", inspect.getsource(search._matchWithPrivateRegexApi))
+				re.findall(rf"\b{moduleName}\.(\w+)", inspect.getsource(search._matchWithPrivateRegexApi)),
 			)
 			for moduleName in ("_parser", "_compiler")
 		}

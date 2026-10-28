@@ -551,7 +551,8 @@ class ClipboardMonitor:
 			return
 		if not _removeClipboardFormatListener(self._window.handle):
 			log.debugWarning(
-				"Could not remove clipboard format listener.", exc_info=WinError(get_last_error())
+				"Could not remove clipboard format listener.",
+				exc_info=WinError(get_last_error()),
 			)
 		self._window.destroy()
 		self._window = None
