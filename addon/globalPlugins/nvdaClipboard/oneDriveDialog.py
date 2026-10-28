@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import addonHandler
+from gui import guiHelper
 from logHandler import log
 import ui
 import wx
@@ -62,20 +63,20 @@ class OneDriveSyncDialog(wx.Dialog):
 	def _makeUi(self) -> None:
 		"""Create focusable status fields and synchronization controls."""
 		mainSizer = wx.BoxSizer(wx.VERTICAL)
-		mainSizer.AddSpacer(10)
+		sHelper = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
 		self.accountCtrl = self._addReadOnlyRow(
-			mainSizer,
+			sHelper,
 			# Translators: Label for the Microsoft account used by OneDrive.
 			_("&Account:"),
 		)
 		self.statusCtrl = self._addReadOnlyText(
-			mainSizer,
+			sHelper,
 			# Translators: Label for the current OneDrive status.
 			_("&Status:"),
 			size=(-1, 58),
 		)
 		self._addReadOnlyText(
-			mainSizer,
+			sHelper,
 			# Translators: Label for a short description of OneDrive synchronization.
 			_("A&bout:"),
 			value=_(
@@ -86,66 +87,61 @@ class OneDriveSyncDialog(wx.Dialog):
 		)
 
 		self.loginPanel = wx.Panel(self)
-		loginSizer = wx.BoxSizer(wx.HORIZONTAL)
-		self.browserLoginButton = wx.Button(
+		loginButtons = guiHelper.ButtonHelper(wx.HORIZONTAL)
+		self.browserLoginButton = loginButtons.addButton(
 			self.loginPanel,
 			# Translators: Button to sign in to OneDrive with the system browser.
 			label=_("Sign &in"),
 		)
-		self.deviceCodeButton = wx.Button(
+		self.deviceCodeButton = loginButtons.addButton(
 			self.loginPanel,
 			# Translators: Button to use Microsoft's device-code sign-in fallback.
 			label=_("&Device code sign-in"),
 		)
-		loginSizer.Add(self.browserLoginButton, flag=wx.RIGHT, border=8)
-		loginSizer.Add(self.deviceCodeButton)
-		self.loginPanel.SetSizer(loginSizer)
-		mainSizer.Add(self.loginPanel, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		self.loginPanel.SetSizer(loginButtons.sizer)
+		sHelper.addItem(self.loginPanel, flag=wx.EXPAND)
 
 		self.devicePanel = wx.Panel(self)
-		deviceSizer = wx.BoxSizer(wx.VERTICAL)
+		deviceHelper = guiHelper.BoxSizerHelper(self.devicePanel, orientation=wx.VERTICAL)
 		self.deviceCodeCtrl = self._addReadOnlyRow(
-			deviceSizer,
+			deviceHelper,
 			# Translators: Label for the selectable Microsoft device sign-in code.
 			_("Cod&e:"),
-			parent=self.devicePanel,
 		)
 		self.verificationUrlCtrl = self._addReadOnlyRow(
-			deviceSizer,
+			deviceHelper,
 			# Translators: Label for the selectable Microsoft device sign-in address.
 			_("Add&ress:"),
-			parent=self.devicePanel,
 		)
-		deviceActionSizer = wx.BoxSizer(wx.HORIZONTAL)
-		self.openUrlButton = wx.Button(
+		deviceButtons = guiHelper.ButtonHelper(wx.HORIZONTAL)
+		self.openUrlButton = deviceButtons.addButton(
 			self.devicePanel,
 			# Translators: Button to open the Microsoft device sign-in page.
 			label=_("&Open page"),
 		)
-		self.cancelDeviceCodeButton = wx.Button(
+		self.cancelDeviceCodeButton = deviceButtons.addButton(
 			self.devicePanel,
 			# Translators: Button to cancel Microsoft device-code sign-in.
 			label=_("Ca&ncel sign-in"),
 		)
-		deviceActionSizer.Add(self.openUrlButton, flag=wx.RIGHT, border=8)
-		deviceActionSizer.Add(self.cancelDeviceCodeButton)
-		deviceSizer.Add(deviceActionSizer, flag=wx.TOP, border=2)
-		self.devicePanel.SetSizer(deviceSizer)
-		mainSizer.Add(self.devicePanel, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		deviceHelper.addItem(deviceButtons.sizer)
+		self.devicePanel.SetSizer(deviceHelper.sizer)
+		sHelper.addItem(self.devicePanel, flag=wx.EXPAND)
 
 		self.loggedInPanel = wx.Panel(self)
-		loggedInSizer = wx.BoxSizer(wx.HORIZONTAL)
-		self.signOutButton = wx.Button(
-			self.loggedInPanel,
-			# Translators: Button to sign out of OneDrive synchronization.
-			label=_("Sign &out"),
+		loggedInHelper = guiHelper.BoxSizerHelper(self.loggedInPanel, orientation=wx.VERTICAL)
+		self.signOutButton = loggedInHelper.addItem(
+			wx.Button(
+				self.loggedInPanel,
+				# Translators: Button to sign out of OneDrive synchronization.
+				label=_("Sign &out"),
+			),
 		)
-		loggedInSizer.Add(self.signOutButton)
-		self.loggedInPanel.SetSizer(loggedInSizer)
-		mainSizer.Add(self.loggedInPanel, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
+		self.loggedInPanel.SetSizer(loggedInHelper.sizer)
+		sHelper.addItem(self.loggedInPanel, flag=wx.EXPAND)
 
-		mainSizer.Add(wx.StaticLine(self), flag=wx.LEFT | wx.RIGHT | wx.EXPAND, border=10)
-		closeSizer = wx.BoxSizer(wx.HORIZONTAL)
+		# The separator is created before the Close button to keep the window order unchanged.
+		sHelper.addItem(wx.StaticLine(self), flag=wx.EXPAND)
 		self.closeButton = wx.Button(
 			self,
 			wx.ID_CLOSE,
@@ -153,9 +149,8 @@ class OneDriveSyncDialog(wx.Dialog):
 			label=_("&Close"),
 		)
 		self.SetEscapeId(wx.ID_CLOSE)
-		closeSizer.AddStretchSpacer()
-		closeSizer.Add(self.closeButton)
-		mainSizer.Add(closeSizer, flag=wx.ALL | wx.EXPAND, border=10)
+		sHelper.addDialogDismissButtons(self.closeButton)
+		mainSizer.Add(sHelper.sizer, border=guiHelper.BORDER_FOR_DIALOGS, flag=wx.ALL | wx.EXPAND)
 		self.SetSizer(mainSizer)
 
 		self.browserLoginButton.Bind(wx.EVT_BUTTON, self._onBrowserLogin)
@@ -167,41 +162,34 @@ class OneDriveSyncDialog(wx.Dialog):
 
 	def _addReadOnlyRow(
 		self,
-		parentSizer: wx.BoxSizer,
+		sHelper: guiHelper.BoxSizerHelper,
 		label: str,
-		*,
-		parent: wx.Window | None = None,
 	) -> wx.TextCtrl:
-		"""Add a labelled, focusable, single-line read-only field."""
-		controlParent = parent or self
-		rowSizer = wx.BoxSizer(wx.HORIZONTAL)
-		labelCtrl = wx.StaticText(controlParent, label=label)
-		textCtrl = _FocusableReadOnlyTextCtrl(controlParent, style=wx.TE_READONLY)
+		"""Add a labelled, focusable, single-line read-only field.
+
+		The field is created on the window that owns ``sHelper``.
+		"""
+		textCtrl = sHelper.addLabeledControl(label, _FocusableReadOnlyTextCtrl, style=wx.TE_READONLY)
 		textCtrl.SetName(label.replace("&", "").rstrip(":"))
-		rowSizer.Add(labelCtrl, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=8)
-		rowSizer.Add(textCtrl, proportion=1, flag=wx.EXPAND)
-		parentSizer.Add(rowSizer, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
 		return textCtrl
 
 	def _addReadOnlyText(
 		self,
-		parentSizer: wx.BoxSizer,
+		sHelper: guiHelper.BoxSizerHelper,
 		label: str,
 		*,
 		value: str = "",
 		size: tuple[int, int] = (-1, -1),
 	) -> wx.TextCtrl:
 		"""Add a labelled, focusable, multiline read-only field."""
-		labelCtrl = wx.StaticText(self, label=label)
-		textCtrl = wx.TextCtrl(
-			self,
+		textCtrl = sHelper.addLabeledControl(
+			label,
+			wx.TextCtrl,
 			value=value,
 			size=size,
 			style=wx.TE_MULTILINE | wx.TE_READONLY,
 		)
 		textCtrl.SetName(label.replace("&", "").rstrip(":"))
-		parentSizer.Add(labelCtrl, flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, border=10)
-		parentSizer.Add(textCtrl, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, border=10)
 		return textCtrl
 
 	def refreshFromManager(self, updateStatus: bool = True) -> None:
