@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import ctypes
 from pathlib import Path
+import sys
 from threading import Event
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import unicodedata
@@ -18,10 +19,14 @@ import unicodedata
 from tests._module_loader import loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "textStats.py"
+_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
+_PACKAGE_NAME = "nvdaClipboardTextStatsTests"
+_PACKAGE = ModuleType(_PACKAGE_NAME)
+_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
+sys.modules[_PACKAGE_NAME] = _PACKAGE
 textStats = loadAddonModule(
-	"nvdaClipboardTextStats",
-	_MODULE_PATH,
+	f"{_PACKAGE_NAME}.textStats",
+	_MODULE_DIRECTORY / "textStats.py",
 	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
 )
 

@@ -132,6 +132,8 @@ class _BuiltinCategory(Enum):
 
 
 type CategoryId = str | _BuiltinCategory
+# Background calculation backing the summary of the current clipboard content.
+type _SummaryCalculation = FileSizeCalculation | TextStatisticsCalculation
 
 _HISTORY_CATEGORY_ID = _BuiltinCategory.HISTORY
 
@@ -402,10 +404,8 @@ class ClipboardController:
 		self._contentType = ClipboardContentType.EMPTY
 		self._text = ""
 		self._canUpload = False
-		self._fileSizeCalculation: FileSizeCalculation | None = None
-		self._pendingFileSizeReport: FileSizeCalculation | None = None
-		self._textStatisticsCalculation: TextStatisticsCalculation | None = None
-		self._pendingTextStatisticsReport: TextStatisticsCalculation | None = None
+		self._summaryCalculation: _SummaryCalculation | None = None
+		self._pendingSummaryReport: _SummaryCalculation | None = None
 		self._missingFileCleanupInProgress = False
 		# Translators: Summary used when the system clipboard is empty.
 		self._summary = _("Clipboard is empty")
@@ -454,14 +454,10 @@ class ClipboardController:
 		self._cloudFetchInProgress = False
 		self._temporaryPasteInProgress = False
 		self._temporaryPasteState = None
-		self._pendingFileSizeReport = None
-		if self._fileSizeCalculation is not None:
-			self._fileSizeCalculation.cancel()
-			self._fileSizeCalculation = None
-		self._pendingTextStatisticsReport = None
-		if self._textStatisticsCalculation is not None:
-			self._textStatisticsCalculation.cancel()
-			self._textStatisticsCalculation = None
+		self._pendingSummaryReport = None
+		if self._summaryCalculation is not None:
+			self._summaryCalculation.cancel()
+			self._summaryCalculation = None
 		try:
 			self.monitor.stop()
 		except Exception:
@@ -642,47 +638,27 @@ class ClipboardController:
 
 	def reportClipboardSummary(self) -> None:
 		"""Report a concise summary of the current clipboard content."""
-		calculation = self._fileSizeCalculation
-		if self._contentType == ClipboardContentType.FILES and calculation is not None:
-			if calculation.start(onComplete=self._onFileSizeCalculationComplete):
-				self._pendingFileSizeReport = calculation
-				try:
-					callLater(
-						_SUMMARY_REPORT_TIMEOUT_MS,
-						self._reportPendingFileSizeSummary,
-						calculation,
-					)
-				except Exception:
-					self._pendingFileSizeReport = None
-					self._reportFileSizeSummary(calculation)
-					return
-				if speech.getState().speechMode == speech.SpeechMode.onDemand:
-					self._reportFileSizeSummary(calculation)
-				return
-			self._pendingFileSizeReport = None
-			self._reportFileSizeSummary(calculation)
+		calculation = self._summaryCalculation
+		if calculation is None:
+			ui.message(self._summary)
 			return
-		calculation = self._textStatisticsCalculation
-		if calculation is not None:
-			if calculation.start(onComplete=self._onTextStatisticsCalculationComplete):
-				self._pendingTextStatisticsReport = calculation
-				try:
-					callLater(
-						_SUMMARY_REPORT_TIMEOUT_MS,
-						self._reportPendingTextStatisticsSummary,
-						calculation,
-					)
-				except Exception:
-					self._pendingTextStatisticsReport = None
-					self._reportTextStatisticsSummary(calculation)
-					return
-				if speech.getState().speechMode == speech.SpeechMode.onDemand:
-					self._reportTextStatisticsSummary(calculation)
+		if calculation.start(onComplete=self._onSummaryCalculationComplete):
+			self._pendingSummaryReport = calculation
+			try:
+				callLater(
+					_SUMMARY_REPORT_TIMEOUT_MS,
+					self._reportPendingSummary,
+					calculation,
+				)
+			except Exception:
+				self._pendingSummaryReport = None
+				self._reportCalculatedSummary(calculation)
 				return
-			self._pendingTextStatisticsReport = None
-			self._reportTextStatisticsSummary(calculation)
+			if speech.getState().speechMode == speech.SpeechMode.onDemand:
+				self._reportCalculatedSummary(calculation)
 			return
-		ui.message(self._summary)
+		self._pendingSummaryReport = None
+		self._reportCalculatedSummary(calculation)
 
 	def showClipboardContent(self) -> None:
 		"""Show the current clipboard content in the configured browseable format."""
@@ -700,18 +676,25 @@ class ClipboardController:
 			showAsPlainText=getShowClipboardContentAsPlainText(),
 		)
 
-	def _onFileSizeCalculationComplete(self, calculation: FileSizeCalculation) -> None:
+	def _onSummaryCalculationComplete(self, calculation: _SummaryCalculation) -> None:
 		"""Queue the response for a pending summary request on NVDA's main thread."""
-		callLater(0, self._reportPendingFileSizeSummary, calculation)
+		callLater(0, self._reportPendingSummary, calculation)
 
-	def _reportPendingFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
+	def _reportPendingSummary(self, calculation: _SummaryCalculation) -> None:
 		"""Report one requested summary while its calculation is still current."""
-		if self._pendingFileSizeReport is not calculation:
+		if self._pendingSummaryReport is not calculation:
 			return
-		self._pendingFileSizeReport = None
-		if not self._isStarted or self._fileSizeCalculation is not calculation:
+		self._pendingSummaryReport = None
+		if not self._isStarted or self._summaryCalculation is not calculation:
 			return
-		self._reportFileSizeSummary(calculation)
+		self._reportCalculatedSummary(calculation)
+
+	def _reportCalculatedSummary(self, calculation: _SummaryCalculation) -> None:
+		"""Report the summary matching the kind of the current clipboard calculation."""
+		if isinstance(calculation, FileSizeCalculation):
+			self._reportFileSizeSummary(calculation)
+		else:
+			self._reportTextStatisticsSummary(calculation)
 
 	def _reportFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
 		"""Report the latest size and item counts for the current clipboard files."""
@@ -766,19 +749,6 @@ class ClipboardController:
 				# Translators: Clipboard file calculation before any content details are available.
 				summary = _("{summary}; calculating contents").format(summary=self._summary)
 		ui.message(summary)
-
-	def _onTextStatisticsCalculationComplete(self, calculation: TextStatisticsCalculation) -> None:
-		"""Queue the response for a pending text summary request on NVDA's main thread."""
-		callLater(0, self._reportPendingTextStatisticsSummary, calculation)
-
-	def _reportPendingTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
-		"""Report one requested text summary while its calculation is still current."""
-		if self._pendingTextStatisticsReport is not calculation:
-			return
-		self._pendingTextStatisticsReport = None
-		if not self._isStarted or self._textStatisticsCalculation is not calculation:
-			return
-		self._reportTextStatisticsSummary(calculation)
 
 	def _reportTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:
 		"""Report exact completed text statistics or the current calculation state."""
@@ -1597,30 +1567,25 @@ class ClipboardController:
 		if shouldRecord:
 			playCopy()
 
+	@staticmethod
+	def _createSummaryCalculation(snapshot: ClipboardSnapshot) -> _SummaryCalculation | None:
+		"""Return the idle background calculation that summarizes a clipboard snapshot, if any."""
+		if snapshot.contentType == ClipboardContentType.FILES:
+			return FileSizeCalculation(snapshot.files) if snapshot.files else None
+		if snapshot.text and snapshot.contentType in (
+			ClipboardContentType.TEXT,
+			ClipboardContentType.FORMATTED_TEXT,
+			ClipboardContentType.TEXT_AND_IMAGE,
+		):
+			return TextStatisticsCalculation(snapshot.text)
+		return None
+
 	def _applyCurrentSnapshot(self, snapshot: ClipboardSnapshot) -> None:
 		"""Update current clipboard navigation without reading or writing history."""
-		self._pendingFileSizeReport = None
-		if self._fileSizeCalculation is not None:
-			self._fileSizeCalculation.cancel()
-		self._fileSizeCalculation = (
-			FileSizeCalculation(snapshot.files)
-			if snapshot.contentType == ClipboardContentType.FILES and snapshot.files
-			else None
-		)
-		self._pendingTextStatisticsReport = None
-		if self._textStatisticsCalculation is not None:
-			self._textStatisticsCalculation.cancel()
-		self._textStatisticsCalculation = (
-			TextStatisticsCalculation(snapshot.text)
-			if snapshot.text
-			and snapshot.contentType
-			in (
-				ClipboardContentType.TEXT,
-				ClipboardContentType.FORMATTED_TEXT,
-				ClipboardContentType.TEXT_AND_IMAGE,
-			)
-			else None
-		)
+		self._pendingSummaryReport = None
+		if self._summaryCalculation is not None:
+			self._summaryCalculation.cancel()
+		self._summaryCalculation = self._createSummaryCalculation(snapshot)
 		self._contentType = snapshot.contentType
 		self._text = snapshot.text
 		self._canUpload = snapshot.canUpload

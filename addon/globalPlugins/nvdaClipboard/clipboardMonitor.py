@@ -20,7 +20,6 @@ from time import monotonic, sleep
 from logHandler import log
 from winBindings import gdi32, kernel32, user32
 from windowUtils import CustomWindow
-import wx
 
 from .clipboardData import (
 	MAX_DECODED_IMAGE_BYTES,
@@ -32,6 +31,7 @@ from .clipboardData import (
 	normalizeNewlinesForWin32,
 )
 from .imageCodec import getImageProperties, isPngImageDecodable, pngToPackedDib
+from .mainThread import queueMainThread
 
 __all__ = [
 	"ClipboardContentType",
@@ -640,17 +640,20 @@ class ClipboardMonitor:
 
 	def _queueMainThread(self, callback: Callable[..., None], *args: object) -> bool:
 		"""Queue one reader result and release reader state if wx is no longer accepting work."""
-		try:
-			wx.CallAfter(callback, *args)
-		except RuntimeError:
-			with self._lock:
-				isRunning = self._isRunning
-				self._readInProgress = False
-				self._readAgain = False
-			if isRunning:
-				log.debugWarning("Could not schedule a clipboard reader callback.", exc_info=True)
-			return False
-		return True
+		return queueMainThread(
+			callback,
+			*args,
+			onFailure=self._releaseReaderAfterDispatchFailure,
+			failureMessage="Could not schedule a clipboard reader callback.",
+		)
+
+	def _releaseReaderAfterDispatchFailure(self) -> bool:
+		"""Release reader state after wx rejected a result and return whether monitoring is running."""
+		with self._lock:
+			isRunning = self._isRunning
+			self._readInProgress = False
+			self._readAgain = False
+		return isRunning
 
 	def _readAndDispatchSnapshot(self, cancelToken: int) -> None:
 		"""Read and queue completed snapshots until pending updates are consumed."""

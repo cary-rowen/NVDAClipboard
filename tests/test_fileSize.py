@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 from threading import Event
 import time
@@ -19,12 +20,16 @@ from unittest.mock import patch
 from tests._module_loader import loadAddonModule
 
 
-_MODULE_PATH = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard" / "fileSize.py"
+_MODULE_DIRECTORY = Path(__file__).parents[1] / "addon" / "globalPlugins" / "nvdaClipboard"
+_PACKAGE_NAME = "nvdaClipboardFileSizeTests"
+_PACKAGE = ModuleType(_PACKAGE_NAME)
+_PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
+sys.modules[_PACKAGE_NAME] = _PACKAGE
 _WIN_BINDINGS = ModuleType("winBindings")
 _WIN_BINDINGS.kernel32 = SimpleNamespace(GetDriveType=lambda _root: 3)
 fileSize = loadAddonModule(
-	"nvdaClipboardFileSize",
-	_MODULE_PATH,
+	f"{_PACKAGE_NAME}.fileSize",
+	_MODULE_DIRECTORY / "fileSize.py",
 	injectedModules={
 		"logHandler": SimpleNamespace(log=SimpleNamespace(exception=lambda *_args, **_kwargs: None)),
 		"winBindings": _WIN_BINDINGS,

@@ -24,6 +24,7 @@ _PACKAGE_NAME = "nvdaClipboardClipboardMonitorTests"
 _PACKAGE = ModuleType(_PACKAGE_NAME)
 _PACKAGE.__path__ = [str(_MODULE_DIRECTORY)]
 sys.modules[_PACKAGE_NAME] = _PACKAGE
+_WX = SimpleNamespace()
 
 with (
 	patch.object(ctypes, "windll", Mock(), create=True),
@@ -34,7 +35,7 @@ with (
 			"logHandler": SimpleNamespace(log=Mock()),
 			"winBindings": SimpleNamespace(gdi32=Mock(), kernel32=Mock(), user32=Mock()),
 			"windowUtils": SimpleNamespace(CustomWindow=type("CustomWindow", (), {})),
-			"wx": SimpleNamespace(),
+			"wx": _WX,
 		},
 	),
 ):
@@ -318,7 +319,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 		)
 
 		with patch.object(
-			clipboardMonitor.wx,
+			_WX,
 			"CallAfter",
 			side_effect=RuntimeError("wx stopped"),
 			create=True,
@@ -390,7 +391,7 @@ class ClipboardMonitorTests(unittest.TestCase):
 				with (
 					patch.object(clipboardMonitor, "Thread") as readerThread,
 					patch.object(
-						clipboardMonitor.wx,
+						_WX,
 						"CallAfter",
 						side_effect=lambda function, *args: function(*args),
 						create=True,

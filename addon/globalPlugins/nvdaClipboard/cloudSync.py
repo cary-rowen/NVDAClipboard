@@ -15,7 +15,6 @@ import addonHandler
 import config
 from logHandler import log
 import ui
-import wx
 
 from .cloudClipboard import (
 	BUFFER_TOO_SMALL,
@@ -30,6 +29,7 @@ from .cloudClipboard import (
 	CloudLoginResult,
 	validateUploadText,
 )
+from .mainThread import queueMainThread
 
 
 addonHandler.initTranslation()
@@ -435,13 +435,12 @@ class CloudSyncManager:
 
 	def _queueMainThread(self, callback: Callable[..., None], *args: object) -> bool:
 		"""Queue a GUI-thread callback and report only a live-manager scheduling failure."""
-		try:
-			wx.CallAfter(callback, *args)
-		except RuntimeError:
-			if not self._terminated:
-				log.debugWarning("Could not schedule a ClipDataCloud result callback.", exc_info=True)
-			return False
-		return True
+		return queueMainThread(
+			callback,
+			*args,
+			onFailure=lambda: not self._terminated,
+			failureMessage="Could not schedule a ClipDataCloud result callback.",
+		)
 
 	def _abandonSdkOperation(
 		self,

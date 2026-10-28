@@ -12,10 +12,12 @@ from contextlib import contextmanager
 import ctypes
 from dataclasses import dataclass
 from functools import cache
-from threading import Event, Lock, Thread
-from typing import Any
+from threading import Event, Lock
+from typing import Any, override
 
 from logHandler import log
+
+from .backgroundCalculation import BackgroundCalculation
 
 
 __all__ = [
@@ -77,63 +79,31 @@ class _IcuBindings:
 	hasBinaryProperty: Callable[..., int]
 
 
-class TextStatisticsCalculation:
+class TextStatisticsCalculation(BackgroundCalculation[TextStatisticsProgress]):
 	"""Calculate text statistics once in a cancellable background thread."""
+
+	_threadName = "nvdaClipboard.textStatistics"
+	_startFailureMessage = "Unable to start clipboard text statistics calculation"
+	_completionFailureMessage = "Unable to report clipboard text statistics completion"
 
 	def __init__(self, text: str) -> None:
 		"""Create a calculation that remains idle until :meth:`start` is called."""
+		super().__init__(TextStatisticsProgress())
 		self._text = text
-		self._cancelEvent = Event()
-		self._progressLock = Lock()
-		self._progress = TextStatisticsProgress()
-		self._hasStarted = False
 
-	def start(
-		self,
-		onComplete: Callable[[TextStatisticsCalculation], None] | None = None,
-	) -> bool:
-		"""Start the calculation once and return whether its worker was started."""
-		with self._progressLock:
-			if self._hasStarted:
-				return False
-			self._hasStarted = True
-		thread = Thread(
-			target=self._run,
-			args=(onComplete,),
-			name="nvdaClipboard.textStatistics",
-			daemon=True,
-		)
-		try:
-			thread.start()
-		except RuntimeError:
-			log.exception("Unable to start clipboard text statistics calculation")
-			self._publish(None)
-			return False
-		return True
+	@override
+	def _publishStartFailure(self) -> None:
+		"""Publish an unavailable result when the worker thread cannot be started."""
+		self._publish(None)
 
-	def getProgress(self) -> TextStatisticsProgress:
-		"""Return an immutable snapshot of the latest calculation state."""
-		with self._progressLock:
-			return self._progress
-
-	def cancel(self) -> None:
-		"""Request cancellation without waiting for the worker thread."""
-		self._cancelEvent.set()
-
-	def _run(self, onComplete: Callable[[TextStatisticsCalculation], None] | None) -> None:
+	@override
+	def _calculate(self) -> None:
 		"""Calculate and publish one result from the worker thread."""
-		statistics = calculateTextStatistics(self._text, self._cancelEvent)
-		self._publish(statistics)
-		if onComplete is not None:
-			try:
-				onComplete(self)
-			except Exception:
-				log.exception("Unable to report clipboard text statistics completion")
+		self._publish(calculateTextStatistics(self._text, self._cancelEvent))
 
 	def _publish(self, statistics: TextStatistics | None) -> None:
 		"""Atomically replace the result state visible to callers."""
-		with self._progressLock:
-			self._progress = TextStatisticsProgress(statistics=statistics, isComplete=True)
+		self._setProgress(TextStatisticsProgress(statistics=statistics, isComplete=True))
 
 
 def calculateTextStatistics(

@@ -560,7 +560,7 @@ class OneDriveSyncTests(unittest.TestCase):
 		manager._hasPendingSync = False
 		manager._state = oneDriveSync.OneDriveSyncState(True, True, False, False, "Account", "Ready")
 
-		with patch.object(oneDriveSync.wx, "CallAfter", side_effect=RuntimeError("wx stopped")):
+		with patch.object(_WX, "CallAfter", side_effect=RuntimeError("wx stopped")):
 			manager._postOperationResult(None, True, "complete", False, True)
 
 		self.assertTrue(manager._hasPendingSync)

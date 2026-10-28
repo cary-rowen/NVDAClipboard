@@ -88,7 +88,7 @@ class CloudSyncTests(unittest.TestCase):
 		cleanup = Mock()
 
 		with (
-			patch.object(cloudSync.wx, "CallAfter", side_effect=RuntimeError("wx stopped")),
+			patch.object(_WX, "CallAfter", side_effect=RuntimeError("wx stopped")),
 			patch.object(cloudSync, "Thread") as threadClass,
 		):
 			threadClass.return_value.start.side_effect = lambda: threadClass.call_args.kwargs["target"]()

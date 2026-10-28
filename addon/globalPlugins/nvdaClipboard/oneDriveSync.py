@@ -30,8 +30,8 @@ from gui.message import MessageDialog, ReturnCode
 from logHandler import log
 import NVDAState
 import requests
-import wx
 
+from .mainThread import queueMainThread
 from .oneDriveProtocol import (
 	MAX_ITEM_FILE_BYTES,
 	MAX_MANIFEST_BYTES,
@@ -1813,15 +1813,43 @@ class OneDriveSyncManager:
 			self._pollTimer.cancel()
 			self._pollTimer = None
 
+	def _isActive(self) -> bool:
+		"""Return whether the manager has not been terminated."""
+		with self._lock:
+			return not self._isTerminated
+
+	def _callOnGui(
+		self,
+		callback: Callable[..., None],
+		*args: object,
+		failureMessage: str,
+		onFailure: Callable[[], bool] | None = None,
+	) -> None:
+		"""Schedule a callback on wx's GUI thread, logging failures only while the manager is active.
+
+		``onFailure`` replaces the default active-manager check when wx rejects the callback.
+		"""
+		# Rejection is fully handled by onFailure, so whether wx accepted the callback is not needed.
+		_ = queueMainThread(
+			callback,
+			*args,
+			onFailure=self._isActive if onFailure is None else onFailure,
+			failureMessage=failureMessage,
+		)
+
+	def _invokeCallback(self, callback: Callable[..., None], *args: object, failureMessage: str) -> None:
+		"""Invoke one GUI callback and log instead of propagating its failure."""
+		try:
+			callback(*args)
+		except Exception:
+			log.exception(failureMessage)
+
 	def _postStateChanged(self) -> None:
 		"""Schedule a state callback on wx's GUI thread."""
-		try:
-			wx.CallAfter(self._deliverStateChanged)
-		except RuntimeError:
-			with self._lock:
-				isTerminated = self._isTerminated
-			if not isTerminated:
-				log.debugWarning("Could not schedule a OneDrive state callback.", exc_info=True)
+		self._callOnGui(
+			self._deliverStateChanged,
+			failureMessage="Could not schedule a OneDrive state callback.",
+		)
 
 	def _postDeviceCode(
 		self,
@@ -1830,13 +1858,13 @@ class OneDriveSyncManager:
 		verificationUrl: str,
 	) -> None:
 		"""Schedule device-code presentation on wx's GUI thread."""
-		try:
-			wx.CallAfter(self._deliverDeviceCode, callback, userCode, verificationUrl)
-		except RuntimeError:
-			with self._lock:
-				isTerminated = self._isTerminated
-			if not isTerminated:
-				log.debugWarning("Could not schedule the Microsoft device code.", exc_info=True)
+		self._callOnGui(
+			self._deliverDeviceCode,
+			callback,
+			userCode,
+			verificationUrl,
+			failureMessage="Could not schedule the Microsoft device code.",
+		)
 
 	def _postCompletion(
 		self,
@@ -1847,13 +1875,13 @@ class OneDriveSyncManager:
 		"""Schedule a rejected operation callback on wx's GUI thread."""
 		if onDone is None:
 			return
-		try:
-			wx.CallAfter(self._deliverCompletion, onDone, success, message)
-		except RuntimeError:
-			with self._lock:
-				isTerminated = self._isTerminated
-			if not isTerminated:
-				log.debugWarning("Could not schedule a OneDrive completion callback.", exc_info=True)
+		self._callOnGui(
+			self._deliverCompletion,
+			onDone,
+			success,
+			message,
+			failureMessage="Could not schedule a OneDrive completion callback.",
+		)
 
 	def _postOperationResult(
 		self,
@@ -1864,22 +1892,25 @@ class OneDriveSyncManager:
 		shouldRunPending: bool,
 	) -> None:
 		"""Schedule ordered state, data, and completion callbacks on wx."""
-		try:
-			wx.CallAfter(
-				self._deliverOperationResult,
-				onDone,
-				success,
-				message,
-				dataChanged,
-				shouldRunPending,
-			)
-		except RuntimeError:
+
+		def retainPendingSync() -> bool:
+			"""Keep queued synchronization when wx rejects delivery and report whether to log it."""
 			with self._lock:
 				isTerminated = self._isTerminated
 				if shouldRunPending and not isTerminated and self._state.isLoggedIn:
 					self._hasPendingSync = True
-			if not isTerminated:
-				log.debugWarning("Could not schedule OneDrive result callbacks.", exc_info=True)
+			return not isTerminated
+
+		self._callOnGui(
+			self._deliverOperationResult,
+			onDone,
+			success,
+			message,
+			dataChanged,
+			shouldRunPending,
+			failureMessage="Could not schedule OneDrive result callbacks.",
+			onFailure=retainPendingSync,
+		)
 
 	def _deliverStateChanged(self) -> None:
 		"""Invoke the current state callback on the GUI thread."""
@@ -1888,10 +1919,7 @@ class OneDriveSyncManager:
 				return
 			callback = self._onStateChanged
 		if callback is not None:
-			try:
-				callback()
-			except Exception:
-				log.exception("OneDrive state callback failed.")
+			self._invokeCallback(callback, failureMessage="OneDrive state callback failed.")
 
 	def _deliverDeviceCode(
 		self,
@@ -1903,10 +1931,12 @@ class OneDriveSyncManager:
 		with self._lock:
 			if self._isTerminated or self._deviceCodeCancellationRequested:
 				return
-		try:
-			callback(userCode, verificationUrl)
-		except Exception:
-			log.exception("OneDrive device-code callback failed.")
+		self._invokeCallback(
+			callback,
+			userCode,
+			verificationUrl,
+			failureMessage="OneDrive device-code callback failed.",
+		)
 
 	def _deliverCompletion(
 		self,
@@ -1918,10 +1948,9 @@ class OneDriveSyncManager:
 		with self._lock:
 			if self._isTerminated:
 				return
-		try:
-			callback(success, message)
-		except Exception:
-			log.exception("OneDrive completion callback failed.")
+		self._invokeCallback(
+			callback, success, message, failureMessage="OneDrive completion callback failed."
+		)
 
 	def _deliverOperationResult(
 		self,
@@ -1939,20 +1968,16 @@ class OneDriveSyncManager:
 			onDataChanged = self._onDataChanged if dataChanged else None
 		try:
 			if onStateChanged is not None:
-				try:
-					onStateChanged()
-				except Exception:
-					log.exception("OneDrive state callback failed.")
+				self._invokeCallback(onStateChanged, failureMessage="OneDrive state callback failed.")
 			if onDataChanged is not None:
-				try:
-					onDataChanged()
-				except Exception:
-					log.exception("OneDrive data callback failed.")
+				self._invokeCallback(onDataChanged, failureMessage="OneDrive data callback failed.")
 			if onDone is not None:
-				try:
-					onDone(success, message)
-				except Exception:
-					log.exception("OneDrive completion callback failed.")
+				self._invokeCallback(
+					onDone,
+					success,
+					message,
+					failureMessage="OneDrive completion callback failed.",
+				)
 		finally:
 			if shouldRunPending:
 				self._requestSync(onDone=None, isAutomatic=True)
