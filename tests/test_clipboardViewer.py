@@ -126,8 +126,7 @@ class ClipboardViewerTests(unittest.TestCase):
 		self.assertIn("<table>", rendered)
 		self.assertIn("<code>code</code>", rendered)
 		self.assertIn("<code>$notmath$</code>", rendered)
-		if clipboardViewer.LaTeX2MathMLExtension is not None:
-			self.assertGreaterEqual(rendered.count("<math"), 2)
+		self.assertGreaterEqual(rendered.count("<math"), 2)
 
 	def testRenderTextFallsBackWhenSanitizationRemovesRawHtml(self) -> None:
 		"""Preserve plain text that Markdown exposes only as removable HTML."""
@@ -161,9 +160,6 @@ class ClipboardViewerTests(unittest.TestCase):
 	def testRenderHtmlConvertsVisibleLatexButNotCode(self) -> None:
 		"""Convert formulas in rich text while preserving literal code samples."""
 		html = clipboardViewer.renderHtml("<p>$x+1$</p><pre>$y+1$</pre><code>$z+1$</code>")
-		if clipboardViewer.converter is None:
-			self.assertIn("$x+1$", html)
-			return
 		self.assertEqual(1, html.count("<math"))
 		self.assertIn("$y+1$", html)
 		self.assertIn("$z+1$", html)

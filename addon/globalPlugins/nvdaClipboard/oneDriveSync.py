@@ -28,6 +28,7 @@ import addonHandler
 import fileUtils
 from gui.message import MessageDialog, ReturnCode
 from logHandler import log
+import NVDAState
 import requests
 import wx
 
@@ -71,8 +72,6 @@ from .storageModels import (
 
 
 addonHandler.initTranslation()
-
-_VENDOR_PATH = Path(__file__).with_name("_vendor").resolve()
 
 CLIENT_ID = "99ce63cb-1d1e-436c-85d8-e78073d3e2d0"
 AUTHORITY = "https://login.microsoftonline.com/common"
@@ -178,7 +177,6 @@ class _RemoteItemFile:
 	size: int | None
 	sha1Hash: str | None
 	quickXorHash: bytes | None = None
-	etag: str | None = None
 
 
 class _ItemStage:
@@ -308,20 +306,6 @@ def _unprotectData(data: bytes) -> bytes:
 		del inputBuffer, entropyBuffer
 
 
-def _shouldWriteToDisk() -> bool:
-	"""Return whether the current NVDA instance permits persistent writes."""
-	try:
-		import NVDAState
-
-		return NVDAState.shouldWriteToDisk()
-	except (ImportError, AttributeError):
-		log.debugWarning(
-			"Could not determine whether the OneDrive token cache may be written.",
-			exc_info=True,
-		)
-		return False
-
-
 class _AuthManager:
 	"""Acquire Microsoft tokens and persist the MSAL cache with DPAPI."""
 
@@ -330,14 +314,6 @@ class _AuthManager:
 		try:
 			from ._vendor import msal
 			from ._vendor.msal.oauth2cli import AuthCodeReceiver
-
-			modulePath = getattr(msal, "__file__", None)
-			if (
-				not isinstance(modulePath, str)
-				or not Path(modulePath).resolve().is_relative_to(_VENDOR_PATH)
-				or getattr(msal, "__version__", None) != "1.37.0"
-			):
-				raise ImportError(f"Unexpected {msal.__name__} module")
 		except Exception as error:
 			raise _AuthenticationUnavailableError(_ERROR_AUTH_UNAVAILABLE) from error
 		self.cachePath = cachePath
@@ -364,7 +340,7 @@ class _AuthManager:
 			self.cache.deserialize(serialized)
 		except (OSError, UnicodeError, json.JSONDecodeError) as error:
 			log.warning(f"Discarding an unreadable OneDrive token cache after {type(error).__name__}.")
-			if _shouldWriteToDisk():
+			if NVDAState.shouldWriteToDisk():
 				try:
 					self.cachePath.unlink(missing_ok=True)
 				except OSError:
@@ -372,7 +348,7 @@ class _AuthManager:
 
 	def _saveCache(self) -> None:
 		"""Atomically encrypt and save changed MSAL cache data."""
-		if not self.cache.has_state_changed or not _shouldWriteToDisk():
+		if not self.cache.has_state_changed or not NVDAState.shouldWriteToDisk():
 			return
 		temporaryPath: Path | None = None
 		try:
@@ -534,7 +510,7 @@ class _AuthManager:
 		"""Remove every cached Microsoft account and persistent token."""
 		for account in self.app.get_accounts():
 			self.app.remove_account(account)
-		if _shouldWriteToDisk():
+		if NVDAState.shouldWriteToDisk():
 			try:
 				self.cachePath.unlink(missing_ok=True)
 			except OSError as error:
@@ -712,7 +688,6 @@ class _GraphClient:
 					size=size,
 					sha1Hash=sha1Value.lower() if isinstance(sha1Value, str) else None,
 					quickXorHash=_quickXorHashFromGraph(quickXorValue),
-					etag=etag,
 				)
 				if payloadHash in relevantPayloads:
 					result[payloadHash] = itemFile
@@ -784,7 +759,8 @@ class _GraphClient:
 		requestHeaders = dict(headers or {})
 		requestHeaders["Authorization"] = f"Bearer {self.accessToken}"
 		requestHeaders.setdefault("Accept", "application/json")
-		for attempt in range(2):
+		retried = False
+		while True:
 			self._checkCancelled()
 			try:
 				response = self.session.request(
@@ -806,13 +782,13 @@ class _GraphClient:
 				return response
 			error = _graphError(response)
 			response.close()
-			if attempt == 0 and response.status_code in (429, 503) and error.retryAfter is not None:
+			if not retried and response.status_code in (429, 503) and error.retryAfter is not None:
+				retried = True
 				# ponytail: retry once with a bounded delay; add cancellable backoff if throttling is common.
 				if self.cancelEvent.wait(min(error.retryAfter, _MAX_RETRY_AFTER_SECONDS)):
 					self._checkCancelled()
 				continue
 			raise error
-		raise AssertionError
 
 	def _checkCancelled(self) -> None:
 		"""Abort a Graph operation after the user requests sign-out."""
@@ -1138,7 +1114,7 @@ class OneDriveSyncManager:
 	def _initializeWorker(self) -> tuple[str, bool]:
 		"""Restore a bound cached account and run the startup synchronization."""
 		self._ensureActive()
-		if not self._cachePath.is_file() or not _shouldWriteToDisk():
+		if not self._cachePath.is_file() or not NVDAState.shouldWriteToDisk():
 			self._setAccountToken(None)
 			return _STATUS_NOT_SIGNED_IN, False
 		auth = self._getAuth()

@@ -107,8 +107,8 @@ WM_CLIPBOARDUPDATE = 0x031D
 HWND_MESSAGE = -3
 DRAG_QUERY_FILE_COUNT = 0xFFFFFFFF
 
-DEFAULT_OPEN_RETRIES = 10
-DEFAULT_OPEN_RETRY_INTERVAL = 0.05
+_OPEN_RETRIES = 10
+_OPEN_RETRY_INTERVAL = 0.05
 _FAILED_OPEN_RETRY_INTERVAL = 0.1
 _OPEN_CLIPBOARD_ERROR = "OpenClipboard failed"
 
@@ -430,15 +430,8 @@ class ClipboardMonitor:
 	thread. Clipboard reads are performed on a worker and dispatched through wx.
 	"""
 
-	def __init__(
-		self,
-		onSnapshot: ClipboardSnapshotCallback | None = None,
-		openRetries: int = DEFAULT_OPEN_RETRIES,
-		openRetryInterval: float = DEFAULT_OPEN_RETRY_INTERVAL,
-	) -> None:
+	def __init__(self, onSnapshot: ClipboardSnapshotCallback | None = None) -> None:
 		self._onSnapshot = onSnapshot
-		self._openRetries = openRetries
-		self._openRetryInterval = openRetryInterval
 		self._formats = _registerFormats()
 		if not all(
 			(
@@ -688,7 +681,7 @@ class ClipboardMonitor:
 			if shouldRetry:
 				if not reportedOpenFailure:
 					log.debugWarning(
-						f"Could not open the clipboard after {self._openRetries} attempts; retrying.",
+						f"Could not open the clipboard after {_OPEN_RETRIES} attempts; retrying.",
 					)
 					reportedOpenFailure = True
 				sleep(_FAILED_OPEN_RETRY_INTERVAL)
@@ -1208,11 +1201,11 @@ class ClipboardMonitor:
 
 	def _openClipboardWithRetry(self, ownerHandle: int | None) -> bool:
 		"""Open the clipboard, retrying briefly while another process owns it."""
-		for attempt in range(1, self._openRetries + 1):
+		for attempt in range(1, _OPEN_RETRIES + 1):
 			if _openClipboard(ownerHandle):
 				return True
-			if attempt < self._openRetries:
-				sleep(self._openRetryInterval)
+			if attempt < _OPEN_RETRIES:
+				sleep(_OPEN_RETRY_INTERVAL)
 		return False
 
 

@@ -113,6 +113,8 @@ _REQUESTS = ModuleType("requests")
 _REQUESTS.RequestException = OSError
 _REQUESTS.Response = object
 _REQUESTS.Session = MagicMock
+_NVDA_STATE = ModuleType("NVDAState")
+_NVDA_STATE.shouldWriteToDisk = MagicMock(return_value=False)
 _WX = ModuleType("wx")
 _WX.CallAfter = MagicMock()
 _STORAGE = ModuleType(f"{_PACKAGE_NAME}.storage")
@@ -125,7 +127,6 @@ _STORAGE.StorageFormatError = _StorageFormatError
 _STORAGE.MAX_HISTORY_ITEMS = 1000
 _STORAGE.MAX_IMAGE_HISTORY_ITEMS = 20
 _STORAGE.MAX_TOTAL_IMAGE_BYTES = 256 * 1024 * 1024
-_STORAGE.getItemDedupKey = _getItemDedupKey
 _STORAGE.getItemPayloadHash = _getItemPayloadHash
 _STORAGE.isOneDriveSyncItem = _isOneDriveSyncItem
 with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True):
@@ -138,6 +139,7 @@ with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicM
 			"gui.message": _GUI_MESSAGE,
 			"fileUtils": _FILE_UTILS,
 			"logHandler": _LOG_HANDLER,
+			"NVDAState": _NVDA_STATE,
 			"requests": _REQUESTS,
 			"wx": _WX,
 			f"{_PACKAGE_NAME}.storage": _STORAGE,
@@ -591,7 +593,7 @@ class OneDriveSyncTests(unittest.TestCase):
 			auth = object.__new__(oneDriveSync._AuthManager)
 			auth.cachePath = blockedParent / "cache.dat"
 			auth.cache = SimpleNamespace(has_state_changed=True)
-			with patch.object(oneDriveSync, "_shouldWriteToDisk", return_value=True):
+			with patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True):
 				with self.assertRaises(oneDriveSync.OneDriveError) as context:
 					auth._saveCache()
 			self.assertEqual(str(context.exception), "Could not save Microsoft sign-in data")
@@ -608,7 +610,7 @@ class OneDriveSyncTests(unittest.TestCase):
 			auth.cache = SimpleNamespace(has_state_changed=True, serialize=Mock(return_value="cached"))
 
 			with (
-				patch.object(oneDriveSync, "_shouldWriteToDisk", return_value=True),
+				patch.object(oneDriveSync.NVDAState, "shouldWriteToDisk", return_value=True),
 				patch.object(oneDriveSync, "_protectData", return_value=b"encrypted"),
 				patch.object(oneDriveSync.fileUtils, "FaultTolerantFile", faultTolerantFile),
 			):

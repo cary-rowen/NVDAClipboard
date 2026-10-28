@@ -152,7 +152,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		version1Storage = ClipboardStorage(version1DataPath, root / "missing-v2.json")
 		version1Snapshot = version1Storage.getOneDriveSnapshot()
 		assert not version1Storage.hasPendingOneDriveChanges()
-		version1DedupKey = getItemDedupKey(version1Item)
+		version1DedupKey = _dedupKey(version1Item)
 		assert not version1Snapshot.history
 		assert not version1Snapshot.categories
 		assert not version1Snapshot.categoryItems
@@ -161,7 +161,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert preSignInDeletedId is not None
 		version1Storage.deleteHistoryItemsById((preSignInDeletedId,))
 		version1Storage.renameCategory("Version 1 category", "Renamed before sign-in")
-		preSignInDeletedKey = getItemDedupKey(preSignInDeletedItem)
+		preSignInDeletedKey = _dedupKey(preSignInDeletedItem)
 		assert version1Storage.getOneDriveSnapshot() == version1Snapshot
 		with version1Storage._readConnection() as connection:
 			assert connection.execute("SELECT logicalClock FROM oneDriveSync").fetchone()[0] == 0
@@ -195,7 +195,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			_deleteHistoryReferences(connection, (evictedItemId,), explicit=False)
 			_garbageCollect(connection)
 		assert all(
-			state.dedupKey != getItemDedupKey(evictedItem)
+			state.dedupKey != _dedupKey(evictedItem)
 			for state in version1Storage.getOneDriveSnapshot().history
 		)
 		privateItem = ClipboardItem(
@@ -205,7 +205,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		)
 		assert version1Storage.addHistory(privateItem) is not None
 		assert all(
-			state.dedupKey != getItemDedupKey(privateItem)
+			state.dedupKey != _dedupKey(privateItem)
 			for state in version1Storage.getOneDriveSnapshot().history
 		)
 		oversizedItem = ClipboardItem(
@@ -216,7 +216,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert oversizedItemId is not None
 		version1Storage.createCategory("Local only")
 		version1Storage.copyHistoryItemsToCategoryById((oversizedItemId,), "Local only")
-		oversizedDedupKey = getItemDedupKey(oversizedItem)
+		oversizedDedupKey = _dedupKey(oversizedItem)
 		oversizedPayloadHash = getItemPayloadHash(oversizedItem)
 		with version1Storage._transaction() as connection:
 			_recordHistoryLive(connection, oversizedDedupKey, oversizedPayloadHash)
@@ -239,7 +239,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		remoteItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="remote change")
 		remotePayloadHash = getItemPayloadHash(remoteItem)
 		remoteState = OneDriveHistoryState(
-			getItemDedupKey(remoteItem),
+			_dedupKey(remoteItem),
 			remotePayloadHash,
 			SyncVersion(10_000, "00000000-0000-0000-0000-000000010000"),
 			False,
@@ -303,7 +303,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		futureState = next(
 			state
 			for state in reservationStorage.getOneDriveSnapshot().history
-			if state.dedupKey == getItemDedupKey(futureItem)
+			if state.dedupKey == _dedupKey(futureItem)
 		)
 		assert futureState.version.clock > futureVersions[-1].clock
 		_expectRaises(
@@ -369,14 +369,12 @@ def _runSelfCheck() -> None:  # noqa: C901
 		afterGenerationSnapshot = generationStorage.getOneDriveSnapshot()
 		assert afterGenerationSnapshot.generation == committedGeneration
 		baselineState = next(
-			state
-			for state in afterGenerationSnapshot.history
-			if state.dedupKey == getItemDedupKey(baselineItem)
+			state for state in afterGenerationSnapshot.history if state.dedupKey == _dedupKey(baselineItem)
 		)
 		concurrentGenerationState = next(
 			state
 			for state in afterGenerationSnapshot.history
-			if state.dedupKey == getItemDedupKey(concurrentGenerationItem)
+			if state.dedupKey == _dedupKey(concurrentGenerationItem)
 		)
 		assert not baselineState.dirty
 		assert concurrentGenerationState.dirty
@@ -744,10 +742,10 @@ class StorageSelfCheckTests(unittest.TestCase):
 					assert tuple(item.itemId for item in storage.history) == (secondId,)
 					assert storage.getHistoryItemById(secondId) == secondItem
 					states = {state.dedupKey: state for state in storage.getOneDriveSnapshot().history}
-					deletedState = states[getItemDedupKey(firstItem)]
+					deletedState = states[_dedupKey(firstItem)]
 					assert deletedState.deleted and deletedState.dirty
 					assert deletedState.payloadHash is None
-					newState = states[getItemDedupKey(secondItem)]
+					newState = states[_dedupKey(secondItem)]
 					assert not newState.deleted and newState.dirty
 					assert newState.payloadHash == getItemPayloadHash(secondItem)
 				finally:
@@ -783,18 +781,18 @@ class StorageSelfCheckTests(unittest.TestCase):
 				oldState = next(
 					state
 					for state in storage.getOneDriveSnapshot().history
-					if state.dedupKey == getItemDedupKey(oldItem)
+					if state.dedupKey == _dedupKey(oldItem)
 				)
 				assert not oldState.deleted
 				newItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="old\nnew")
 				newItemId = storage.addHistory(newItem, replaceText=oldItem.text)
 				assert newItemId is not None
 				states = {state.dedupKey: state for state in storage.getOneDriveSnapshot().history}
-				deletedState = states[getItemDedupKey(oldItem)]
+				deletedState = states[_dedupKey(oldItem)]
 				assert deletedState.deleted and deletedState.dirty
 				assert deletedState.payloadHash is None
 				assert deletedState.version > oldState.version
-				newState = states[getItemDedupKey(newItem)]
+				newState = states[_dedupKey(newItem)]
 				assert not newState.deleted and newState.dirty
 				assert newState.payloadHash == getItemPayloadHash(newItem)
 				assert tuple(item.itemId for item in storage.history) == (newItemId,)

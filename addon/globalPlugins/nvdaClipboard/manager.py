@@ -2330,7 +2330,7 @@ class ClipboardManagerFrame(wx.Frame):
 		"""Apply one text transform to the current editable content."""
 		if self._isSearchSessionActive or not self._isContentCurrent() or not self._contentEditable:
 			return
-		textTransforms.applyEditorTextTransform(self.editor, transform, lineWise=True)
+		textTransforms.applyEditorTextTransform(self.editor, transform)
 
 	def _onCloudSync(self, event: wx.CommandEvent) -> None:
 		"""Open the Tiantan Cloud Clipboard account dialog."""

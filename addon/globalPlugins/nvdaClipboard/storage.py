@@ -74,11 +74,6 @@ class StorageFormatError(StorageError):
 class UnsupportedSchemaVersionError(StorageError):
 	"""Raised when a database uses an unsupported schema version."""
 
-	def __init__(self, foundVersion: int, supportedVersion: int = SCHEMA_VERSION) -> None:
-		super().__init__(foundVersion, supportedVersion)
-		self.foundVersion = foundVersion
-		self.supportedVersion = supportedVersion
-
 
 class InvalidItemError(StorageError):
 	"""Raised when a clipboard entry has inconsistent fixed-format fields."""
@@ -264,7 +259,7 @@ def _initializeSchema(connection: sqlite3.Connection) -> None:
 		raise StorageFormatError
 	version = cast(int, versionRow[0])
 	if version not in (0, 1, SCHEMA_VERSION):
-		raise UnsupportedSchemaVersionError(version)
+		raise UnsupportedSchemaVersionError(version, SCHEMA_VERSION)
 	if version in (1, SCHEMA_VERSION):
 		requiredTables = {
 			"items",
@@ -545,12 +540,6 @@ def _payloadHash(item: ClipboardItem) -> bytes:
 			b"1" if item.canUpload else b"0",
 		),
 	)
-
-
-def getItemDedupKey(item: ClipboardItem) -> bytes:
-	"""Return the stable history identity used by local and cloud storage."""
-	_validateItem(item)
-	return _dedupKey(item)
 
 
 def getItemPayloadHash(item: ClipboardItem) -> bytes:

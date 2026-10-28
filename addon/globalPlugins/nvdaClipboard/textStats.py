@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import ctypes
 from dataclasses import dataclass
+from functools import cache
 from threading import Event, Lock, Thread
 from typing import Any
 
@@ -37,7 +38,7 @@ _LINE_BREAK_CHARACTERS = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
 _ASCII_INLINE_WHITESPACE = " \t"
 _ASCII_PUNCTUATION = "!\"#%&'()*,-./:;?@[\\]_{}"
 _ASCII_SYMBOLS = "$+<=>^`|~"
-_icuUnavailableReported = False
+_icuBindingsLock = Lock()
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +73,8 @@ class _IcuBindings:
 	next: Callable[..., int]
 	charType: Callable[..., int]
 	isWhitespace: Callable[..., int]
-	getScript: Callable[..., int] | None
-	hasBinaryProperty: Callable[..., int] | None
+	getScript: Callable[..., int]
+	hasBinaryProperty: Callable[..., int]
 
 
 class TextStatisticsCalculation:
@@ -259,8 +260,6 @@ def _isHanCharacter(character: str, bindings: _IcuBindings) -> bool | None:
 	codePoint = ord(character)
 	if codePoint < 0x2E80:
 		return False
-	if bindings.hasBinaryProperty is None:
-		return None
 	if not bindings.hasBinaryProperty(codePoint, _UCHAR_IDEOGRAPHIC):
 		return False
 	script = _getScript(character, bindings)
@@ -269,8 +268,6 @@ def _isHanCharacter(character: str, bindings: _IcuBindings) -> bool | None:
 
 def _getScript(character: str, bindings: _IcuBindings) -> int | None:
 	"""Return one ICU script code, or ``None`` when script classification fails."""
-	if bindings.getScript is None:
-		return None
 	status = bindings.core.UErrorCode(0)
 	script = bindings.getScript(ord(character), ctypes.byref(status))
 	if bindings.core.U_FAILURE(status.value) or script < 0 or script == _USCRIPT_UNKNOWN:
@@ -296,62 +293,38 @@ def _breakIterator(
 
 
 def _loadIcuBindings() -> _IcuBindings | None:
+	"""Return the ICU bindings, loading them at most once across worker threads."""
+	with _icuBindingsLock:
+		return _bindIcu()
+
+
+@cache
+def _bindIcu() -> _IcuBindings | None:
 	"""Load NVDA's ICU module and bind the additional character functions."""
-	try:
-		import winBindings.icu as icu
-	except ImportError as error:
-		_reportIcuUnavailable(error)
-		return None
-	try:
-		if not icu.ICU_AVAILABLE or icu.dll is None:
-			_reportIcuUnavailable()
-			return None
-	except AttributeError as error:
-		_reportIcuUnavailable(error)
-		return None
-	try:
-		first = ctypes.WINFUNCTYPE(ctypes.c_int32, ctypes.c_void_p)(("ubrk_first", icu.dll))
-		nextBoundary = ctypes.WINFUNCTYPE(ctypes.c_int32, ctypes.c_void_p)(("ubrk_next", icu.dll))
-		charType = ctypes.WINFUNCTYPE(ctypes.c_int8, ctypes.c_int32)(("u_charType", icu.dll))
-		isWhitespace = ctypes.WINFUNCTYPE(ctypes.c_int8, ctypes.c_int32)(("u_isUWhiteSpace", icu.dll))
-	except (AttributeError, OSError) as error:
-		_reportIcuUnavailable(error)
-		return None
-	try:
-		getScript = ctypes.WINFUNCTYPE(
-			ctypes.c_int32,
-			ctypes.c_int32,
-			ctypes.POINTER(icu.UErrorCode),
-		)(("uscript_getScript", icu.dll))
-	except (AttributeError, OSError):
-		getScript = None
-	try:
-		hasBinaryProperty = ctypes.WINFUNCTYPE(
-			ctypes.c_int8,
-			ctypes.c_int32,
-			ctypes.c_int32,
-		)(("u_hasBinaryProperty", icu.dll))
-	except (AttributeError, OSError):
-		hasBinaryProperty = None
-	return _IcuBindings(
-		core=icu,
-		first=first,
-		next=nextBoundary,
-		charType=charType,
-		isWhitespace=isWhitespace,
-		getScript=getScript,
-		hasBinaryProperty=hasBinaryProperty,
-	)
+	import winBindings.icu as icu
 
-
-def _reportIcuUnavailable(error: Exception | None = None) -> None:
-	"""Log the first non-ASCII statistics request that cannot use NVDA's ICU runtime."""
-	global _icuUnavailableReported
-	if _icuUnavailableReported:
-		return
-	_icuUnavailableReported = True
 	message = "NVDA ICU is unavailable for non-ASCII clipboard text statistics."
-	if error is None:
+	if not icu.ICU_AVAILABLE:
 		log.debugWarning(message)
-	else:
+		return None
+	try:
+		return _IcuBindings(
+			core=icu,
+			first=ctypes.WINFUNCTYPE(ctypes.c_int32, ctypes.c_void_p)(("ubrk_first", icu.dll)),
+			next=ctypes.WINFUNCTYPE(ctypes.c_int32, ctypes.c_void_p)(("ubrk_next", icu.dll)),
+			charType=ctypes.WINFUNCTYPE(ctypes.c_int8, ctypes.c_int32)(("u_charType", icu.dll)),
+			isWhitespace=ctypes.WINFUNCTYPE(ctypes.c_int8, ctypes.c_int32)(("u_isUWhiteSpace", icu.dll)),
+			getScript=ctypes.WINFUNCTYPE(
+				ctypes.c_int32,
+				ctypes.c_int32,
+				ctypes.POINTER(icu.UErrorCode),
+			)(("uscript_getScript", icu.dll)),
+			hasBinaryProperty=ctypes.WINFUNCTYPE(
+				ctypes.c_int8,
+				ctypes.c_int32,
+				ctypes.c_int32,
+			)(("u_hasBinaryProperty", icu.dll)),
+		)
+	except (AttributeError, OSError) as error:
 		log.debugWarning(message, exc_info=error)
+		return None

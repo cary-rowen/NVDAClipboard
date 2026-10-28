@@ -334,23 +334,10 @@ def isPngImageDecodable(pngData: bytes, expectedInfo: tuple[int, int, int]) -> b
 	return True
 
 
-def encodeBgrPixelsToPng(
-	pixelData: bytes | memoryview,
-	width: int,
-	height: int,
-	*,
-	bytesPerPixel: int,
-	rowStride: int,
-	bottomUp: bool = False,
-) -> bytes | None:
-	"""Encode bounded BGR or BGRX pixels as an adaptively filtered RGB PNG."""
-	expectedStride = ((width * 3 + 3) // 4) * 4 if bytesPerPixel == 3 else width * 4
-	if (
-		bytesPerPixel not in (3, 4)
-		or rowStride != expectedStride
-		or not isImageSizeSafe(width, height, bytesPerPixel * 8)
-		or len(pixelData) != rowStride * height
-	):
+def encodeBgrPixelsToPng(pixelData: bytes | memoryview, width: int, height: int) -> bytes | None:
+	"""Encode bounded top-down BGRX pixels as an adaptively filtered RGB PNG."""
+	rowStride = width * 4
+	if not isImageSizeSafe(width, height, 32) or len(pixelData) != rowStride * height:
 		return None
 	from PIL import Image
 
@@ -360,9 +347,9 @@ def encodeBgrPixelsToPng(
 			(width, height),
 			pixelData,
 			"raw",
-			"BGR" if bytesPerPixel == 3 else "BGRX",
+			"BGRX",
 			rowStride,
-			-1 if bottomUp else 1,
+			1,
 		)
 	except (OSError, ValueError):
 		return None

@@ -145,7 +145,6 @@ class TextTransformTests(unittest.TestCase):
 		changed = textTransforms.applyEditorTextTransform(
 			editor,
 			textTransforms.cleanTerminalOutput,
-			lineWise=True,
 		)
 
 		self.assertTrue(changed)
@@ -174,7 +173,6 @@ class TextTransformTests(unittest.TestCase):
 		changed = textTransforms.applyEditorTextTransform(
 			editor,
 			textTransforms.trimLeadingAndTrailingSpaces,
-			lineWise=True,
 		)
 
 		self.assertTrue(changed)
@@ -200,7 +198,6 @@ class TextTransformTests(unittest.TestCase):
 			changed = textTransforms.applyEditorTextTransform(
 				editor,
 				textTransforms.replaceLineBreaksWithSpaces,
-				lineWise=True,
 			)
 
 		self.assertTrue(changed)

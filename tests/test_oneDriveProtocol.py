@@ -143,7 +143,7 @@ class OneDriveProtocolTests(unittest.TestCase):
 		payloadHash = storage.getItemPayloadHash(item)
 		firstVersion = oneDriveProtocol.SyncVersion(1, "00000000-0000-0000-0000-000000000001")
 		secondVersion = oneDriveProtocol.SyncVersion(2, "00000000-0000-0000-0000-000000000002")
-		dedupKey = storage.getItemDedupKey(item)
+		dedupKey = storage._dedupKey(item)
 		local = oneDriveProtocol.OneDriveSyncSnapshot(
 			accountId="account",
 			history=(oneDriveProtocol.OneDriveHistoryState(dedupKey, payloadHash, firstVersion, False),),

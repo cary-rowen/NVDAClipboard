@@ -64,7 +64,7 @@ class ImageCodecTests(unittest.TestCase):
 		width = 256
 		height = 128
 		randomGenerator = random.Random(1234)
-		pixelData = bytearray(width * height * 3)
+		pixelData = bytearray(width * height * 4)
 		previous = [128, 128, 128]
 		offset = 0
 		for _row in range(height):
@@ -72,16 +72,10 @@ class ImageCodecTests(unittest.TestCase):
 				for channel in range(3):
 					previous[channel] = (previous[channel] + randomGenerator.randrange(-2, 3)) & 0xFF
 					pixelData[offset + channel] = previous[channel]
-				offset += 3
+				offset += 4
 
 		with patch.object(imageCodec, "MAX_IMAGE_BYTES", 50_000):
-			pngData = imageCodec.encodeBgrPixelsToPng(
-				pixelData,
-				width,
-				height,
-				bytesPerPixel=3,
-				rowStride=width * 3,
-			)
+			pngData = imageCodec.encodeBgrPixelsToPng(pixelData, width, height)
 
 		self.assertIsNotNone(pngData)
 		self.assertEqual((width, height, 24), clipboardData.getPngImageInfo(pngData))

@@ -112,21 +112,15 @@ def sortLinesByLengthDescending(text: str) -> str:
 	return _applyLineTransform(text, lambda lines: sorted(lines, key=len, reverse=True))
 
 
-def applyEditorTextTransform(
-	editor: object,
-	transform: Callable[[str], str],
-	*,
-	lineWise: bool = False,
-) -> bool:
-	"""Apply one text transform to the editor selection or full content."""
+def applyEditorTextTransform(editor: object, transform: Callable[[str], str]) -> bool:
+	"""Apply one text transform to the whole lines of the editor selection or full content."""
 	text = editor.GetValue()
 	selectionStart, selectionEnd = editor.GetSelection()
 	hasSelection = selectionStart != selectionEnd
 	offsetConverter = textUtils.WideStringOffsetConverter(text)
 	if hasSelection:
 		textStart, textEnd = offsetConverter.encodedToStrOffsets(selectionStart, selectionEnd)
-		if lineWise:
-			textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
+		textStart, textEnd = _expandToWholeLines(text, textStart, textEnd)
 		encodedStart, encodedEnd = offsetConverter.strToEncodedOffsets(textStart, textEnd)
 	else:
 		textStart = 0

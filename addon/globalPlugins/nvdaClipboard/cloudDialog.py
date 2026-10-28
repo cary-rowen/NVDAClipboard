@@ -151,10 +151,10 @@ class CloudClipboardDialog(wx.Dialog):
 		self.Layout()
 		self.Fit()
 
-	def refreshFromManager(self, updateStatus: bool = True) -> None:
+	def refreshFromManager(self) -> None:
 		"""Refresh controls after cloud state changes outside this dialog."""
 		if not self._isDestroyed:
-			self._refreshUi(updateStatus=updateStatus)
+			self._refreshUi()
 
 	def _setBusy(self, busy: bool, message: str | None = None) -> None:
 		self._busy = busy

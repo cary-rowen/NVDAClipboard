@@ -22,18 +22,10 @@ _AMD64_DIRECTORY = _NATIVE_ROOT / "amd64"
 _ARM64_DIRECTORY = _NATIVE_ROOT / "arm64"
 
 
-def getNativeDirectory(machine: str | None = None) -> Path:
-	"""Return the bundled native directory for one Windows architecture."""
-	if machine is None:
-		machine = platform.machine()
-	if machine.upper() == "ARM64":
-		return _ARM64_DIRECTORY
-	return _AMD64_DIRECTORY
-
-
-def getNativeFilePath(fileName: str, machine: str | None = None) -> Path:
+def getNativeFilePath(fileName: str) -> Path:
 	"""Return one bundled native file path for the current architecture."""
-	return getNativeDirectory(machine) / fileName
+	directory = _ARM64_DIRECTORY if platform.machine().upper() == "ARM64" else _AMD64_DIRECTORY
+	return directory / fileName
 
 
 def loadExtensionModule(moduleName: str, fileName: str) -> ModuleType:

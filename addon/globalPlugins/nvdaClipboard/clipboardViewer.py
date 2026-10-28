@@ -18,6 +18,8 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element
 
 import nh3
+from l2m4m import LaTeX2MathMLExtension
+from latex2mathml import converter
 from logHandler import log
 from markdown import Markdown, markdown
 from markdown.extensions import Extension
@@ -27,87 +29,80 @@ from markdown.postprocessors import Postprocessor
 if TYPE_CHECKING:
 	from .clipboardMonitor import ClipboardSnapshot
 
-try:
-	from l2m4m import LaTeX2MathMLExtension
-	from latex2mathml import converter
-except ImportError:  # pragma: no cover - available in supported NVDA builds.
-	LaTeX2MathMLExtension = None
-	converter = None
 
+class _LatexInlineProcessor(InlineProcessor):
+	"""Convert one unescaped inline or display LaTeX expression."""
 
-if converter is not None:
+	def __init__(self, pattern: str, display: str) -> None:
+		"""Initialize a processor for one delimiter family."""
+		super().__init__(pattern)
+		self._display = display
 
-	class _LatexInlineProcessor(InlineProcessor):
-		"""Convert one unescaped inline or display LaTeX expression."""
-
-		def __init__(self, pattern: str, display: str) -> None:
-			"""Initialize a processor for one delimiter family."""
-			super().__init__(pattern)
-			self._display = display
-
-		def handleMatch(
-			self,
-			match: re.Match[str],
-			data: str,
-		) -> tuple[Element | None, int | None, int | None]:
-			"""Convert a formula, leaving malformed expressions as source text."""
-			formula = match.group(1)
-			if self._display == "inline" and _shouldSkipDollarFormula(formula, match.end(0), data):
-				return None, None, None
-			try:
-				return (
-					_convertFormulaToElement(formula, self._display),
-					match.start(0),
-					match.end(0),
-				)
-			except Exception:
-				return None, None, None
-
-	class _ParenthesizedLatexProcessor(InlineProcessor):
-		"""Convert the common \\(...\\) inline LaTeX form to MathML."""
-
-		def handleMatch(
-			self,
-			match: re.Match[str],
-			data: str,
-		) -> tuple[Element | None, int | None, int | None]:
-			"""Convert one matched formula, leaving malformed input unchanged."""
-			try:
-				return _convertFormulaToElement(match.group(1), "inline"), match.start(0), match.end(0)
-			except Exception:
-				return None, None, None
-
-	class _SafeLatexExtension(Extension):
-		"""Use l2m4m's display processor with a safe inline delimiter parser."""
-
-		def extendMarkdown(self, md: Markdown) -> None:
-			"""Register l2m4m block support and replace its permissive inline rule."""
-			baseExtension = LaTeX2MathMLExtension()
-			baseExtension.extendMarkdown(md)
-			md.inlinePatterns.deregister("latex-inline")
-			for name, pattern, display in (
-				(
-					"clipboard-latex-display-dollar",
-					r"(?<!\\)\$\$(?!\$)([\s\S]+?)(?<!\\)\$\$(?!\$)",
-					"block",
-				),
-				(
-					"clipboard-latex-display-bracket",
-					r"(?<!\\)\\\[([\s\S]+?)(?<!\\)\\\]",
-					"block",
-				),
-				(
-					"clipboard-latex-inline-dollar",
-					r"(?<!\\)\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)",
-					"inline",
-				),
-			):
-				md.inlinePatterns.register(_LatexInlineProcessor(pattern, display), name, 185)
-			md.inlinePatterns.register(
-				_ParenthesizedLatexProcessor(r"(?<!\\)\\\((.+?)(?<!\\)\\\)"),
-				"clipboard-latex-inline-parenthesized",
-				185,
+	def handleMatch(
+		self,
+		match: re.Match[str],
+		data: str,
+	) -> tuple[Element | None, int | None, int | None]:
+		"""Convert a formula, leaving malformed expressions as source text."""
+		formula = match.group(1)
+		if self._display == "inline" and _shouldSkipDollarFormula(formula, match.end(0), data):
+			return None, None, None
+		try:
+			return (
+				_convertFormulaToElement(formula, self._display),
+				match.start(0),
+				match.end(0),
 			)
+		except Exception:
+			return None, None, None
+
+
+class _ParenthesizedLatexProcessor(InlineProcessor):
+	"""Convert the common \\(...\\) inline LaTeX form to MathML."""
+
+	def handleMatch(
+		self,
+		match: re.Match[str],
+		data: str,
+	) -> tuple[Element | None, int | None, int | None]:
+		"""Convert one matched formula, leaving malformed input unchanged."""
+		try:
+			return _convertFormulaToElement(match.group(1), "inline"), match.start(0), match.end(0)
+		except Exception:
+			return None, None, None
+
+
+class _SafeLatexExtension(Extension):
+	"""Use l2m4m's display processor with a safe inline delimiter parser."""
+
+	def extendMarkdown(self, md: Markdown) -> None:
+		"""Register l2m4m block support and replace its permissive inline rule."""
+		baseExtension = LaTeX2MathMLExtension()
+		baseExtension.extendMarkdown(md)
+		md.inlinePatterns.deregister("latex-inline")
+		for name, pattern, display in (
+			(
+				"clipboard-latex-display-dollar",
+				r"(?<!\\)\$\$(?!\$)([\s\S]+?)(?<!\\)\$\$(?!\$)",
+				"block",
+			),
+			(
+				"clipboard-latex-display-bracket",
+				r"(?<!\\)\\\[([\s\S]+?)(?<!\\)\\\]",
+				"block",
+			),
+			(
+				"clipboard-latex-inline-dollar",
+				r"(?<!\\)\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)",
+				"inline",
+			),
+		):
+			md.inlinePatterns.register(_LatexInlineProcessor(pattern, display), name, 185)
+		md.inlinePatterns.register(
+			_ParenthesizedLatexProcessor(r"(?<!\\)\\\((.+?)(?<!\\)\\\)"),
+			"clipboard-latex-inline-parenthesized",
+			185,
+		)
 
 
 _MAX_RENDERED_TEXT_LENGTH = 4 * 1024 * 1024
@@ -910,18 +905,13 @@ class _RawHtmlMathExtension(Extension):
 
 
 def _getMarkdownExtensions() -> list[str | Extension]:
-	"""Build Markdown extensions, adding the optional LaTeX pipeline."""
-	extensions: list[str | Extension] = ["extra", "nl2br"]
-	if converter is None:
-		return extensions
-
-	extensions.extend(
-		(
-			_SafeLatexExtension(),
-			_RawHtmlMathExtension(),
-		),
-	)
-	return extensions
+	"""Build Markdown extensions, adding the LaTeX pipeline."""
+	return [
+		"extra",
+		"nl2br",
+		_SafeLatexExtension(),
+		_RawHtmlMathExtension(),
+	]
 
 
 def _safeAttribute(tag: str, attribute: str, value: str) -> str | None:
@@ -982,9 +972,7 @@ def renderText(text: str) -> str:
 def renderHtml(html: str) -> str:
 	"""Render and sanitize clipboard HTML, converting LaTeX in visible text."""
 	html = html[:_MAX_RENDERED_TEXT_LENGTH]
-	if converter is not None:
-		html = _convertMathInRawHtml(html)
-	return sanitizeHtml(html)
+	return sanitizeHtml(_convertMathInRawHtml(html))
 
 
 def renderSnapshot(snapshot: ClipboardSnapshot, fallbackText: str = "") -> str:
