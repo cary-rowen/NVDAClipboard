@@ -159,7 +159,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		preSignInDeletedItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="deleted before sign-in")
 		preSignInDeletedId = version1Storage.addHistory(preSignInDeletedItem)
 		assert preSignInDeletedId is not None
-		version1Storage.deleteHistoryItemsById((preSignInDeletedId,))
+		version1Storage.deleteItemsById(None, (preSignInDeletedId,))
 		version1Storage.renameCategory("Version 1 category", "Renamed before sign-in")
 		preSignInDeletedKey = _dedupKey(preSignInDeletedItem)
 		assert version1Storage.getOneDriveSnapshot() == version1Snapshot
@@ -181,7 +181,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			state.nameFolded == "renamed before sign-in" and not state.deleted
 			for state in boundSnapshot.categoryItems
 		)
-		version1Storage.deleteHistoryItemsById((version1ItemId,))
+		version1Storage.deleteItemsById(None, (version1ItemId,))
 		sameAccountSnapshot = version1Storage.getOneDriveSnapshot()
 		assert next(
 			state for state in sameAccountSnapshot.history if state.dedupKey == version1DedupKey
@@ -219,7 +219,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		oversizedDedupKey = _dedupKey(oversizedItem)
 		oversizedPayloadHash = getItemPayloadHash(oversizedItem)
 		with version1Storage._transaction() as connection:
-			_recordHistoryLive(connection, oversizedDedupKey, oversizedPayloadHash)
+			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
 			_recordCategoryItemState(
 				connection,
 				"local only",
@@ -235,7 +235,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			state for state in oversizedSnapshot.categoryItems if state.payloadHash == oversizedPayloadHash
 		).deleted
 		assert oversizedItemId in {item.itemId for item in version1Storage.history}
-		assert oversizedItemId in {item.itemId for item in version1Storage.getCategoryItems("Local only")}
+		assert oversizedItemId in {item.itemId for item in version1Storage.getItems("Local only")}
 		remoteItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="remote change")
 		remotePayloadHash = getItemPayloadHash(remoteItem)
 		remoteState = OneDriveHistoryState(
@@ -250,10 +250,10 @@ def _runSelfCheck() -> None:  # noqa: C901
 			lambda payloadHash: remoteItem if payloadHash == remotePayloadHash else None,
 		)
 		assert oversizedItemId in {item.itemId for item in version1Storage.history}
-		assert oversizedItemId in {item.itemId for item in version1Storage.getCategoryItems("Local only")}
+		assert oversizedItemId in {item.itemId for item in version1Storage.getItems("Local only")}
 		assert version1Storage.getOneDriveItem(oversizedPayloadHash) is None
 		with version1Storage._transaction() as connection:
-			_recordHistoryLive(connection, oversizedDedupKey, oversizedPayloadHash)
+			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
 			_recordCategoryItemState(
 				connection,
 				"local only",
@@ -417,11 +417,9 @@ def _runSelfCheck() -> None:  # noqa: C901
 			state for state in categoryRaceSnapshot.categories if state.nameFolded == "target"
 		)
 		assert not categoryRaceState.deleted and categoryRaceState.version > remoteCategoryDeletion
-		categoryRaceItems = categoryRaceStorage.getCategoryItems("Target")
+		categoryRaceItems = categoryRaceStorage.getItems("Target")
 		assert len(categoryRaceItems) == 1
-		assert (
-			categoryRaceStorage.getCategoryItemById("Target", categoryRaceItems[0].itemId) == categoryRaceItem
-		)
+		assert categoryRaceStorage.getItemById("Target", categoryRaceItems[0].itemId) == categoryRaceItem
 		categoryRaceStorage.close()
 		categoryOrderStorage = ClipboardStorage(
 			root / "category-order.db",
@@ -484,9 +482,9 @@ def _runSelfCheck() -> None:  # noqa: C901
 			lambda _payloadHash: None,
 		)
 		assert categoryStorage.categoryNames == ("Mixed",)
-		mixedItems = categoryStorage.getCategoryItems("Mixed")
+		mixedItems = categoryStorage.getItems("Mixed")
 		assert len(mixedItems) == 1
-		assert categoryStorage.getCategoryItemById("Mixed", mixedItems[0].itemId) == privateCategoryItem
+		assert categoryStorage.getItemById("Mixed", mixedItems[0].itemId) == privateCategoryItem
 		categoryStorage.close()
 		imageStorage = ClipboardStorage(root / "images.db", root / "missing-images.json")
 		imageStorage.createCategory("Images")
@@ -540,14 +538,14 @@ def _runSelfCheck() -> None:  # noqa: C901
 			"gap latest",
 			"latest",
 		)
-		positionedItem, positionedIndex, itemCount = storage.getHistorySummaryAt(99, -1)
+		positionedItem, positionedIndex, itemCount = storage.getSummaryAt(None, 99, -1)
 		assert positionedItem is not None
 		assert (positionedItem.textPreview, positionedIndex, itemCount) == ("gap latest", 1, 3)
 		storage.createCategory("Saved")
-		assert storage.getCategorySummaryAt("Saved", 99, 1) == (None, 0, 0)
+		assert storage.getSummaryAt("Saved", 99, 1) == (None, 0, 0)
 		plainLatestId = next(item.itemId for item in storage.history if item.textPreview == "latest")
 		storage.copyHistoryItemsToCategoryById((plainLatestId,), "Saved")
-		assert tuple(item.textPreview for item in storage.getCategoryItems("Saved")) == ("latest",)
+		assert tuple(item.textPreview for item in storage.getItems("Saved")) == ("latest",)
 		formattedId = storage.addHistory(
 			ClipboardItem(
 				ClipboardItemType.FORMATTED_TEXT,
@@ -557,7 +555,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		)
 		assert formattedId is not None
 		assert storage.history[0].contentType == ClipboardItemType.FORMATTED_TEXT
-		assert storage.getHistoryItemContentById(formattedId) == ClipboardItemContent(
+		assert storage.getItemContentById(None, formattedId) == ClipboardItemContent(
 			itemId=formattedId,
 			contentType=ClipboardItemType.FORMATTED_TEXT,
 			text="latest",
@@ -568,17 +566,15 @@ def _runSelfCheck() -> None:  # noqa: C901
 			files=(),
 			canUpload=True,
 		)
-		categoryItemId = storage.getCategoryItems("Saved")[0].itemId
-		assert (
-			storage.getCategoryItemById("Saved", categoryItemId).contentType == ClipboardItemType.PLAIN_TEXT
-		)
-		assert storage.addHistory(storage.getHistoryItemById(storage.history[0].itemId)) == formattedId
+		categoryItemId = storage.getItems("Saved")[0].itemId
+		assert storage.getItemById("Saved", categoryItemId).contentType == ClipboardItemType.PLAIN_TEXT
+		assert storage.addHistory(storage.getItemById(None, storage.history[0].itemId)) == formattedId
 		storage.createCategory("Moved")
 		plainHistoryId = next(item.itemId for item in storage.history if item.textPreview == "older")
 		storage.copyHistoryItemsToCategoryById((formattedId, formattedId, plainHistoryId), "Saved")
-		savedItemIds = tuple(item.itemId for item in storage.getCategoryItems("Saved"))
+		savedItemIds = tuple(item.itemId for item in storage.getItems("Saved"))
 		assert savedItemIds == (formattedId, plainHistoryId, plainLatestId)
-		positionedItem, positionedIndex, itemCount = storage.getCategorySummaryAt("Saved", 99, -1)
+		positionedItem, positionedIndex, itemCount = storage.getSummaryAt("Saved", 99, -1)
 		assert positionedItem is not None
 		assert (positionedItem.itemId, positionedIndex, itemCount) == (plainHistoryId, 1, 3)
 		_expectRaises(
@@ -586,33 +582,33 @@ def _runSelfCheck() -> None:  # noqa: C901
 			lambda: storage.moveCategoryItemsById("Saved", (formattedId, -1), "Moved"),
 			"A partial category move was committed",
 		)
-		assert tuple(item.itemId for item in storage.getCategoryItems("Saved")) == savedItemIds
-		assert not storage.getCategoryItems("Moved")
+		assert tuple(item.itemId for item in storage.getItems("Saved")) == savedItemIds
+		assert not storage.getItems("Moved")
 		storage.moveCategoryItemsById("Saved", savedItemIds, "Moved")
-		assert not storage.getCategoryItems("Saved")
-		assert tuple(item.itemId for item in storage.getCategoryItems("Moved")) == savedItemIds
-		storage.deleteCategoryItemsById("Moved", savedItemIds)
-		assert not storage.getCategoryItems("Moved")
+		assert not storage.getItems("Saved")
+		assert tuple(item.itemId for item in storage.getItems("Moved")) == savedItemIds
+		storage.deleteItemsById("Moved", savedItemIds)
+		assert not storage.getItems("Moved")
 		historyItemIds = tuple(item.itemId for item in storage.history)
 		_expectRaises(
 			ItemNotFoundError,
-			lambda: storage.deleteHistoryItemsById((formattedId, -1)),
+			lambda: storage.deleteItemsById(None, (formattedId, -1)),
 			"A partial history deletion was committed",
 		)
 		assert tuple(item.itemId for item in storage.history) == historyItemIds
 		olderItemIds = tuple(
 			item.itemId for item in storage.history if item.textPreview in ("older", "gap latest")
 		)
-		storage.deleteHistoryItemsById(olderItemIds)
+		storage.deleteItemsById(None, olderItemIds)
 		assert all(item.itemId not in olderItemIds for item in storage.history)
 		longText = "x" * (SUMMARY_TEXT_LIMIT + 1) + "search tail"
 		longTextId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=longText))
 		assert longTextId is not None and "search tail" not in storage.history[0].textPreview
-		assert storage.getHistoryItemContentById(longTextId).text == longText
+		assert storage.getItemContentById(None, longTextId).text == longText
 		files = (r"C:\one\first.txt", r"C:\two\second.txt", r"C:\three\target.py")
 		filesId = storage.addHistory(ClipboardItem(ClipboardItemType.FILES, files=files))
 		assert filesId is not None and storage.history[0].filesPreview == ("first.txt", "second.txt")
-		assert storage.getHistoryItemContentById(filesId).files == files
+		assert storage.getItemContentById(None, filesId).files == files
 		imageItem = ClipboardItem(
 			ClipboardItemType.IMAGE,
 			imageData=b"abc",
@@ -622,7 +618,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		)
 		imageId = storage.addHistory(imageItem)
 		assert imageId is not None
-		historyContents = tuple(storage.iterHistoryItemContents())
+		historyContents = tuple(storage.iterItemContents())
 		assert tuple(item.itemId for item in historyContents) == tuple(
 			item.itemId for item in storage.history
 		)
@@ -631,18 +627,18 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert contentById[filesId].files == files
 		assert contentById[imageId].imageByteCount == len(imageItem.imageData or b"")
 		storage.copyHistoryItemsToCategoryById((filesId, longTextId), "Saved")
-		categoryContents = tuple(storage.iterCategoryItemContents("Saved"))
+		categoryContents = tuple(storage.iterItemContents("Saved"))
 		assert tuple(item.itemId for item in categoryContents) == (filesId, longTextId)
 		with storage._transaction() as connection:
 			connection.execute("UPDATE items SET imageData = ? WHERE itemId = ?", (b"abd", imageId))
 		_expectRaises(
 			StorageFormatError,
-			lambda: storage.getHistoryItemById(imageId),
+			lambda: storage.getItemById(None, imageId),
 			"A payload with a stale hash was accepted",
 		)
 		replacementImageId = storage.addHistory(imageItem)
 		assert replacementImageId is not None and replacementImageId != imageId
-		assert storage.getHistoryItemById(replacementImageId) == imageItem
+		assert storage.getItemById(None, replacementImageId) == imageItem
 		with storage._transaction() as connection:
 			connection.execute(
 				"UPDATE items SET imageByteCount = imageByteCount + 1 WHERE itemId = ?",
@@ -650,7 +646,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			)
 		_expectRaises(
 			StorageFormatError,
-			lambda: storage.getHistoryItemById(replacementImageId),
+			lambda: storage.getItemById(None, replacementImageId),
 			"An incorrect image byte count was accepted",
 		)
 		with storage._transaction() as connection:
@@ -660,7 +656,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			)
 		storage.close()
 		reopened = ClipboardStorage(dataPath, version2HistoryPath)
-		assert reopened.getHistoryItemById(formattedId).html == b"<b>latest</b>"
+		assert reopened.getItemById(None, formattedId).html == b"<b>latest</b>"
 		reopened.close()
 
 
@@ -702,14 +698,14 @@ class StorageSelfCheckTests(unittest.TestCase):
 						ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="deleted"),
 					)
 					assert olderId is not None and oldId is not None and deletedId is not None
-					storage.deleteHistoryItemsById((deletedId,))
+					storage.deleteItemsById(None, (deletedId,))
 					assert storage.getLatestHistoryItem() == oldItem
 					newItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=f"{previousText}\nnew")
 					newId = storage.addHistory(newItem, replaceText=previousText)
 					assert newId is not None
 					expectedIds = (newId, olderId) if previousText == "old" else (newId, oldId, olderId)
 					assert tuple(item.itemId for item in storage.history) == expectedIds
-					assert storage.getHistoryItemById(newId) == newItem
+					assert storage.getItemById(None, newId) == newItem
 				finally:
 					storage.close()
 
@@ -740,7 +736,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 					secondId = storage.addHistory(secondItem, replaceText=clipboardText)
 					assert secondId is not None
 					assert tuple(item.itemId for item in storage.history) == (secondId,)
-					assert storage.getHistoryItemById(secondId) == secondItem
+					assert storage.getItemById(None, secondId) == secondItem
 					states = {state.dedupKey: state for state in storage.getOneDriveSnapshot().history}
 					deletedState = states[_dedupKey(firstItem)]
 					assert deletedState.deleted and deletedState.dirty
@@ -766,7 +762,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 					)
 					assert newId is not None
 					assert tuple(item.itemId for item in storage.history) == (newId, oldId)
-					assert storage.getHistoryItemById(oldId) == oldItem
+					assert storage.getItemById(None, oldId) == oldItem
 				finally:
 					storage.close()
 
@@ -796,7 +792,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 				assert not newState.deleted and newState.dirty
 				assert newState.payloadHash == getItemPayloadHash(newItem)
 				assert tuple(item.itemId for item in storage.history) == (newItemId,)
-				assert storage.getHistoryItemById(newItemId) == newItem
+				assert storage.getItemById(None, newItemId) == newItem
 			finally:
 				storage.close()
 
@@ -814,7 +810,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 			before = (
 				storage.history,
 				storage.categoryNames,
-				storage.getCategoryItems("Saved"),
+				storage.getItems("Saved"),
 				storage.getOneDriveSnapshot(),
 			)
 			storage.close()
@@ -831,7 +827,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 						(
 							storage.history,
 							storage.categoryNames,
-							storage.getCategoryItems("Saved"),
+							storage.getItems("Saved"),
 							storage.getOneDriveSnapshot(),
 						),
 					)
@@ -888,19 +884,19 @@ class StorageSelfCheckTests(unittest.TestCase):
 			assert historyId is not None
 			storage.copyHistoryItemsToCategoryById((historyId,), "Saved")
 
-			changed, removed, replacements = storage.removeMissingCategoryFileReferences(
+			changed, removed, replacements = storage.removeMissingFileReferences(
 				"Saved",
 				(historyId,),
 				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, removed), (1, 1))
-			self.assertEqual(storage.getHistoryItemById(historyId).files, ("kept.txt", "missing.txt"))
-			categoryItems = storage.getCategoryItems("Saved")
+			self.assertEqual(storage.getItemById(None, historyId).files, ("kept.txt", "missing.txt"))
+			categoryItems = storage.getItems("Saved")
 			self.assertEqual(len(categoryItems), 1)
 			self.assertNotEqual(categoryItems[0].itemId, historyId)
 			self.assertEqual(
-				storage.getCategoryItemById("Saved", categoryItems[0].itemId).files,
+				storage.getItemById("Saved", categoryItems[0].itemId).files,
 				("kept.txt",),
 			)
 			self.assertEqual(replacements, {historyId: categoryItems[0].itemId})
@@ -915,7 +911,8 @@ class StorageSelfCheckTests(unittest.TestCase):
 			itemId = storage.addHistory(fileGroup)
 			assert itemId is not None
 
-			changed, removed, replacements = storage.removeMissingHistoryFileReferences(
+			changed, removed, replacements = storage.removeMissingFileReferences(
+				None,
 				(itemId,),
 				frozenset({"missing.txt"}),
 			)
@@ -937,7 +934,8 @@ class StorageSelfCheckTests(unittest.TestCase):
 			assert existingId is not None
 			assert selectedId is not None
 
-			changed, removed, replacements = storage.removeMissingHistoryFileReferences(
+			changed, removed, replacements = storage.removeMissingFileReferences(
+				None,
 				(selectedId,),
 				frozenset({"missing.txt"}),
 			)
@@ -946,7 +944,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 			history = storage.history
 			self.assertEqual(2, len(history))
 			self.assertNotEqual(history[0].itemId, existingId)
-			self.assertEqual(storage.getHistoryItemById(history[0].itemId).files, ("kept.txt",))
+			self.assertEqual(storage.getItemById(None, history[0].itemId).files, ("kept.txt",))
 			self.assertEqual(history[1].itemId, existingId)
 			self.assertEqual(replacements, {selectedId: history[0].itemId})
 			storage.close()
@@ -966,18 +964,18 @@ class StorageSelfCheckTests(unittest.TestCase):
 			storage.copyHistoryItemsToCategoryById((existingId,), "Saved")
 			storage.copyHistoryItemsToCategoryById((selectedId,), "Saved")
 
-			changed, removed, replacements = storage.removeMissingCategoryFileReferences(
+			changed, removed, replacements = storage.removeMissingFileReferences(
 				"Saved",
 				(selectedId,),
 				frozenset({"missing.txt"}),
 			)
 
 			self.assertEqual((changed, removed), (1, 1))
-			categoryItems = storage.getCategoryItems("Saved")
+			categoryItems = storage.getItems("Saved")
 			self.assertEqual(2, len(categoryItems))
 			self.assertNotEqual(categoryItems[0].itemId, existingId)
 			self.assertEqual(
-				storage.getCategoryItemById("Saved", categoryItems[0].itemId).files,
+				storage.getItemById("Saved", categoryItems[0].itemId).files,
 				("kept.txt",),
 			)
 			self.assertEqual(categoryItems[1].itemId, existingId)
@@ -997,7 +995,7 @@ class StorageSelfCheckTests(unittest.TestCase):
 			def deleteItem() -> None:
 				"""Commit a deletion while the reader retains its earlier snapshot."""
 				try:
-					storage.deleteHistoryItemsById((itemId,))
+					storage.deleteItemsById(None, (itemId,))
 				except Exception as error:
 					writeErrors.append(error)
 				finally:

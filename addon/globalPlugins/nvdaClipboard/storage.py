@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager, suppress
+from dataclasses import replace
 from hashlib import sha256
 import json
 import os
@@ -434,18 +435,16 @@ def _seedOneDriveState(connection: sqlite3.Connection) -> None:
 		""",
 	)
 	for row in historyRows:
-		version = _nextSyncVersion(connection)
 		connection.execute(
-			"""
-			INSERT INTO oneDriveHistory (
-				dedupKey, payloadHash, clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, 0, 1)
-			""",
-			(
-				cast(bytes, row["dedupKey"]),
-				cast(bytes, row["payloadHash"]),
-				version.clock,
-				version.operationId,
+			_HISTORY_STATE_INSERT_SQL,
+			_historyStateRow(
+				OneDriveHistoryState(
+					dedupKey=cast(bytes, row["dedupKey"]),
+					payloadHash=cast(bytes, row["payloadHash"]),
+					version=_nextSyncVersion(connection),
+					deleted=False,
+					dirty=True,
+				),
 			),
 		)
 	categoryRows = connection.execute(
@@ -454,19 +453,16 @@ def _seedOneDriveState(connection: sqlite3.Connection) -> None:
 	for row in categoryRows:
 		version = _nextSyncVersion(connection)
 		connection.execute(
-			"""
-			INSERT INTO oneDriveCategories (
-				nameFolded, name, orderClock, orderOperationId,
-				clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, ?, ?, 0, 1)
-			""",
-			(
-				cast(str, row["nameFolded"]),
-				cast(str, row["name"]),
-				version.clock,
-				version.operationId,
-				version.clock,
-				version.operationId,
+			_CATEGORY_STATE_INSERT_SQL,
+			_categoryStateRow(
+				OneDriveCategoryState(
+					nameFolded=cast(str, row["nameFolded"]),
+					name=cast(str, row["name"]),
+					orderVersion=version,
+					version=version,
+					deleted=False,
+					dirty=True,
+				),
 			),
 		)
 	categoryItemRows = connection.execute(
@@ -480,18 +476,16 @@ def _seedOneDriveState(connection: sqlite3.Connection) -> None:
 		""",
 	)
 	for row in categoryItemRows:
-		version = _nextSyncVersion(connection)
 		connection.execute(
-			"""
-			INSERT INTO oneDriveCategoryItems (
-				nameFolded, payloadHash, clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, 0, 1)
-			""",
-			(
-				cast(str, row["nameFolded"]),
-				cast(bytes, row["payloadHash"]),
-				version.clock,
-				version.operationId,
+			_CATEGORY_ITEM_STATE_INSERT_SQL,
+			_categoryItemStateRow(
+				OneDriveCategoryItemState(
+					nameFolded=cast(str, row["nameFolded"]),
+					payloadHash=cast(bytes, row["payloadHash"]),
+					version=_nextSyncVersion(connection),
+					deleted=False,
+					dirty=True,
+				),
 			),
 		)
 
@@ -579,132 +573,138 @@ def isOneDriveSyncItem(item: ClipboardItem) -> bool:
 	)
 
 
-def _recordHistoryLive(
+_HISTORY_STATE_INSERT_SQL = """
+	INSERT INTO oneDriveHistory (
+		dedupKey, payloadHash, clock, operationId, deleted, dirty
+	) VALUES (?, ?, ?, ?, ?, ?)
+"""
+_HISTORY_STATE_UPSERT_SQL = f"""{_HISTORY_STATE_INSERT_SQL}
+	ON CONFLICT (dedupKey) DO UPDATE SET
+		payloadHash = excluded.payloadHash,
+		clock = excluded.clock,
+		operationId = excluded.operationId,
+		deleted = excluded.deleted,
+		dirty = excluded.dirty
+"""
+_CATEGORY_STATE_INSERT_SQL = """
+	INSERT INTO oneDriveCategories (
+		nameFolded, name, orderClock, orderOperationId,
+		clock, operationId, deleted, dirty
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+_CATEGORY_STATE_UPSERT_SQL = f"""{_CATEGORY_STATE_INSERT_SQL}
+	ON CONFLICT (nameFolded) DO UPDATE SET
+		name = excluded.name,
+		orderClock = excluded.orderClock,
+		orderOperationId = excluded.orderOperationId,
+		clock = excluded.clock,
+		operationId = excluded.operationId,
+		deleted = excluded.deleted,
+		dirty = excluded.dirty
+"""
+_CATEGORY_ITEM_STATE_INSERT_SQL = """
+	INSERT INTO oneDriveCategoryItems (
+		nameFolded, payloadHash, clock, operationId, deleted, dirty
+	) VALUES (?, ?, ?, ?, ?, ?)
+"""
+_CATEGORY_ITEM_STATE_UPSERT_SQL = f"""{_CATEGORY_ITEM_STATE_INSERT_SQL}
+	ON CONFLICT (nameFolded, payloadHash) DO UPDATE SET
+		clock = excluded.clock,
+		operationId = excluded.operationId,
+		deleted = excluded.deleted,
+		dirty = excluded.dirty
+"""
+
+
+def _historyStateRow(state: OneDriveHistoryState) -> tuple[bytes, bytes | None, int, str, int, int]:
+	"""Return SQL parameters for ``_HISTORY_STATE_*_SQL``."""
+	return (
+		state.dedupKey,
+		state.payloadHash,
+		state.version.clock,
+		state.version.operationId,
+		int(state.deleted),
+		int(state.dirty),
+	)
+
+
+def _categoryStateRow(state: OneDriveCategoryState) -> tuple[str, str, int, str, int, str, int, int]:
+	"""Return SQL parameters for ``_CATEGORY_STATE_*_SQL``."""
+	return (
+		state.nameFolded,
+		state.name,
+		state.orderVersion.clock,
+		state.orderVersion.operationId,
+		state.version.clock,
+		state.version.operationId,
+		int(state.deleted),
+		int(state.dirty),
+	)
+
+
+def _categoryItemStateRow(state: OneDriveCategoryItemState) -> tuple[str, bytes, int, str, int, int]:
+	"""Return SQL parameters for ``_CATEGORY_ITEM_STATE_*_SQL``."""
+	return (
+		state.nameFolded,
+		state.payloadHash,
+		state.version.clock,
+		state.version.operationId,
+		int(state.deleted),
+		int(state.dirty),
+	)
+
+
+def _recordHistoryState(
 	connection: sqlite3.Connection,
 	dedupKey: bytes,
-	payloadHash: bytes,
+	payloadHash: bytes | None,
 ) -> None:
-	"""Record a new live version for one history identity."""
+	"""Record a new live version for one history identity, or a deletion when ``payloadHash`` is None."""
 	if not _hasBoundOneDriveAccount(connection):
 		return
-	version = _nextSyncVersion(connection)
-	connection.execute(
-		"""
-		INSERT INTO oneDriveHistory (
-			dedupKey, payloadHash, clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, 0, 1)
-		ON CONFLICT (dedupKey) DO UPDATE SET
-			payloadHash = excluded.payloadHash,
-			clock = excluded.clock,
-			operationId = excluded.operationId,
-			deleted = 0,
-			dirty = 1
-		""",
-		(dedupKey, payloadHash, version.clock, version.operationId),
+	state = OneDriveHistoryState(
+		dedupKey=dedupKey,
+		payloadHash=payloadHash,
+		version=_nextSyncVersion(connection),
+		deleted=payloadHash is None,
+		dirty=True,
 	)
+	connection.execute(_HISTORY_STATE_UPSERT_SQL, _historyStateRow(state))
 
 
-def _recordHistoryDeleted(connection: sqlite3.Connection, dedupKey: bytes) -> None:
-	"""Record an explicit deletion for one history identity."""
-	if not _hasBoundOneDriveAccount(connection):
-		return
-	version = _nextSyncVersion(connection)
-	connection.execute(
-		"""
-		INSERT INTO oneDriveHistory (
-			dedupKey, payloadHash, clock, operationId, deleted, dirty
-		) VALUES (?, NULL, ?, ?, 1, 1)
-		ON CONFLICT (dedupKey) DO UPDATE SET
-			payloadHash = NULL,
-			clock = excluded.clock,
-			operationId = excluded.operationId,
-			deleted = 1,
-			dirty = 1
-		""",
-		(dedupKey, version.clock, version.operationId),
-	)
-
-
-def _recordCategoryLive(
-	connection: sqlite3.Connection,
-	nameFolded: str,
-	name: str,
-	orderVersion: SyncVersion | None = None,
-) -> None:
-	"""Record a live category while retaining its established order by default."""
-	if not _hasBoundOneDriveAccount(connection):
-		return
-	version = _nextSyncVersion(connection)
-	if orderVersion is None:
-		row = connection.execute(
-			"SELECT orderClock, orderOperationId FROM oneDriveCategories WHERE nameFolded = ?",
-			(nameFolded,),
-		).fetchone()
-		orderVersion = version if row is None else SyncVersion(cast(int, row[0]), cast(str, row[1]))
-	connection.execute(
-		"""
-		INSERT INTO oneDriveCategories (
-			nameFolded, name, orderClock, orderOperationId,
-			clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, ?, 0, 1)
-		ON CONFLICT (nameFolded) DO UPDATE SET
-			name = excluded.name,
-			orderClock = excluded.orderClock,
-			orderOperationId = excluded.orderOperationId,
-			clock = excluded.clock,
-			operationId = excluded.operationId,
-			deleted = 0,
-			dirty = 1
-		""",
-		(
-			nameFolded,
-			name,
-			orderVersion.clock,
-			orderVersion.operationId,
-			version.clock,
-			version.operationId,
-		),
-	)
-
-
-def _recordCategoryDeleted(
-	connection: sqlite3.Connection,
-	nameFolded: str,
-	name: str,
-) -> None:
-	"""Record an explicit category deletion while retaining its order identity."""
-	if not _hasBoundOneDriveAccount(connection):
-		return
-	version = _nextSyncVersion(connection)
+def _categoryOrderVersion(connection: sqlite3.Connection, nameFolded: str) -> SyncVersion | None:
+	"""Return the established synchronization order of a category, if it has one."""
 	row = connection.execute(
 		"SELECT orderClock, orderOperationId FROM oneDriveCategories WHERE nameFolded = ?",
 		(nameFolded,),
 	).fetchone()
-	orderVersion = version if row is None else SyncVersion(cast(int, row[0]), cast(str, row[1]))
-	connection.execute(
-		"""
-		INSERT INTO oneDriveCategories (
-			nameFolded, name, orderClock, orderOperationId,
-			clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, ?, 1, 1)
-		ON CONFLICT (nameFolded) DO UPDATE SET
-			name = excluded.name,
-			orderClock = excluded.orderClock,
-			orderOperationId = excluded.orderOperationId,
-			clock = excluded.clock,
-			operationId = excluded.operationId,
-			deleted = 1,
-			dirty = 1
-		""",
-		(
-			nameFolded,
-			name,
-			orderVersion.clock,
-			orderVersion.operationId,
-			version.clock,
-			version.operationId,
-		),
+	return None if row is None else SyncVersion(cast(int, row[0]), cast(str, row[1]))
+
+
+def _recordCategoryState(
+	connection: sqlite3.Connection,
+	nameFolded: str,
+	name: str,
+	*,
+	deleted: bool,
+	orderVersion: SyncVersion | None = None,
+) -> None:
+	"""Record a live or deleted category while retaining its established order by default."""
+	if not _hasBoundOneDriveAccount(connection):
+		return
+	version = _nextSyncVersion(connection)
+	if orderVersion is None:
+		establishedOrderVersion = _categoryOrderVersion(connection, nameFolded)
+		orderVersion = version if establishedOrderVersion is None else establishedOrderVersion
+	state = OneDriveCategoryState(
+		nameFolded=nameFolded,
+		name=name,
+		orderVersion=orderVersion,
+		version=version,
+		deleted=deleted,
+		dirty=True,
 	)
+	connection.execute(_CATEGORY_STATE_UPSERT_SQL, _categoryStateRow(state))
 
 
 def _recordCategoryItemState(
@@ -717,20 +717,14 @@ def _recordCategoryItemState(
 	"""Record a live or deleted category membership."""
 	if not _hasBoundOneDriveAccount(connection):
 		return
-	version = _nextSyncVersion(connection)
-	connection.execute(
-		"""
-		INSERT INTO oneDriveCategoryItems (
-			nameFolded, payloadHash, clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, 1)
-		ON CONFLICT (nameFolded, payloadHash) DO UPDATE SET
-			clock = excluded.clock,
-			operationId = excluded.operationId,
-			deleted = excluded.deleted,
-			dirty = 1
-		""",
-		(nameFolded, payloadHash, version.clock, version.operationId, int(deleted)),
+	state = OneDriveCategoryItemState(
+		nameFolded=nameFolded,
+		payloadHash=payloadHash,
+		version=_nextSyncVersion(connection),
+		deleted=deleted,
+		dirty=True,
 	)
+	connection.execute(_CATEGORY_ITEM_STATE_UPSERT_SQL, _categoryItemStateRow(state))
 
 
 def _recordHistoryItem(connection: sqlite3.Connection, itemId: int) -> None:
@@ -747,14 +741,14 @@ def _recordHistoryItem(connection: sqlite3.Connection, itemId: int) -> None:
 		raise ItemNotFoundError(itemId)
 	dedupKey = cast(bytes, row["dedupKey"])
 	if bool(cast(int, row["isOneDrive"])):
-		_recordHistoryLive(connection, dedupKey, cast(bytes, row["payloadHash"]))
+		_recordHistoryState(connection, dedupKey, cast(bytes, row["payloadHash"]))
 		return
 	stateRow = connection.execute(
 		"SELECT deleted FROM oneDriveHistory WHERE dedupKey = ?",
 		(dedupKey,),
 	).fetchone()
 	if stateRow is not None and not bool(cast(int, stateRow[0])):
-		_recordHistoryDeleted(connection, dedupKey)
+		_recordHistoryState(connection, dedupKey, None)
 
 
 def _recordCategoryItem(
@@ -806,7 +800,7 @@ def _reviveCategoryIfNeeded(connection: sqlite3.Connection, categoryId: int) -> 
 	if row is None:
 		raise CategoryNotFoundError(categoryId)
 	nameFolded = cast(str, row["nameFolded"])
-	_recordCategoryLive(connection, nameFolded, cast(str, row["name"]))
+	_recordCategoryState(connection, nameFolded, cast(str, row["name"]), deleted=False)
 	return nameFolded
 
 
@@ -1069,7 +1063,7 @@ def _deleteHistoryReferences(
 				(dedupKey,),
 			).fetchone()
 			if isUploadable or (stateRow is not None and not bool(cast(int, stateRow[0]))):
-				_recordHistoryDeleted(connection, dedupKey)
+				_recordHistoryState(connection, dedupKey, None)
 		else:
 			connection.execute(
 				"""
@@ -1517,27 +1511,7 @@ def _mergeHistoryStates(
 					(int(state.dirty), state.dedupKey),
 				)
 			continue
-		connection.execute(
-			"""
-			INSERT INTO oneDriveHistory (
-				dedupKey, payloadHash, clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT (dedupKey) DO UPDATE SET
-				payloadHash = excluded.payloadHash,
-				clock = excluded.clock,
-				operationId = excluded.operationId,
-				deleted = excluded.deleted,
-				dirty = excluded.dirty
-			""",
-			(
-				state.dedupKey,
-				state.payloadHash,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			),
-		)
+		connection.execute(_HISTORY_STATE_UPSERT_SQL, _historyStateRow(state))
 		hasChanged = True
 	return hasChanged
 
@@ -1595,30 +1569,8 @@ def _mergeCategoryStates(
 					hasChanged = orderVersion < localOrderVersion or hasChanged
 				continue
 		connection.execute(
-			"""
-			INSERT INTO oneDriveCategories (
-				nameFolded, name, orderClock, orderOperationId,
-				clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (nameFolded) DO UPDATE SET
-				name = excluded.name,
-				orderClock = excluded.orderClock,
-				orderOperationId = excluded.orderOperationId,
-				clock = excluded.clock,
-				operationId = excluded.operationId,
-				deleted = excluded.deleted,
-				dirty = excluded.dirty
-			""",
-			(
-				state.nameFolded,
-				state.name,
-				orderVersion.clock,
-				orderVersion.operationId,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			),
+			_CATEGORY_STATE_UPSERT_SQL,
+			_categoryStateRow(replace(state, orderVersion=orderVersion)),
 		)
 		hasChanged = True
 	return hasChanged
@@ -1652,26 +1604,7 @@ def _mergeCategoryItemStates(
 					(int(state.dirty), state.nameFolded, state.payloadHash),
 				)
 			continue
-		connection.execute(
-			"""
-			INSERT INTO oneDriveCategoryItems (
-				nameFolded, payloadHash, clock, operationId, deleted, dirty
-			) VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT (nameFolded, payloadHash) DO UPDATE SET
-				clock = excluded.clock,
-				operationId = excluded.operationId,
-				deleted = excluded.deleted,
-				dirty = excluded.dirty
-			""",
-			(
-				state.nameFolded,
-				state.payloadHash,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			),
-		)
+		connection.execute(_CATEGORY_ITEM_STATE_UPSERT_SQL, _categoryItemStateRow(state))
 		hasChanged = True
 	return hasChanged
 
@@ -1774,62 +1707,11 @@ def _replaceOneDriveSnapshot(
 	connection.execute("DELETE FROM oneDriveHistory")
 	connection.execute("DELETE FROM oneDriveCategories")
 	connection.execute("DELETE FROM oneDriveCategoryItems")
+	connection.executemany(_HISTORY_STATE_INSERT_SQL, map(_historyStateRow, snapshot.history))
+	connection.executemany(_CATEGORY_STATE_INSERT_SQL, map(_categoryStateRow, snapshot.categories))
 	connection.executemany(
-		"""
-		INSERT INTO oneDriveHistory (
-			dedupKey, payloadHash, clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, ?)
-		""",
-		(
-			(
-				state.dedupKey,
-				state.payloadHash,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			)
-			for state in snapshot.history
-		),
-	)
-	connection.executemany(
-		"""
-		INSERT INTO oneDriveCategories (
-			nameFolded, name, orderClock, orderOperationId,
-			clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		""",
-		(
-			(
-				state.nameFolded,
-				state.name,
-				state.orderVersion.clock,
-				state.orderVersion.operationId,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			)
-			for state in snapshot.categories
-		),
-	)
-	connection.executemany(
-		"""
-		INSERT INTO oneDriveCategoryItems (
-			nameFolded, payloadHash, clock, operationId, deleted, dirty
-		) VALUES (?, ?, ?, ?, ?, ?)
-		""",
-		(
-			(
-				state.nameFolded,
-				state.payloadHash,
-				state.version.clock,
-				state.version.operationId,
-				int(state.deleted),
-				int(state.dirty),
-			)
-			for state in snapshot.categoryItems
-		),
+		_CATEGORY_ITEM_STATE_INSERT_SQL,
+		map(_categoryItemStateRow, snapshot.categoryItems),
 	)
 	connection.execute(
 		"""
@@ -1891,20 +1773,18 @@ def _replayConcurrentOneDriveChanges(
 		if state.deleted and state.nameFolded in committedCategories
 	}
 	for state in sorted(history, key=lambda value: value.version):
-		if state.deleted:
-			_recordHistoryDeleted(connection, state.dedupKey)
-		else:
-			_recordHistoryLive(connection, state.dedupKey, cast(bytes, state.payloadHash))
+		_recordHistoryState(connection, state.dedupKey, None if state.deleted else state.payloadHash)
 	for state in sorted(categories.values(), key=lambda value: value.orderVersion):
 		if state.deleted:
-			_recordCategoryDeleted(connection, state.nameFolded, state.name)
+			_recordCategoryState(connection, state.nameFolded, state.name, deleted=True)
 		else:
 			committedCategory = committedCategories.get(state.nameFolded)
-			_recordCategoryLive(
+			_recordCategoryState(
 				connection,
 				state.nameFolded,
 				state.name,
-				(
+				deleted=False,
+				orderVersion=(
 					committedCategory.orderVersion
 					if committedCategory is not None
 					else renamedOrderVersions.get(state.orderVersion)
@@ -1941,7 +1821,7 @@ def _excludeIneligibleOneDriveItems(connection: sqlite3.Connection) -> bool:
 		""",
 	).fetchall()
 	for row in historyRows:
-		_recordHistoryDeleted(connection, cast(bytes, row["dedupKey"]))
+		_recordHistoryState(connection, cast(bytes, row["dedupKey"]), None)
 	for row in categoryItemRows:
 		_recordCategoryItemState(
 			connection,
@@ -2267,21 +2147,32 @@ class ClipboardStorage:
 	@property
 	def history(self) -> tuple[ClipboardItemSummary, ...]:
 		"""Return newest-first history metadata without loading payload BLOBs."""
+		return self.getItems()
+
+	def getItems(self, category: str | None = None) -> tuple[ClipboardItemSummary, ...]:
+		"""Return newest-first history or category metadata without loading payload BLOBs."""
 		with self._readConnection() as connection:
+			table, condition, parameters = self._scope(connection, category)
 			rows = connection.execute(
-				f"SELECT {_SUMMARY_COLUMNS} FROM history JOIN items USING (itemId) "
-				"ORDER BY history.sortOrder",
+				f"SELECT {_SUMMARY_COLUMNS} FROM {table} JOIN items USING (itemId) "
+				f"WHERE {condition} ORDER BY {table}.sortOrder",
+				parameters,
 			).fetchall()
 			return tuple(_rowToSummary(row) for row in rows)
 
-	def getHistorySummaryAt(
+	def getSummaryAt(
 		self,
+		category: str | None,
 		index: int,
 		offset: int = 0,
 	) -> tuple[ClipboardItemSummary | None, int, int]:
-		"""Clamp an index, apply an offset, and return its history summary, index, and total."""
+		"""Clamp an index, apply an offset, and return one summary, index, and total."""
 		with self._readConnection() as connection:
-			countRow = connection.execute("SELECT COUNT(*) FROM history").fetchone()
+			table, condition, parameters = self._scope(connection, category)
+			countRow = connection.execute(
+				f"SELECT COUNT(*) FROM {table} WHERE {condition}",
+				parameters,
+			).fetchone()
 			if countRow is None:
 				raise StorageFormatError
 			itemCount = cast(int, countRow[0])
@@ -2290,9 +2181,9 @@ class ClipboardStorage:
 			currentIndex = max(0, min(index, itemCount - 1))
 			resolvedIndex = max(0, min(currentIndex + offset, itemCount - 1))
 			row = connection.execute(
-				f"SELECT {_SUMMARY_COLUMNS} FROM history JOIN items USING (itemId) "
-				"ORDER BY history.sortOrder LIMIT 1 OFFSET ?",
-				(resolvedIndex,),
+				f"SELECT {_SUMMARY_COLUMNS} FROM {table} JOIN items USING (itemId) "
+				f"WHERE {condition} ORDER BY {table}.sortOrder LIMIT 1 OFFSET ?",
+				(*parameters, resolvedIndex),
 			).fetchone()
 			if row is None:
 				raise StorageFormatError
@@ -2420,7 +2311,7 @@ class ClipboardStorage:
 				(payloadHash,),
 			).fetchall()
 			for row in historyRows:
-				_recordHistoryDeleted(connection, cast(bytes, row["dedupKey"]))
+				_recordHistoryState(connection, cast(bytes, row["dedupKey"]), None)
 			for row in categoryRows:
 				_recordCategoryItemState(
 					connection,
@@ -2596,7 +2487,7 @@ class ClipboardStorage:
 					)
 				if replacedItemId is not None and replacedItemId != itemId:
 					if replacedCanSync:
-						_recordHistoryDeleted(connection, replacedDedupKey)
+						_recordHistoryState(connection, cast(bytes, replacedDedupKey), None)
 					connection.execute("DELETE FROM history WHERE itemId = ?", (replacedItemId,))
 				_moveHistoryItemToFront(connection, itemId)
 				_recordHistoryItem(connection, itemId)
@@ -2607,79 +2498,17 @@ class ClipboardStorage:
 		except _ImageLimitReached:
 			return None
 
-	def getHistoryItemById(self, itemId: int) -> ClipboardItem:
-		"""Load one complete entry after confirming it still belongs to history."""
+	def getItemById(self, category: str | None, itemId: int) -> ClipboardItem:
+		"""Load one complete entry after confirming it still belongs to history or a category."""
 		with self._readConnection() as connection:
-			self._requireHistoryItem(connection, itemId)
+			self._requireItem(connection, category, itemId)
 			return self._getItem(connection, itemId)
 
-	def getHistoryItemContentById(self, itemId: int) -> ClipboardItemContent:
-		"""Load displayable history content by stable identifier without binary payloads."""
+	def getItemContentById(self, category: str | None, itemId: int) -> ClipboardItemContent:
+		"""Load displayable history or category content by stable identifier without binary payloads."""
 		with self._readConnection() as connection:
-			self._requireHistoryItem(connection, itemId)
+			self._requireItem(connection, category, itemId)
 			return self._getItemContent(connection, itemId)
-
-	def getCategoryItems(self, categoryName: str) -> tuple[ClipboardItemSummary, ...]:
-		"""Return newest-first category metadata without loading payload BLOBs."""
-		with self._readConnection() as connection:
-			categoryId = self._categoryId(connection, categoryName)
-			rows = connection.execute(
-				f"SELECT {_SUMMARY_COLUMNS} FROM categoryItems JOIN items USING (itemId) "
-				"WHERE categoryId = ? ORDER BY categoryItems.sortOrder",
-				(categoryId,),
-			).fetchall()
-			return tuple(_rowToSummary(row) for row in rows)
-
-	def getCategorySummaryAt(
-		self,
-		categoryName: str,
-		index: int,
-		offset: int = 0,
-	) -> tuple[ClipboardItemSummary | None, int, int]:
-		"""Clamp an index, apply an offset, and return one category summary, index, and total."""
-		with self._readConnection() as connection:
-			categoryId = self._categoryId(connection, categoryName)
-			countRow = connection.execute(
-				"SELECT COUNT(*) FROM categoryItems WHERE categoryId = ?",
-				(categoryId,),
-			).fetchone()
-			if countRow is None:
-				raise StorageFormatError
-			itemCount = cast(int, countRow[0])
-			if itemCount == 0:
-				return None, 0, 0
-			currentIndex = max(0, min(index, itemCount - 1))
-			resolvedIndex = max(0, min(currentIndex + offset, itemCount - 1))
-			row = connection.execute(
-				f"SELECT {_SUMMARY_COLUMNS} FROM categoryItems JOIN items USING (itemId) "
-				"WHERE categoryId = ? ORDER BY categoryItems.sortOrder LIMIT 1 OFFSET ?",
-				(categoryId, resolvedIndex),
-			).fetchone()
-			if row is None:
-				raise StorageFormatError
-			return _rowToSummary(row), resolvedIndex, itemCount
-
-	def getCategoryItemById(self, categoryName: str, itemId: int) -> ClipboardItem:
-		"""Load one complete entry after confirming it still belongs to a category."""
-		with self._readConnection() as connection:
-			categoryId = self._categoryId(connection, categoryName)
-			self._requireCategoryItem(connection, categoryId, itemId)
-			return self._getItem(connection, itemId)
-
-	def getCategoryItemContentById(self, categoryName: str, itemId: int) -> ClipboardItemContent:
-		"""Load displayable category content by stable identifier without binary payloads."""
-		with self._readConnection() as connection:
-			categoryId = self._categoryId(connection, categoryName)
-			self._requireCategoryItem(connection, categoryId, itemId)
-			return self._getItemContent(connection, itemId)
-
-	def iterHistoryItemContents(self) -> Iterator[ClipboardItemContent]:
-		"""Yield history content in display order without loading binary payloads."""
-		return self._iterItemContents()
-
-	def iterCategoryItemContents(self, categoryName: str) -> Iterator[ClipboardItemContent]:
-		"""Yield one category's content in display order without loading binary payloads."""
-		return self._iterItemContents(categoryName)
 
 	def createCategory(self, name: str) -> str:
 		"""Create an empty user category and return its trimmed name."""
@@ -2691,7 +2520,7 @@ class ClipboardStorage:
 				"INSERT INTO categories (name, nameFolded, sortOrder) VALUES (?, ?, ?)",
 				(normalizedName, normalizedName.casefold(), sortOrder),
 			)
-			_recordCategoryLive(connection, normalizedName.casefold(), normalizedName)
+			_recordCategoryState(connection, normalizedName.casefold(), normalizedName, deleted=False)
 			return normalizedName
 
 	def renameCategory(self, oldName: str, newName: str) -> str:
@@ -2709,7 +2538,7 @@ class ClipboardStorage:
 					"UPDATE categories SET name = ? WHERE categoryId = ?",
 					(normalizedName, categoryId),
 				)
-				_recordCategoryLive(connection, newNameFolded, normalizedName)
+				_recordCategoryState(connection, newNameFolded, normalizedName, deleted=False)
 				return normalizedName
 			itemRows = connection.execute(
 				"""
@@ -2720,19 +2549,13 @@ class ClipboardStorage:
 				""",
 				(categoryId,),
 			).fetchall()
-			_recordCategoryDeleted(connection, oldNameFolded, actualOldName)
-			orderRow = connection.execute(
-				"""
-				SELECT orderClock, orderOperationId
-				FROM oneDriveCategories WHERE nameFolded = ?
-				""",
-				(oldNameFolded,),
-			).fetchone()
-			_recordCategoryLive(
+			_recordCategoryState(connection, oldNameFolded, actualOldName, deleted=True)
+			_recordCategoryState(
 				connection,
 				newNameFolded,
 				normalizedName,
-				(None if orderRow is None else SyncVersion(cast(int, orderRow[0]), cast(str, orderRow[1]))),
+				deleted=False,
+				orderVersion=_categoryOrderVersion(connection, oldNameFolded),
 			)
 			for row in itemRows:
 				_recordCategoryItem(connection, oldNameFolded, cast(int, row[0]), deleted=True)
@@ -2755,7 +2578,7 @@ class ClipboardStorage:
 			if row is not None:
 				raise CategoryNotEmptyError(name)
 			actualName = self._categoryName(connection, categoryId)
-			_recordCategoryDeleted(connection, actualName.casefold(), actualName)
+			_recordCategoryState(connection, actualName.casefold(), actualName, deleted=True)
 			connection.execute("DELETE FROM categories WHERE categoryId = ?", (categoryId,))
 
 	def addCategoryItem(self, categoryName: str, item: ClipboardItem) -> None:
@@ -2780,54 +2603,32 @@ class ClipboardStorage:
 		except _ImageLimitReached as error:
 			raise ImageStorageLimitError(MAX_TOTAL_IMAGE_BYTES) from error
 
-	def deleteHistoryItemsById(self, itemIds: tuple[int, ...]) -> None:
-		"""Delete stable history entries without deleting category copies."""
+	def deleteItemsById(self, category: str | None, itemIds: tuple[int, ...]) -> None:
+		"""Delete stable history or category entries without changing other references."""
 		if not itemIds:
 			return
 		with self._transaction() as connection:
-			for itemId in itemIds:
-				self._requireHistoryItem(connection, itemId)
-			_deleteHistoryReferences(connection, itemIds, explicit=True)
+			if category is None:
+				for itemId in itemIds:
+					self._requireHistoryItem(connection, itemId)
+				_deleteHistoryReferences(connection, itemIds, explicit=True)
+			else:
+				categoryId = self._categoryId(connection, category)
+				nameFolded = self._categoryName(connection, categoryId).casefold()
+				for itemId in itemIds:
+					self._requireCategoryItem(connection, categoryId, itemId)
+					_recordCategoryItem(connection, nameFolded, itemId, deleted=True)
+				connection.executemany(
+					"DELETE FROM categoryItems WHERE categoryId = ? AND itemId = ?",
+					((categoryId, itemId) for itemId in itemIds),
+				)
 			_garbageCollect(connection)
 
-	def removeMissingHistoryFileReferences(
+	def removeMissingFileReferences(
 		self,
+		category: str | None,
 		itemIds: tuple[int, ...],
 		missingPaths: frozenset[str],
-	) -> tuple[int, int, dict[int, int]]:
-		"""Remove missing paths from selected history file groups."""
-		return self._removeMissingFileReferences(itemIds, missingPaths)
-
-	def deleteCategoryItemsById(self, categoryName: str, itemIds: tuple[int, ...]) -> None:
-		"""Delete stable category entries without changing history."""
-		if not itemIds:
-			return
-		with self._transaction() as connection:
-			categoryId = self._categoryId(connection, categoryName)
-			nameFolded = self._categoryName(connection, categoryId).casefold()
-			for itemId in itemIds:
-				self._requireCategoryItem(connection, categoryId, itemId)
-				_recordCategoryItem(connection, nameFolded, itemId, deleted=True)
-			connection.executemany(
-				"DELETE FROM categoryItems WHERE categoryId = ? AND itemId = ?",
-				((categoryId, itemId) for itemId in itemIds),
-			)
-			_garbageCollect(connection)
-
-	def removeMissingCategoryFileReferences(
-		self,
-		categoryName: str,
-		itemIds: tuple[int, ...],
-		missingPaths: frozenset[str],
-	) -> tuple[int, int, dict[int, int]]:
-		"""Remove missing paths from selected category file groups."""
-		return self._removeMissingFileReferences(itemIds, missingPaths, categoryName)
-
-	def _removeMissingFileReferences(
-		self,
-		itemIds: tuple[int, ...],
-		missingPaths: frozenset[str],
-		categoryName: str | None = None,
 	) -> tuple[int, int, dict[int, int]]:
 		"""Remove missing paths from selected history or category file groups."""
 		if not itemIds or not missingPaths:
@@ -2835,8 +2636,8 @@ class ClipboardStorage:
 		with self._transaction() as connection:
 			categoryId = None
 			nameFolded = None
-			if categoryName is not None:
-				categoryId = self._categoryId(connection, categoryName)
+			if category is not None:
+				categoryId = self._categoryId(connection, category)
 				nameFolded = self._categoryName(connection, categoryId).casefold()
 			changed = 0
 			removed = 0
@@ -2992,25 +2793,19 @@ class ClipboardStorage:
 			raise ItemNotFoundError(itemId)
 		return _rowToContent(row)
 
-	def _iterItemContents(self, categoryName: str | None = None) -> Iterator[ClipboardItemContent]:
-		"""Stream payload-free content through a dedicated read-only connection."""
+	def iterItemContents(self, category: str | None = None) -> Iterator[ClipboardItemContent]:
+		"""Stream payload-free history or category content through a dedicated read-only connection."""
 		connection: sqlite3.Connection | None = None
 		try:
 			with self._lock:
 				self._requireConnection()
 			connection = _openReadOnlyDatabase(self.path)
-			if categoryName is None:
-				rows = connection.execute(
-					f"SELECT {_CONTENT_COLUMNS} FROM history JOIN items USING (itemId) "
-					"ORDER BY history.sortOrder",
-				)
-			else:
-				categoryId = self._categoryId(connection, categoryName)
-				rows = connection.execute(
-					f"SELECT {_CONTENT_COLUMNS} FROM categoryItems JOIN items USING (itemId) "
-					"WHERE categoryId = ? ORDER BY categoryItems.sortOrder",
-					(categoryId,),
-				)
+			table, condition, parameters = self._scope(connection, category)
+			rows = connection.execute(
+				f"SELECT {_CONTENT_COLUMNS} FROM {table} JOIN items USING (itemId) "
+				f"WHERE {condition} ORDER BY {table}.sortOrder",
+				parameters,
+			)
 			for row in rows:
 				yield _rowToContent(row)
 		except sqlite3.Error as error:
@@ -3018,6 +2813,23 @@ class ClipboardStorage:
 		finally:
 			if connection is not None:
 				connection.close()
+
+	def _scope(
+		self,
+		connection: sqlite3.Connection,
+		category: str | None,
+	) -> tuple[str, str, tuple[int, ...]]:
+		"""Return the reference table, row filter, and filter parameters for history or a category."""
+		if category is None:
+			return "history", "1", ()
+		return "categoryItems", "categoryId = ?", (self._categoryId(connection, category),)
+
+	def _requireItem(self, connection: sqlite3.Connection, category: str | None, itemId: int) -> None:
+		"""Raise ``ItemNotFoundError`` unless history or a category references an entry."""
+		if category is None:
+			self._requireHistoryItem(connection, itemId)
+		else:
+			self._requireCategoryItem(connection, self._categoryId(connection, category), itemId)
 
 	def _requireHistoryItem(self, connection: sqlite3.Connection, itemId: int) -> None:
 		row = connection.execute("SELECT 1 FROM history WHERE itemId = ?", (itemId,)).fetchone()

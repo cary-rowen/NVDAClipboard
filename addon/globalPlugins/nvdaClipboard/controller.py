@@ -7,9 +7,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, replace
 from enum import Enum, auto
 from functools import partial
@@ -1050,12 +1050,8 @@ class ClipboardController:
 		# ponytail: Re-scan off-thread to bound memory; add a byte-capped cache only if profiling justifies it.
 		visibleSummaries = {itemId: summary for itemId, summary, _itemType in items}
 		matchingKeys: list[int] = []
-		try:
-			if self.isHistoryCategory(category):
-				contents = self.storage.iterHistoryItemContents()
-			else:
-				assert isinstance(category, str)
-				contents = self.storage.iterCategoryItemContents(category)
+		with self._userStorageErrors():
+			contents = self.storage.iterItemContents(self._storageCategory(category))
 			with closing(contents):
 				for item in contents:
 					if cancelEvent.is_set():
@@ -1080,8 +1076,6 @@ class ClipboardController:
 						break
 					if matches:
 						matchingKeys.append(item.itemId)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		return tuple(matchingKeys)
 
 	def getItemDetails(self, category: CategoryId, itemId: int) -> ClipboardItemDetails:
@@ -1159,13 +1153,11 @@ class ClipboardController:
 			# Translators: Error shown when an empty category entry is requested.
 			raise ValueError(_("An empty entry cannot be saved"))
 		assert isinstance(category, str)
-		try:
+		with self._userStorageErrors():
 			self.storage.addCategoryItem(
 				category,
 				ClipboardItem(ClipboardItemType.PLAIN_TEXT, text=text, canUpload=canUpload),
 			)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == category:
 			self._storedItemIndex = 0
 		self.oneDriveSync.notifyLocalChange()
@@ -1315,14 +1307,8 @@ class ClipboardController:
 
 	def deleteItems(self, category: CategoryId, itemIds: tuple[int, ...]) -> None:
 		"""Delete stored entries."""
-		try:
-			if self.isHistoryCategory(category):
-				self.storage.deleteHistoryItemsById(itemIds)
-			else:
-				assert isinstance(category, str)
-				self.storage.deleteCategoryItemsById(category, itemIds)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			self.storage.deleteItemsById(self._storageCategory(category), itemIds)
 		self.oneDriveSync.notifyLocalChange()
 
 	def startMissingFileCleanup(
@@ -1347,22 +1333,12 @@ class ClipboardController:
 				if not self._isStarted or not missingPaths:
 					result: MissingFileCleanupResult | Exception = MissingFileCleanupResult(0, 0, {})
 				else:
-					try:
-						if self.isHistoryCategory(category):
-							changedCount, removedCount, replacementIds = (
-								self.storage.removeMissingHistoryFileReferences(itemIds, missingPaths)
-							)
-						else:
-							assert isinstance(category, str)
-							changedCount, removedCount, replacementIds = (
-								self.storage.removeMissingCategoryFileReferences(
-									category,
-									itemIds,
-									missingPaths,
-								)
-							)
-					except StorageError as error:
-						self._raiseUserStorageError(error)
+					with self._userStorageErrors():
+						changedCount, removedCount, replacementIds = self.storage.removeMissingFileReferences(
+							self._storageCategory(category),
+							itemIds,
+							missingPaths,
+						)
 					result = MissingFileCleanupResult(
 						changedCount,
 						removedCount,
@@ -1406,19 +1382,15 @@ class ClipboardController:
 
 	def createCategory(self, name: str) -> str:
 		"""Create a user category and return its stored name."""
-		try:
+		with self._userStorageErrors():
 			actualName = self.storage.createCategory(name)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		self.oneDriveSync.notifyLocalChange()
 		return actualName
 
 	def renameCategory(self, oldName: str, newName: str) -> str:
 		"""Rename a user category and return its stored name."""
-		try:
+		with self._userStorageErrors():
 			actualName = self.storage.renameCategory(oldName, newName)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == oldName:
 			self._storedItemCategory = actualName
 		self.oneDriveSync.notifyLocalChange()
@@ -1426,10 +1398,8 @@ class ClipboardController:
 
 	def deleteCategory(self, name: str) -> None:
 		"""Delete an empty user category."""
-		try:
+		with self._userStorageErrors():
 			self.storage.deleteCategory(name)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
 		if self._storedItemCategory == name:
 			self._storedItemCategory = _HISTORY_CATEGORY_ID
 			self._storedItemIndex = 0
@@ -2709,45 +2679,23 @@ class ClipboardController:
 		offset: int = 0,
 	) -> tuple[ClipboardItemSummary | None, int, int]:
 		"""Return one stored-item summary at the current position plus an offset."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistorySummaryAt(self._storedItemIndex, offset)
-			assert isinstance(category, str)
-			return self.storage.getCategorySummaryAt(category, self._storedItemIndex, offset)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getSummaryAt(self._storageCategory(category), self._storedItemIndex, offset)
 
 	def _getCategorySummaries(self, category: CategoryId) -> tuple[ClipboardItemSummary, ...]:
 		"""Return metadata-only entries for one manager category."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.history
-			assert isinstance(category, str)
-			return self.storage.getCategoryItems(category)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getItems(self._storageCategory(category))
 
 	def _getStoredItemById(self, category: CategoryId, itemId: int) -> ClipboardItem:
 		"""Load one complete entry after validating its stable category membership."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistoryItemById(itemId)
-			assert isinstance(category, str)
-			return self.storage.getCategoryItemById(category, itemId)
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors():
+			return self.storage.getItemById(self._storageCategory(category), itemId)
 
 	def _getStoredItemContentById(self, category: CategoryId, itemId: int) -> ClipboardItemContent:
 		"""Load displayable content by stable identifier without payload BLOBs."""
-		try:
-			if self.isHistoryCategory(category):
-				return self.storage.getHistoryItemContentById(itemId)
-			assert isinstance(category, str)
-			return self.storage.getCategoryItemContentById(category, itemId)
-		except ItemNotFoundError:
-			raise
-		except StorageError as error:
-			self._raiseUserStorageError(error)
+		with self._userStorageErrors(reraiseItemNotFound=True):
+			return self.storage.getItemContentById(self._storageCategory(category), itemId)
 
 	def _formatItemSummary(self, item: ClipboardItemSummary) -> str:
 		"""Return a concise content summary without a type prefix."""
@@ -3027,6 +2975,26 @@ class ClipboardController:
 
 	def _raiseUserStorageError(self, error: Exception) -> Never:
 		raise ValueError(self._formatItemError(error)) from error
+
+	@contextmanager
+	def _userStorageErrors(self, *, reraiseItemNotFound: bool = False) -> Iterator[None]:
+		"""Translate storage errors raised in the block into user-facing ``ValueError`` messages.
+
+		With ``reraiseItemNotFound``, ``ItemNotFoundError`` propagates unchanged.
+		"""
+		try:
+			yield
+		except StorageError as error:
+			if reraiseItemNotFound and isinstance(error, ItemNotFoundError):
+				raise
+			self._raiseUserStorageError(error)
+
+	def _storageCategory(self, category: CategoryId) -> str | None:
+		"""Return the storage scope of a category identifier, using ``None`` for history."""
+		if self.isHistoryCategory(category):
+			return None
+		assert isinstance(category, str)
+		return category
 
 	def _refreshManager(
 		self,
