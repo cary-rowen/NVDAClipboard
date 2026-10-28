@@ -10,23 +10,111 @@ from __future__ import annotations
 from collections.abc import Iterable
 from importlib import import_module
 import re
+from types import ModuleType
 from typing import Any
 import unicodedata
 
+from logHandler import log
+
 
 _BACKWARD_SEARCH_CHUNK_SIZE = 64 * 1024
-_parser = import_module("re._parser")
-_compiler = import_module("re._compiler")
+PRIVATE_PARSER_NAMES = (
+	"parse",
+	"MIN_REPEAT",
+	"MAX_REPEAT",
+	"AT",
+	"ASSERT",
+	"ASSERT_NOT",
+	"SUBPATTERN",
+	"_REPEATCODES",
+	"ATOMIC_GROUP",
+	"BRANCH",
+	"GROUPREF_EXISTS",
+	"_UNITCODES",
+	"GROUPREF",
+)
+"""Names of the CPython-private ``re._parser`` module used by ``matchRegexSelection``."""
+PRIVATE_COMPILER_NAMES = ("_simple", "compile")
+"""Names of the CPython-private ``re._compiler`` module used by ``matchRegexSelection``."""
+
+
+def _loadPrivateRegexModules() -> tuple[ModuleType, ModuleType]:
+	"""Import ``re._parser`` and ``re._compiler`` and check every name the selection matcher uses.
+
+	:raises ImportError: If a private module is missing.
+	:raises AttributeError: If a private module lacks a used name.
+	"""
+	parser = import_module("re._parser")
+	compiler = import_module("re._compiler")
+	for module, names in ((parser, PRIVATE_PARSER_NAMES), (compiler, PRIVATE_COMPILER_NAMES)):
+		for name in names:
+			getattr(module, name)
+	return parser, compiler
+
+
+_privateRegexModules: tuple[ModuleType, ModuleType] | None
+"""The private ``re`` modules, or ``None`` if they lack a name the selection matcher uses."""
+_privateRegexError: Exception | None = None
+"""Why the private ``re`` modules could not be loaded, if they could not."""
+try:
+	_privateRegexModules = _loadPrivateRegexModules()
+except (ImportError, AttributeError) as error:
+	_privateRegexModules = None
+	_privateRegexError = error
+_privateRegexFallbackLogged = False
+"""Whether the fallback to context-free selection matching has been logged."""
+
+
+def _fullMatchFallback(
+	pattern: re.Pattern[str],
+	text: str,
+	start: int,
+	end: int,
+	error: Exception | None,
+) -> re.Match[str] | None:
+	"""Match the selection without surrounding context because the private ``re`` API is missing.
+
+	The reason is logged only once.
+	"""
+	global _privateRegexFallbackLogged
+	if not _privateRegexFallbackLogged:
+		_privateRegexFallbackLogged = True
+		log.debugWarning(
+			"Private re parser API unavailable; regular-expression selections are matched without context.",
+			exc_info=error,
+		)
+	return pattern.fullmatch(text, start, end)
 
 
 def matchRegexSelection(pattern: re.Pattern[str], text: str, start: int, end: int) -> re.Match[str] | None:
+	"""Return a full match of ``pattern`` over ``text[start:end]`` whose assertions see the whole text.
+
+	Falls back to ``pattern.fullmatch(text, start, end)`` if CPython's private ``re``
+	parser modules, or any name used from them, are missing.
+	"""
 	if end == len(text):
 		return pattern.fullmatch(text, start)
+	modules = _privateRegexModules
+	if modules is None:
+		return _fullMatchFallback(pattern, text, start, end, _privateRegexError)
+	return _matchWithPrivateRegexApi(modules, pattern, text, start, end)
+
+
+def _matchWithPrivateRegexApi(
+	modules: tuple[ModuleType, ModuleType],
+	pattern: re.Pattern[str],
+	text: str,
+	start: int,
+	end: int,
+) -> re.Match[str] | None:
+	"""Match the selection by limiting consumption in its parse tree while assertions keep full context."""
+	_parser, _compiler = modules
 	# CPython 3.13 的 re 解析树：限制消耗文本的节点，保留断言可见的全文上下文。
 	parsed = _parser.parse(pattern.pattern, pattern.flags)
 	boundary = _parser.parse(rf"(?<!(?s:.{{{end + 1}}}))", 0)[0]
 
 	def limitConsumption(subPattern: Any) -> bool:
+		"""Cap consuming nodes below ``subPattern`` in place; return whether it contains assertions."""
 		hasContext = False
 		limited: list[tuple[Any, Any]] = []
 		for operation, argument in subPattern:
