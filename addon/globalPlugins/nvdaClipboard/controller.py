@@ -371,13 +371,11 @@ class ClipboardController:
 			if tiantanEnabled:
 				tiantanSupportState = getTiantanSupportState()
 				self._tiantanUnavailableMessage = tiantanSupportState.statusMessage
-				if tiantanSupportState.isAvailable:
-					self.cloudSync = CloudSyncManager(onStateChanged=self._onCloudStateChanged)
-					cloudState = self.cloudSync.getState()
-					if not cloudState.isAvailable:
-						self._tiantanUnavailableMessage = cloudState.statusMessage
-						self.cloudSync.terminate()
-						self.cloudSync = None
+				if tiantanSupportState.sdk is not None:
+					self.cloudSync = CloudSyncManager(
+						tiantanSupportState.sdk,
+						onStateChanged=self._onCloudStateChanged,
+					)
 			self.oneDriveSync = OneDriveSyncManager(
 				self.storage,
 				onStateChanged=self._onOneDriveStateChanged,
@@ -507,9 +505,6 @@ class ClipboardController:
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
-		if not cloudSync.getState().isAvailable:
-			ui.message(cloudSync.getState().statusMessage)
-			return
 		if self.cloudDialog is not None:
 			try:
 				self.cloudDialog.Raise()
@@ -572,10 +567,6 @@ class ClipboardController:
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
 			return
-		state = cloudSync.getState()
-		if not state.isAvailable:
-			ui.message(state.statusMessage)
-			return
 		if self._cloudFetchInProgress:
 			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.
 			ui.message(_("A Tiantan Cloud Clipboard receive is already in progress"))
@@ -626,10 +617,6 @@ class ClipboardController:
 		cloudSync = self.cloudSync
 		if cloudSync is None:
 			ui.message(self._tiantanUnavailableMessage or _TIANTAN_DISABLED_MESSAGE)
-			return
-		state = cloudSync.getState()
-		if not state.isAvailable:
-			ui.message(state.statusMessage)
 			return
 		if self._cloudFetchInProgress:
 			# Translators: Message shown when another Tiantan Cloud Clipboard receive is still running.

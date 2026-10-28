@@ -44,11 +44,6 @@ _CONFIG_AUTO_SYNC_TIANTAN = "autoSyncTiantan"
 config.conf.spec.setdefault(_CONFIG_SECTION, {})[_CONFIG_AUTO_SYNC_TIANTAN] = "boolean(default=true)"
 
 
-def _getSdkUnavailableMessage() -> str:
-	# Translators: Error shown when the native cloud clipboard library cannot be used.
-	return _("Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.")
-
-
 class CloudClipboardWriteError(Exception):
 	"""Raised when fetched cloud text cannot be written to the local clipboard."""
 
@@ -57,7 +52,6 @@ class CloudClipboardWriteError(Exception):
 class CloudSyncState:
 	"""Describe the current cloud clipboard state for user interfaces."""
 
-	isAvailable: bool
 	isLoggedIn: bool
 	isAutoSyncEnabled: bool
 	isManualSendInProgress: bool
@@ -67,19 +61,12 @@ class CloudSyncState:
 class CloudSyncManager:
 	"""Run cloud SDK calls in worker threads and track automatic upload state."""
 
-	def __init__(self, onStateChanged: StateChangedCallback | None = None) -> None:
+	def __init__(self, sdk: CloudClipboardSdk, onStateChanged: StateChangedCallback | None = None) -> None:
+		"""Use an already loaded SDK instance and register for configuration profile switches."""
 		self._onStateChanged = onStateChanged
-		self._sdk: CloudClipboardSdk | None = None
-		self._loadError: str | None = None
-		try:
-			self._sdk = CloudClipboardSdk()
-		except CloudClipboardError as error:
-			self._loadError = error.message
-			self._statusMessage = _getSdkUnavailableMessage()
-			log.debugWarning("ClipDataCloud SDK is unavailable.", exc_info=error)
-		else:
-			# Translators: Initial cloud clipboard status before the persisted login is checked.
-			self._statusMessage = _("Checking...")
+		self._sdk = sdk
+		# Translators: Initial cloud clipboard status before the persisted login is checked.
+		self._statusMessage = _("Checking...")
 		self._isLoggedIn = False
 		self._nickname: str | None = None
 		self._isVip: bool | None = None
@@ -98,8 +85,7 @@ class CloudSyncManager:
 
 	def initialize(self) -> None:
 		"""Check the persisted login state without blocking NVDA's main thread."""
-		if self._loadError is None:
-			self.checkStatus(announce=False)
+		self.checkStatus(announce=False)
 
 	def terminate(self) -> None:
 		"""Prevent future callbacks and automatic uploads."""
@@ -113,7 +99,6 @@ class CloudSyncManager:
 	def getState(self) -> CloudSyncState:
 		"""Return a snapshot of the current cloud state."""
 		return CloudSyncState(
-			isAvailable=self._loadError is None,
 			isLoggedIn=self._isLoggedIn,
 			isAutoSyncEnabled=self.isAutoSyncEnabled(),
 			isManualSendInProgress=self._manualSendLock.locked(),
@@ -157,7 +142,7 @@ class CloudSyncManager:
 			return
 
 		def work() -> CloudLoginResult:
-			return self._getSdk().login(phone, password)
+			return self._sdk.login(phone, password)
 
 		def success(result: object) -> str:
 			assert isinstance(result, CloudLoginResult)
@@ -182,7 +167,7 @@ class CloudSyncManager:
 		operationId = self._beginStateOperation()
 
 		def work() -> None:
-			self._getSdk().logout()
+			self._sdk.logout()
 
 		def success(_result: object) -> str:
 			# Translators: Status shown after signing out of cloud clipboard.
@@ -206,7 +191,7 @@ class CloudSyncManager:
 		operationId = self._beginStateOperation()
 
 		def work() -> bool:
-			return self._getSdk().isUserLoggedIn()
+			return self._sdk.isUserLoggedIn()
 
 		def success(result: object) -> str:
 			isLoggedIn = bool(result)
@@ -260,7 +245,7 @@ class CloudSyncManager:
 			self._manualSendLock.release()
 
 		def work() -> None:
-			self._getSdk().uploadText(text)
+			self._sdk.uploadText(text)
 
 		def success(_result: object) -> str:
 			# Translators: Confirmation after manually sending clipboard text.
@@ -296,7 +281,7 @@ class CloudSyncManager:
 						self._abandonSdkOperation(None, onDispatchFailed)
 					return
 				try:
-					text = self._getSdk().fetchText()
+					text = self._sdk.fetchText()
 				except Exception as error:
 					if not self._queueMainThread(
 						self._finishFailedOperation,
@@ -364,11 +349,6 @@ class CloudSyncManager:
 			if not self._autoUploadFailureReported:
 				self._autoUploadFailureReported = True
 				log.exception("Could not start automatic ClipDataCloud upload.")
-
-	def _getSdk(self) -> CloudClipboardSdk:
-		if self._sdk is not None:
-			return self._sdk
-		raise CloudClipboardError(None, self._loadError or _getSdkUnavailableMessage())
 
 	def _beginStateOperation(self) -> int:
 		"""Return a new identifier that invalidates older login-state results."""
@@ -519,12 +499,6 @@ class CloudSyncManager:
 		if operationId != self._stateOperationId:
 			self._finishStaleOperation(onDone)
 			return
-		if isinstance(error, CloudClipboardError) and error.code is None:
-			if self._loadError is None:
-				log.debugWarning("ClipDataCloud SDK became unavailable.", exc_info=error)
-			self._markSdkUnavailable(error.message)
-			self._finish(False, _getSdkUnavailableMessage(), onDone, announce)
-			return
 		if not isinstance(error, CloudClipboardError):
 			log.exception(
 				"Unexpected ClipDataCloud operation failure.",
@@ -627,7 +601,7 @@ class CloudSyncManager:
 						self._uploadInProgress = False
 						return
 				try:
-					self._getSdk().uploadText(currentText)
+					self._sdk.uploadText(currentText)
 					uploadSucceeded = True
 					self._autoUploadFailureReported = False
 				except Exception as error:
@@ -661,9 +635,6 @@ class CloudSyncManager:
 
 	def _handleAutoUploadError(self, error: Exception, stateAtStart: int) -> bool:
 		"""Handle automatic upload failure without repeated speech."""
-		if isinstance(error, CloudClipboardError) and error.code is None:
-			self._queueMainThread(self._handleSdkUnavailableForAutoUpload, error, stateAtStart)
-			return True
 		if not self._autoUploadFailureReported:
 			if isinstance(error, CloudClipboardError):
 				log.debugWarning(
@@ -692,15 +663,6 @@ class CloudSyncManager:
 			self._notLoggedInNotified = True
 			ui.message(message)
 
-	def _handleSdkUnavailableForAutoUpload(self, error: CloudClipboardError, stateAtStart: int) -> None:
-		"""Disable cloud state after an automatic upload detects an unusable SDK."""
-		if self._terminated or stateAtStart != self._stateOperationId:
-			return
-		if self._loadError is None:
-			log.debugWarning("ClipDataCloud SDK became unavailable.", exc_info=error)
-		self._markSdkUnavailable(error.message)
-		self._notifyStateChanged()
-
 	def _getInvalidUploadReason(self, text: str) -> str | None:
 		try:
 			validateUploadText(text)
@@ -725,8 +687,6 @@ class CloudSyncManager:
 
 	def _formatError(self, error: Exception) -> str:
 		if isinstance(error, CloudClipboardError):
-			if error.code is None:
-				return _getSdkUnavailableMessage()
 			if error.code == INVALID_ARGUMENT:
 				# Translators: Cloud SDK error description.
 				return _("Invalid argument")
@@ -759,12 +719,6 @@ class CloudSyncManager:
 		self._statusMessage = statusMessage
 		with self._uploadLock:
 			self._pendingUploadText = None
-
-	def _markSdkUnavailable(self, errorMessage: str) -> None:
-		self._sdk = None
-		self._loadError = errorMessage
-		self._stateOperationInProgress = False
-		self._setLoggedOut(_getSdkUnavailableMessage())
 
 	def _formatLoggedInStatus(self) -> str:
 		if self._autoUploadEnabled:

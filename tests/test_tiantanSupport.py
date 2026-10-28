@@ -55,29 +55,14 @@ class TiantanSupportTests(unittest.TestCase):
 		tiantanSupport.getTiantanSupportState.cache_clear()
 		tiantanSupport.log.reset_mock()
 
-	def testUnsupportedProcessBitnessDoesNotLoadSdk(self) -> None:
-		"""Reject 32-bit NVDA before trying to load the SDK."""
-		with (
-			patch.object(tiantanSupport.sys, "maxsize", 2**32),
-			patch.object(tiantanSupport.cloudClipboard, "CloudClipboardSdk") as sdkClass,
-		):
-			state = tiantanSupport.getTiantanSupportState()
-
-		self.assertFalse(state.isAvailable)
-		self.assertEqual(state.statusMessage, "Tiantan Cloud Clipboard requires 64-bit NVDA.")
-		sdkClass.assert_not_called()
-		tiantanSupport.log.debugWarning.assert_called_once()
-
 	def testSdkLoadFailureReportsUnavailable(self) -> None:
 		"""Return an unavailable state when the native SDK cannot be loaded."""
 		error = tiantanSupport.cloudClipboard.CloudClipboardError(None, "load failed")
-		with (
-			patch.object(tiantanSupport.sys, "maxsize", 2**63 - 1),
-			patch.object(tiantanSupport.cloudClipboard, "CloudClipboardSdk", side_effect=error),
-		):
+		with patch.object(tiantanSupport.cloudClipboard, "CloudClipboardSdk", side_effect=error):
 			state = tiantanSupport.getTiantanSupportState()
 
 		self.assertFalse(state.isAvailable)
+		self.assertIsNone(state.sdk)
 		self.assertEqual(
 			state.statusMessage,
 			"Tiantan Cloud Clipboard is unavailable. Check the ClipDataCloud SDK.",
@@ -86,6 +71,17 @@ class TiantanSupportTests(unittest.TestCase):
 			"ClipDataCloud SDK is unavailable.",
 			exc_info=error,
 		)
+
+	def testSdkIsLoadedOnceAndReturned(self) -> None:
+		"""Load the native SDK only once and expose the loaded instance."""
+		with patch.object(tiantanSupport.cloudClipboard, "CloudClipboardSdk") as sdkClass:
+			state = tiantanSupport.getTiantanSupportState()
+			self.assertIs(tiantanSupport.getTiantanSupportState(), state)
+
+		self.assertTrue(state.isAvailable)
+		self.assertIs(state.sdk, sdkClass.return_value)
+		self.assertEqual(state.statusMessage, "")
+		sdkClass.assert_called_once_with()
 
 
 if __name__ == "__main__":

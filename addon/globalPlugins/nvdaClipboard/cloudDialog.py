@@ -141,7 +141,7 @@ class CloudClipboardDialog(wx.Dialog):
 		self.loginPanel.Show(not state.isLoggedIn)
 		self.loggedInPanel.Show(state.isLoggedIn)
 
-		canUse = not self._busy and state.isAvailable
+		canUse = not self._busy
 		self.phoneCtrl.Enable(canUse)
 		self.passwordCtrl.Enable(canUse)
 		self.loginButton.Enable(canUse)

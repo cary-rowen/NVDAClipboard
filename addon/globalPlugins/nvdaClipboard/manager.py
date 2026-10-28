@@ -654,15 +654,12 @@ class ClipboardManagerFrame(wx.Frame):
 			cloudState = cloudSync.getState()
 			if self.autoSyncTiantanItem is not None:
 				self.autoSyncTiantanItem.Check(cloudState.isAutoSyncEnabled)
-				self.autoSyncTiantanItem.Enable(cloudState.isAvailable)
 			if self.sendToTiantanItem is not None:
 				self.sendToTiantanItem.Enable(
-					cloudState.isAvailable
-					and cloudState.isLoggedIn
-					and not cloudState.isManualSendInProgress,
+					cloudState.isLoggedIn and not cloudState.isManualSendInProgress,
 				)
 			if self.receiveFromTiantanItem is not None:
-				self.receiveFromTiantanItem.Enable(cloudState.isAvailable and cloudState.isLoggedIn)
+				self.receiveFromTiantanItem.Enable(cloudState.isLoggedIn)
 		oneDriveState = self.controller.oneDriveSync.getState()
 		self.syncOneDriveItem.Enable(
 			oneDriveState.isAvailable
