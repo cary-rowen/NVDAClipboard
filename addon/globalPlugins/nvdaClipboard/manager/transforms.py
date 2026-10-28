@@ -14,7 +14,7 @@ from itertools import groupby
 import textUtils
 import winUser
 
-from .clipboardData import normalizeNewlinesForWin32
+from ..clipboard.payload import normalizeNewlinesForWin32
 
 _EM_REPLACESEL = 0x00C2
 

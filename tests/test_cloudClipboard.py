@@ -18,7 +18,7 @@ createAddonPackage(_PACKAGE_NAME)
 
 
 cloudClipboard = loadAddonModule(
-	f"{_PACKAGE_NAME}.cloudClipboard",
+	f"{_PACKAGE_NAME}.tiantan.sdk",
 )
 
 

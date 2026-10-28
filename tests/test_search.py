@@ -22,7 +22,7 @@ from tests._module_loader import createAddonPackage, loadAddonModule
 _PACKAGE_NAME = "nvdaClipboardSearchTests"
 createAddonPackage(_PACKAGE_NAME)
 search = loadAddonModule(
-	f"{_PACKAGE_NAME}.search",
+	f"{_PACKAGE_NAME}.textSearch",
 	injectedModules={"logHandler": SimpleNamespace(log=Mock())},
 )
 
@@ -34,7 +34,7 @@ def _loadSearchWithoutPrivateRegexApi(
 	createAddonPackage(packageName)
 	log = Mock()
 	module = loadAddonModule(
-		f"{packageName}.search",
+		f"{packageName}.textSearch",
 		injectedModules={"logHandler": SimpleNamespace(log=log), **privateModules},
 	)
 	return module, log

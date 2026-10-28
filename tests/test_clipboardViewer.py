@@ -24,13 +24,13 @@ try:
 except ImportError:
 	clipboardViewer = None
 else:
-	clipboardMonitor = ModuleType(f"{_PACKAGE_NAME}.clipboardMonitor")
+	clipboardMonitor = ModuleType(f"{_PACKAGE_NAME}.clipboard.monitor")
 	clipboardMonitor.ClipboardSnapshot = object
 	clipboardViewer = loadAddonModule(
-		f"{_PACKAGE_NAME}.clipboardViewer",
+		f"{_PACKAGE_NAME}.clipboard.viewer",
 		injectedModules={
 			"logHandler": SimpleNamespace(log=Mock()),
-			f"{_PACKAGE_NAME}.clipboardMonitor": clipboardMonitor,
+			f"{_PACKAGE_NAME}.clipboard.monitor": clipboardMonitor,
 		},
 	)
 

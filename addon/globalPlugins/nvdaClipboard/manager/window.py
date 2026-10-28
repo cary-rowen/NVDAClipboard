@@ -29,17 +29,17 @@ import ui
 import winUser
 import wx
 
-from .cues import playNonPlainText
-from .clipboardData import MAX_TEXT_BYTES
-from . import textTransforms
-from .managerEditor import _ManagerEditorCommands
-from .managerFilter import ManagerSearchFilter
-from .configuration import getConfirmOnClose, getManagerWindowState
-from .storage import ItemNotFoundError
-from .storageModels import ClipboardItemType
+from ..cues import playNonPlainText
+from ..clipboard.payload import MAX_TEXT_BYTES
+from . import transforms as textTransforms
+from .editor import _ManagerEditorCommands
+from .filter import ManagerSearchFilter
+from ..configuration import getConfirmOnClose, getManagerWindowState
+from ..storage.database import ItemNotFoundError
+from ..storage.models import ClipboardItemType
 
 if TYPE_CHECKING:
-	from .controller import CategoryId, ClipboardController, MissingFileCleanupResult
+	from ..controller import CategoryId, ClipboardController, MissingFileCleanupResult
 
 __all__ = ["ClipboardManagerFrame"]
 

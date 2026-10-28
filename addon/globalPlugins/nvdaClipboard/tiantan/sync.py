@@ -17,7 +17,7 @@ import config
 from logHandler import log
 import ui
 
-from .cloudClipboard import (
+from .sdk import (
 	BUFFER_TOO_SMALL,
 	INVALID_ARGUMENT,
 	TEXT_CONTAINS_NUL_ERROR,
@@ -30,8 +30,8 @@ from .cloudClipboard import (
 	TiantanSdk,
 	validateUploadText,
 )
-from .configuration import getSection
-from .background import queueMainThread
+from ..configuration import getSection
+from ..background import queueMainThread
 
 
 addonHandler.initTranslation()

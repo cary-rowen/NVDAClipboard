@@ -17,7 +17,7 @@ from gui.message import displayDialogAsModal
 import textUtils
 import wx
 
-from .search import findPreviousLiteralMatch, matchRegexSelection
+from ..textSearch import findPreviousLiteralMatch, matchRegexSelection
 
 
 addonHandler.initTranslation()

@@ -22,15 +22,15 @@ from logHandler import log
 import NVDAState
 import requests
 
-from .background import queueMainThread
-from .oneDriveAuth import (
+from ..background import queueMainThread
+from .auth import (
 	ERROR_AUTH_UNAVAILABLE,
 	TOKEN_CACHE_FILE_NAME,
 	AccountToken,
 	AuthenticationUnavailableError,
 	AuthManager,
 )
-from .oneDriveGraph import (
+from .graph import (
 	ERROR_SIGN_IN_EXPIRED,
 	GraphClient,
 	ManifestConflictError,
@@ -39,7 +39,7 @@ from .oneDriveGraph import (
 	RemoteManifest,
 	remoteItemMatches,
 )
-from .oneDriveProtocol import (
+from .protocol import (
 	MAX_ITEM_FILE_BYTES,
 	OneDriveError,
 	_ItemSizeLimitError,
@@ -61,7 +61,7 @@ from .oneDriveProtocol import (
 	_rebaseLocalSnapshot,
 	_tombstoneCount,
 )
-from .storage import (
+from ..storage.database import (
 	ClipboardStorage,
 	ImageStorageLimitError,
 	OneDriveAccountMismatchError,
@@ -69,7 +69,7 @@ from .storage import (
 	StorageError,
 	StorageFormatError,
 )
-from .storageModels import (
+from ..storage.models import (
 	ClipboardItem,
 	OneDriveSyncSnapshot,
 )

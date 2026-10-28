@@ -21,8 +21,8 @@ import fileUtils
 from logHandler import log
 import NVDAState
 
-from .oneDriveGraph import HTTP_TIMEOUT
-from .oneDriveProtocol import OneDriveError
+from .graph import HTTP_TIMEOUT
+from .protocol import OneDriveError
 
 
 addonHandler.initTranslation()
@@ -143,8 +143,8 @@ class AuthManager:
 	def __init__(self, cachePath: Path) -> None:
 		"""Create an MSAL client backed by the encrypted token cache."""
 		try:
-			from ._vendor import msal
-			from ._vendor.msal.oauth2cli import AuthCodeReceiver
+			from .._vendor import msal
+			from .._vendor.msal.oauth2cli import AuthCodeReceiver
 		except Exception as error:
 			raise AuthenticationUnavailableError(ERROR_AUTH_UNAVAILABLE) from error
 		self.cachePath = cachePath

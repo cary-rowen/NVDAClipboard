@@ -29,26 +29,26 @@ from tests.test_clipboardMonitor import clipboardMonitor
 
 _PACKAGE_NAME = "nvdaClipboardWorkerPipelineTests"
 createAddonPackage(_PACKAGE_NAME)
-storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels")
+storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storage.models")
 
 
 def _placeholderAddonModules() -> dict[str, object]:
 	"""Return placeholders for add-on modules the pipelines do not exercise."""
 	modules: dict[str, object] = {}
 	for name in (
-		"cloudSync",
+		"tiantan.sync",
 		"configuration",
 		"cues",
-		"fileSize",
-		"images",
+		"summary.fileSize",
+		"clipboard.images",
 		"navigation",
-		"oneDriveSync",
-		"search",
-		"storage",
-		"textStats",
+		"oneDrive.sync",
+		"textSearch",
+		"storage.database",
+		"summary.textStats",
 	):
 		modules[f"{_PACKAGE_NAME}.{name}"] = _PlaceholderModule(f"{_PACKAGE_NAME}.{name}")
-	storage = modules[f"{_PACKAGE_NAME}.storage"]
+	storage = modules[f"{_PACKAGE_NAME}.storage.database"]
 	for errorName in (
 		"CategoryExistsError",
 		"CategoryNameError",
@@ -80,7 +80,7 @@ controllerModule = loadAddonModule(
 				"textInfos",
 			),
 		),
-		f"{_PACKAGE_NAME}.clipboardMonitor": clipboardMonitor,
+		f"{_PACKAGE_NAME}.clipboard.monitor": clipboardMonitor,
 		**_placeholderAddonModules(),
 	},
 )

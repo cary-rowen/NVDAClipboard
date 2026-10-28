@@ -22,7 +22,7 @@ from urllib.parse import quote
 import addonHandler
 import requests
 
-from .oneDriveProtocol import (
+from .protocol import (
 	MAX_ITEM_FILE_BYTES,
 	MAX_MANIFEST_BYTES,
 	OneDriveError,
@@ -30,7 +30,7 @@ from .oneDriveProtocol import (
 	_decodeManifest,
 	_emptySnapshot,
 )
-from .storageModels import OneDriveSyncSnapshot
+from ..storage.models import OneDriveSyncSnapshot
 
 
 addonHandler.initTranslation()

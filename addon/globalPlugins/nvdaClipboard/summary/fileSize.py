@@ -16,7 +16,7 @@ from typing import override
 from logHandler import log
 from winBindings import kernel32
 
-from .background import BackgroundCalculation
+from ..background import BackgroundCalculation
 
 
 __all__ = ["FileSizeCalculation", "FileSizeProgress"]

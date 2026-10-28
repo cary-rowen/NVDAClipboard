@@ -37,7 +37,7 @@ with (
 	),
 ):
 	clipboardMonitor = loadAddonModule(
-		f"{_PACKAGE_NAME}.clipboardMonitor",
+		f"{_PACKAGE_NAME}.clipboard.monitor",
 	)
 
 
@@ -849,7 +849,7 @@ class SharedWinDllTests(unittest.TestCase):
 
 	def testClipboardMonitorUsesPrivateLastErrorLibraries(self) -> None:
 		"""Load user32, kernel32 and gdi32 as private instances that capture the last error."""
-		tree = ast.parse(addonSourcePath("clipboardMonitor").read_text(encoding="utf-8"))
+		tree = ast.parse(addonSourcePath("clipboard.monitor").read_text(encoding="utf-8"))
 		libraries = {
 			node.args[0].value
 			for node in ast.walk(tree)

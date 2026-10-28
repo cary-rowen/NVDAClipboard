@@ -92,7 +92,7 @@ def _makeTextUtilsPackage() -> dict[str, ModuleType]:
 
 
 textTransforms = loadAddonModule(
-	f"{_PACKAGE_NAME}.textTransforms",
+	f"{_PACKAGE_NAME}.manager.transforms",
 	injectedModules={
 		"textUtils": SimpleNamespace(WideStringOffsetConverter=_IdentityOffsetConverter),
 		"winUser": ModuleType("winUser"),

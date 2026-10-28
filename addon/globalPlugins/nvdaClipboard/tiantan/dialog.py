@@ -15,7 +15,7 @@ from gui import guiHelper
 import wx
 
 if TYPE_CHECKING:
-	from .cloudSync import TiantanSyncManager
+	from .sync import TiantanSyncManager
 
 
 addonHandler.initTranslation()

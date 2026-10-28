@@ -19,13 +19,13 @@ from logHandler import log
 import ui
 
 from .background import queueMainThread
-from .clipboardData import MAX_IMAGE_BYTES, getPngImageInfo, isImageSizeSafe
-from .clipboardMonitor import ClipboardContentType, ClipboardSnapshot
-from .imageCodec import ImageDataTooLargeError, normalizeImageDataToPng
-from .storageModels import ClipboardItem, ClipboardItemType
+from .clipboard.payload import MAX_IMAGE_BYTES, getPngImageInfo, isImageSizeSafe
+from .clipboard.monitor import ClipboardContentType, ClipboardSnapshot
+from .clipboard.imageCodec import ImageDataTooLargeError, normalizeImageDataToPng
+from .storage.models import ClipboardItem, ClipboardItemType
 
 if TYPE_CHECKING:
-	from .storage import ClipboardStorage
+	from .storage.database import ClipboardStorage
 
 
 addonHandler.initTranslation()

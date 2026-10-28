@@ -20,8 +20,8 @@ _PACKAGE_NAME = "nvdaClipboardImageCodecTests"
 createAddonPackage(_PACKAGE_NAME)
 
 
-clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboardData")
-imageCodec = loadAddonModule(f"{_PACKAGE_NAME}.imageCodec")
+clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboard.payload")
+imageCodec = loadAddonModule(f"{_PACKAGE_NAME}.clipboard.imageCodec")
 
 
 def _buildCanonicalDib() -> bytes:

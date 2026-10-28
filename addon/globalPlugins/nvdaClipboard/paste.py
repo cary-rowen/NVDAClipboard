@@ -22,16 +22,16 @@ import ui
 import winUser
 
 from .background import LatestWorkerResult
-from .clipboardData import normalizeNewlinesForWin32, normalizeUnicodeText
-from .clipboardMonitor import ClipboardContentType, ClipboardSequenceChangedError, ClipboardSnapshot
-from .imageCodec import pngToPackedDib
-from .storageModels import StorageError
+from .clipboard.payload import normalizeNewlinesForWin32, normalizeUnicodeText
+from .clipboard.monitor import ClipboardContentType, ClipboardSequenceChangedError, ClipboardSnapshot
+from .clipboard.imageCodec import pngToPackedDib
+from .storage.models import StorageError
 from .summary.formatting import getTextOrCharacterCount
 
 if TYPE_CHECKING:
-	from .clipboardMonitor import ClipboardMonitor
-	from .storage import ClipboardStorage
-	from .storageModels import ClipboardItem
+	from .clipboard.monitor import ClipboardMonitor
+	from .storage.database import ClipboardStorage
+	from .storage.models import ClipboardItem
 
 
 addonHandler.initTranslation()

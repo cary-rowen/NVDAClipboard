@@ -27,7 +27,7 @@ from markdown.inlinepatterns import InlineProcessor
 from markdown.postprocessors import Postprocessor
 
 if TYPE_CHECKING:
-	from .clipboardMonitor import ClipboardSnapshot
+	from .monitor import ClipboardSnapshot
 
 
 class _LatexInlineProcessor(InlineProcessor):

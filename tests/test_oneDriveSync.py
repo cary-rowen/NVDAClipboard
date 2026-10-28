@@ -25,7 +25,7 @@ from tests._module_loader import createAddonPackage, loadAddonModule
 
 _PACKAGE_NAME = "nvdaClipboardOneDriveSyncTests"
 createAddonPackage(_PACKAGE_NAME)
-storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storageModels")
+storageModels = loadAddonModule(f"{_PACKAGE_NAME}.storage.models")
 
 
 def _translate(message: str) -> str:
@@ -116,7 +116,7 @@ _NVDA_STATE = ModuleType("NVDAState")
 _NVDA_STATE.shouldWriteToDisk = MagicMock(return_value=False)
 _WX = ModuleType("wx")
 _WX.CallAfter = MagicMock()
-_STORAGE = ModuleType(f"{_PACKAGE_NAME}.storage")
+_STORAGE = ModuleType(f"{_PACKAGE_NAME}.storage.database")
 _STORAGE.ClipboardStorage = object
 _STORAGE.ImageStorageLimitError = _ImageStorageLimitError
 _STORAGE.OneDriveAccountMismatchError = _OneDriveAccountMismatchError
@@ -130,7 +130,7 @@ _STORAGE.getItemPayloadHash = _getItemPayloadHash
 _STORAGE.isOneDriveSyncItem = _isOneDriveSyncItem
 with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicMock(), create=True):
 	oneDriveSync = loadAddonModule(
-		f"{_PACKAGE_NAME}.oneDriveSync",
+		f"{_PACKAGE_NAME}.oneDrive.sync",
 		injectedModules={
 			"addonHandler": _ADDON_HANDLER,
 			"gui": _GUI,
@@ -140,12 +140,12 @@ with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicM
 			"NVDAState": _NVDA_STATE,
 			"requests": _REQUESTS,
 			"wx": _WX,
-			f"{_PACKAGE_NAME}.storage": _STORAGE,
+			f"{_PACKAGE_NAME}.storage.database": _STORAGE,
 		},
 	)
-oneDriveAuth = sys.modules[f"{_PACKAGE_NAME}.oneDriveAuth"]
-oneDriveGraph = sys.modules[f"{_PACKAGE_NAME}.oneDriveGraph"]
-oneDriveProtocol = sys.modules[f"{_PACKAGE_NAME}.oneDriveProtocol"]
+oneDriveAuth = sys.modules[f"{_PACKAGE_NAME}.oneDrive.auth"]
+oneDriveGraph = sys.modules[f"{_PACKAGE_NAME}.oneDrive.graph"]
+oneDriveProtocol = sys.modules[f"{_PACKAGE_NAME}.oneDrive.protocol"]
 
 
 def _makeImageItem() -> storageModels.ClipboardItem:

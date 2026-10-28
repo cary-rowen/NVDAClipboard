@@ -42,7 +42,7 @@ _UI.message = Mock()
 _WX = ModuleType("wx")
 _WX.CallAfter = Mock()
 cloudSync = loadAddonModule(
-	f"{_PACKAGE_NAME}.cloudSync",
+	f"{_PACKAGE_NAME}.tiantan.sync",
 	injectedModules={
 		"addonHandler": _ADDON_HANDLER,
 		"config": _CONFIG,
@@ -51,7 +51,7 @@ cloudSync = loadAddonModule(
 		"wx": _WX,
 	},
 )
-cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.cloudClipboard"]
+cloudClipboard = sys.modules[f"{_PACKAGE_NAME}.tiantan.sdk"]
 
 
 class TiantanSyncTests(unittest.TestCase):

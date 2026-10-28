@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING
 from logHandler import log
 import wx
 
-from .search import normalizeSearchText, splitSearchKeywords
+from ..textSearch import normalizeSearchText, splitSearchKeywords
 
 if TYPE_CHECKING:
-	from .storageModels import ClipboardItemType
+	from ..storage.models import ClipboardItemType
 
 
 _SEARCH_DELAY_MS = 100

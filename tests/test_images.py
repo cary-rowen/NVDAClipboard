@@ -36,7 +36,7 @@ class NavigatorImageTests(unittest.TestCase):
 		self.wgc.captureImage.return_value = ctypes.create_string_buffer(b"\x01\x02\x03\x00", 4)
 		self.gdi = Mock()
 		self.images = loadAddonModule(
-			f"{_PACKAGE_NAME}.images",
+			f"{_PACKAGE_NAME}.clipboard.images",
 			injectedModules={
 				"addonHandler": Mock(),
 				"api": SimpleNamespace(getNavigatorObject=lambda: SimpleNamespace(location=(0, 0, 1, 1))),
@@ -45,8 +45,8 @@ class NavigatorImageTests(unittest.TestCase):
 				"screenCurtain": SimpleNamespace(screenCurtain=self.curtain),
 				"screenBitmap": SimpleNamespace(ScreenBitmap=self.gdi),
 				"wx": SimpleNamespace(Display=display),
-				f"{_PACKAGE_NAME}.clipboardData": clipboardData,
-				f"{_PACKAGE_NAME}.imageCodec": imageCodec,
+				f"{_PACKAGE_NAME}.clipboard.payload": clipboardData,
+				f"{_PACKAGE_NAME}.clipboard.imageCodec": imageCodec,
 			},
 		)
 

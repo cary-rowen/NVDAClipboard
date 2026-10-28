@@ -16,7 +16,7 @@ from tests._module_loader import createAddonPackage, loadAddonModule
 
 _PACKAGE_NAME = "nvdaClipboardClipboardDataTests"
 createAddonPackage(_PACKAGE_NAME)
-clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboardData")
+clipboardData = loadAddonModule(f"{_PACKAGE_NAME}.clipboard.payload")
 
 
 def _buildChunk(chunkType: bytes, payload: bytes) -> bytes:

@@ -13,8 +13,8 @@ from hashlib import sha256
 from typing import TYPE_CHECKING, cast
 from uuid import UUID, uuid4
 
-from .clipboardData import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES
-from .storageModels import (
+from ..clipboard.payload import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES
+from .models import (
 	CategoryNotFoundError,
 	ClipboardItem,
 	ClipboardItemType,

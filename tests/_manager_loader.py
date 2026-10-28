@@ -107,4 +107,4 @@ def fakeNvdaModules(
 def loadManagerModule(packageName: str) -> ModuleType:
 	"""Import the real clipboard manager module below a fresh add-on package alias."""
 	createAddonPackage(packageName)
-	return loadAddonModule(f"{packageName}.manager", injectedModules=fakeNvdaModules())
+	return loadAddonModule(f"{packageName}.manager.window", injectedModules=fakeNvdaModules())

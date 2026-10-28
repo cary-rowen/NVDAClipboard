@@ -32,7 +32,7 @@ import textInfos
 import ui
 import wx
 
-from .clipboardMonitor import (
+from .clipboard.monitor import (
 	ClipboardContentType,
 	ClipboardMonitor,
 	ClipboardSequenceChangedError,
@@ -40,17 +40,17 @@ from .clipboardMonitor import (
 	ClipboardWriteError,
 )
 from .configuration import getShowClipboardContentAsPlainText
-from .clipboardData import (
+from .clipboard.payload import (
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,
 	isImageSizeSafe,
 	normalizeUnicodeText,
 )
 from .background import LatestWorkerResult, queueMainThread
-from .fileSize import FileSizeCalculation
-from .cloudSync import TiantanSyncManager, TiantanWriteError, getTiantanSupportState
+from .summary.fileSize import FileSizeCalculation
+from .tiantan.sync import TiantanSyncManager, TiantanWriteError, getTiantanSupportState
 from .navigation import ClipboardNavigator, NavigationResult
-from .oneDriveSync import OneDriveSyncManager
+from .oneDrive.sync import OneDriveSyncManager
 from .paste import (
 	PASTE_KEY_RELEASE_POLL_INTERVAL_MS,
 	PASTE_KEY_RELEASE_TIMEOUT_SECONDS,
@@ -60,7 +60,7 @@ from .paste import (
 	preparePngDib,
 	waitForTriggerKeysReleased,
 )
-from .search import matchesSearchKeywords, normalizeSearchText
+from .textSearch import matchesSearchKeywords, normalizeSearchText
 from .cues import playBoundary, playCopy, playLineBoundary, playNonPlainText
 from .historyWriter import (
 	IMAGE_CONTENT_TYPES,
@@ -69,12 +69,12 @@ from .historyWriter import (
 	clipboardItemFromSnapshot,
 	normalizeImageSnapshot,
 )
-from .images import (
+from .clipboard.images import (
 	ScreenCurtainCaptureUnavailableError,
 	captureNavigatorObjectPng,
 	savePngImage,
 )
-from .storage import (
+from .storage.database import (
 	CategoryExistsError,
 	CategoryNameError,
 	CategoryNotEmptyError,
@@ -87,7 +87,7 @@ from .storage import (
 	StorageError,
 	StorageFormatError,
 )
-from .storageModels import (
+from .storage.models import (
 	TEXT_ITEM_TYPES,
 	ClipboardItem,
 	ClipboardItemContent,
@@ -104,12 +104,12 @@ from .summary.formatting import (
 	formatTextStatisticsReport,
 	getTextOrCharacterCount,
 )
-from .textStats import TextStatisticsCalculation
+from .summary.textStats import TextStatisticsCalculation
 
 if TYPE_CHECKING:
-	from .cloudDialog import TiantanDialog
-	from .manager import ClipboardManagerFrame
-	from .oneDriveDialog import OneDriveSyncDialog
+	from .tiantan.dialog import TiantanDialog
+	from .manager.window import ClipboardManagerFrame
+	from .oneDrive.dialog import OneDriveSyncDialog
 
 
 addonHandler.initTranslation()
@@ -352,7 +352,7 @@ class ClipboardController:
 			raise RuntimeError(_MAIN_FRAME_UNAVAILABLE)
 		with _popup(mainFrame):
 			if self.manager is None:
-				from .manager import ClipboardManagerFrame
+				from .manager.window import ClipboardManagerFrame
 
 				self.manager = ClipboardManagerFrame(mainFrame, self)
 			self.manager.showManager(self._resolveStoredItemCategory(), self._storedItemIndex)
@@ -387,7 +387,7 @@ class ClipboardController:
 		tiantanSync = self._getAvailableTiantanSync()
 		if tiantanSync is None:
 			return
-		from .cloudDialog import TiantanDialog
+		from .tiantan.dialog import TiantanDialog
 
 		self._showSingletonDialog(
 			"tiantanDialog",
@@ -397,7 +397,7 @@ class ClipboardController:
 
 	def showOneDriveDialog(self, parent: wx.Window | None = None) -> None:
 		"""Create or raise the OneDrive history synchronization dialog."""
-		from .oneDriveDialog import OneDriveSyncDialog
+		from .oneDrive.dialog import OneDriveSyncDialog
 
 		self._showSingletonDialog(
 			"oneDriveDialog",
@@ -517,7 +517,7 @@ class ClipboardController:
 
 	def showClipboardContent(self) -> None:
 		"""Show the current clipboard content in the configured browseable format."""
-		from .clipboardViewer import showSnapshot
+		from .clipboard.viewer import showSnapshot
 
 		snapshot = self.monitor.readNow()
 		if snapshot.contentType == ClipboardContentType.ERROR:

@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING
 import addonHandler
 import colors
 
-from ..clipboardMonitor import ClipboardContentType
-from ..storageModels import TEXT_ITEM_TYPES, ClipboardItemType
+from ..clipboard.monitor import ClipboardContentType
+from ..storage.models import TEXT_ITEM_TYPES, ClipboardItemType
 
 if TYPE_CHECKING:
-	from ..clipboardMonitor import ClipboardSnapshot
-	from ..fileSize import FileSizeProgress
-	from ..storageModels import ClipboardItem, ClipboardItemContent, ClipboardItemSummary
-	from ..textStats import TextStatistics, TextStatisticsProgress
+	from ..clipboard.monitor import ClipboardSnapshot
+	from .fileSize import FileSizeProgress
+	from ..storage.models import ClipboardItem, ClipboardItemContent, ClipboardItemSummary
+	from .textStats import TextStatistics, TextStatisticsProgress
 
 
 addonHandler.initTranslation()

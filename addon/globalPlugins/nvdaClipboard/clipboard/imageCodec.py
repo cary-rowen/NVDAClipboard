@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
 	from PIL import Image
 
-from .clipboardData import (
+from .payload import (
 	MAX_DECODED_IMAGE_BYTES,
 	MAX_IMAGE_BYTES,
 	getPngImageInfo,

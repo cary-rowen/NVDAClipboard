@@ -28,10 +28,10 @@ createAddonPackage(_PACKAGE_NAME)
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
 storageModule = loadAddonModule(
-	f"{_PACKAGE_NAME}.storage",
+	f"{_PACKAGE_NAME}.storage.database",
 	injectedModules={"logHandler": _LOG_HANDLER},
 )
-syncStateModule = sys.modules[f"{_PACKAGE_NAME}.storageSyncState"]
+syncStateModule = sys.modules[f"{_PACKAGE_NAME}.storage.syncState"]
 for _module in (syncStateModule, storageModule):
 	for _name, _value in vars(_module).items():
 		if not _name.startswith("__"):

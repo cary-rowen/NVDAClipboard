@@ -27,7 +27,7 @@ from .configuration import (
 	getSection,
 	getTiantanEnabled,
 )
-from .cloudSync import getTiantanSupportState
+from .tiantan.sync import getTiantanSupportState
 
 
 addonHandler.initTranslation()

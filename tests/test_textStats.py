@@ -20,7 +20,7 @@ from tests._module_loader import createAddonPackage, loadAddonModule
 _PACKAGE_NAME = "nvdaClipboardTextStatsTests"
 createAddonPackage(_PACKAGE_NAME)
 textStats = loadAddonModule(
-	f"{_PACKAGE_NAME}.textStats",
+	f"{_PACKAGE_NAME}.summary.textStats",
 	injectedModules={
 		"logHandler": SimpleNamespace(log=Mock()),
 		"wx": SimpleNamespace(CallAfter=Mock()),

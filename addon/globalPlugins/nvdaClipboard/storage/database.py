@@ -17,9 +17,9 @@ from threading import RLock
 from typing import TYPE_CHECKING, cast
 
 from logHandler import log
-from .clipboardData import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES, normalizeNewlinesForWin32
-from ._nativeDeps import loadExtensionModule
-from .storageModels import (
+from ..clipboard.payload import MAX_IMAGE_BYTES, MAX_RICH_FORMAT_BYTES, normalizeNewlinesForWin32
+from .._native import loadExtensionModule
+from .models import (
 	CategoryExistsError,
 	CategoryNameError,
 	CategoryNotEmptyError,
@@ -41,7 +41,7 @@ from .storageModels import (
 	UnsupportedSchemaVersionError,
 	ZERO_OPERATION_ID,
 )
-from .storageSyncState import (
+from .syncState import (
 	allocateOneDriveVersions,
 	bindOneDriveState,
 	categoryOrderVersion,

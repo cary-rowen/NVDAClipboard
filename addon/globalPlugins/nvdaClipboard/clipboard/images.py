@@ -20,7 +20,7 @@ import screenCurtain
 import screenBitmap
 import wx
 
-from .clipboardData import getPngImageInfo, isImageSizeSafe
+from .payload import getPngImageInfo, isImageSizeSafe
 from .imageCodec import ImageDataTooLargeError, encodeBgrPixelsToPng, isPngImageDecodable
 
 

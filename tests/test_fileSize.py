@@ -24,7 +24,7 @@ createAddonPackage(_PACKAGE_NAME)
 _WIN_BINDINGS = ModuleType("winBindings")
 _WIN_BINDINGS.kernel32 = SimpleNamespace(GetDriveType=lambda _root: 3)
 fileSize = loadAddonModule(
-	f"{_PACKAGE_NAME}.fileSize",
+	f"{_PACKAGE_NAME}.summary.fileSize",
 	injectedModules={
 		"logHandler": SimpleNamespace(log=SimpleNamespace(exception=lambda *_args, **_kwargs: None)),
 		"winBindings": _WIN_BINDINGS,

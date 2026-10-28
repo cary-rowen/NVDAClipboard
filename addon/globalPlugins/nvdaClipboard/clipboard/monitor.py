@@ -22,7 +22,7 @@ from logHandler import log
 from winBindings import gdi32, kernel32, user32
 from windowUtils import CustomWindow
 
-from .clipboardData import (
+from .payload import (
 	MAX_DECODED_IMAGE_BYTES,
 	MAX_IMAGE_BYTES,
 	MAX_RICH_FORMAT_BYTES,
@@ -38,7 +38,7 @@ from .imageCodec import (
 	isPngImageDecodable,
 	pngToPackedDib,
 )
-from .background import queueMainThread
+from ..background import queueMainThread
 
 __all__ = [
 	"ClipboardContentType",

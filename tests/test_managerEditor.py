@@ -37,7 +37,7 @@ class _WideStringOffsetConverter:
 _PACKAGE_NAME = "nvdaClipboardManagerEditorTests"
 createAddonPackage(_PACKAGE_NAME)
 _MANAGER_EDITOR = loadAddonModule(
-	f"{_PACKAGE_NAME}.managerEditor",
+	f"{_PACKAGE_NAME}.manager.editor",
 	injectedModules=fakeNvdaModules(
 		{
 			"textUtils": {"WideStringOffsetConverter": _WideStringOffsetConverter},

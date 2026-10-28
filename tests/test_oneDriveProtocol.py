@@ -39,10 +39,10 @@ _ADDON_HANDLER.initTranslation = _initTranslation
 _LOG_HANDLER = ModuleType("logHandler")
 _LOG_HANDLER.log = Mock()
 oneDriveProtocol = loadAddonModule(
-	f"{_PACKAGE_NAME}.oneDriveProtocol",
+	f"{_PACKAGE_NAME}.oneDrive.protocol",
 	injectedModules={"addonHandler": _ADDON_HANDLER, "logHandler": _LOG_HANDLER},
 )
-storage = sys.modules[f"{_PACKAGE_NAME}.storage"]
+storage = sys.modules[f"{_PACKAGE_NAME}.storage.database"]
 
 
 class OneDriveProtocolTests(unittest.TestCase):
