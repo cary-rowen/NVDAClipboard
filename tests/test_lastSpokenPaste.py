@@ -33,7 +33,6 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 			and node.name
 			in {
 				"_getTextOrCharacterCount",
-				"_mapClipboardSelectionOffsets",
 				"_isTemporarySnapshot",
 				"_normalizeUnicodeText",
 				"_getPlainTextPasteRequest",
@@ -56,7 +55,6 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 		namespace["_TemporaryPasteState"],
 		namespace["_isTemporarySnapshot"],
 		namespace["_getTextOrCharacterCount"],
-		namespace["_mapClipboardSelectionOffsets"],
 		namespace["_TemporaryPasteRequest"],
 		namespace["_prepareTemporaryPngPaste"],
 	)
@@ -66,7 +64,6 @@ def _loadTemporaryPasteHelpers() -> tuple[object, ...]:
 	_TemporaryPasteState,
 	_isTemporarySnapshot,
 	_getTextOrCharacterCount,
-	_mapClipboardSelectionOffsets,
 	_TemporaryPasteRequest,
 	_prepareTemporaryPngPaste,
 ) = _loadTemporaryPasteHelpers()
@@ -116,16 +113,6 @@ class TemporaryPasteTests(unittest.TestCase):
 				self.assertFalse(prepared.snapshot.canUpload)
 				self.assertEqual(None if fails else b"png", prepared.snapshot.imageData)
 				self.assertEqual(None if fails else b"dib", prepared.preparedPngDib)
-
-	def testSelectionOffsetsFollowClipboardLineEndingNormalization(self) -> None:
-		"""Keep marked characters stable when Win32 expands LF to CRLF."""
-		self.assertEqual(
-			(3, 3),
-			_mapClipboardSelectionOffsets((2, 2), "a\nb", "a\r\nb"),
-		)
-		self.assertIsNone(
-			_mapClipboardSelectionOffsets((2, 2), "a\nb", "a\r\nc"),
-		)
 
 	def testTextFeedbackUsesConfiguredCharacterLimit(self) -> None:
 		"""Replace lengthy selection and paste feedback with a character count."""
