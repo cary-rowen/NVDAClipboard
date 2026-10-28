@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from types import ModuleType
@@ -30,9 +31,11 @@ storageModule = loadAddonModule(
 	f"{_PACKAGE_NAME}.storage",
 	injectedModules={"logHandler": _LOG_HANDLER},
 )
-for _name, _value in vars(storageModule).items():
-	if not _name.startswith("__"):
-		globals()[_name] = _value
+syncStateModule = sys.modules[f"{_PACKAGE_NAME}.storageSyncState"]
+for _module in (syncStateModule, storageModule):
+	for _name, _value in vars(_module).items():
+		if not _name.startswith("__"):
+			globals()[_name] = _value
 
 
 def _expectRaises(
@@ -57,7 +60,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 	assert _mergeSynchronizedOrder(existingOrder, (4, 3, 1)) == (4, 3, 2, 1)
 	assert _mergeSynchronizedOrder(existingOrder, (3, 4, 1)) == (3, 2, 4, 1)
 	validationVersion = SyncVersion(1, "00000000-0000-0000-0000-000000000001")
-	_validateOneDriveSnapshot(
+	validateOneDriveSnapshot(
 		OneDriveSyncSnapshot(
 			accountId=None,
 			history=(),
@@ -214,8 +217,8 @@ def _runSelfCheck() -> None:  # noqa: C901
 		oversizedDedupKey = _dedupKey(oversizedItem)
 		oversizedPayloadHash = getItemPayloadHash(oversizedItem)
 		with version1Storage._transaction() as connection:
-			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
-			_recordCategoryItemState(
+			recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
+			recordCategoryItemState(
 				connection,
 				"local only",
 				oversizedPayloadHash,
@@ -248,8 +251,8 @@ def _runSelfCheck() -> None:  # noqa: C901
 		assert oversizedItemId in {item.itemId for item in version1Storage.getItems("Local only")}
 		assert version1Storage.getOneDriveItem(oversizedPayloadHash) is None
 		with version1Storage._transaction() as connection:
-			_recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
-			_recordCategoryItemState(
+			recordHistoryState(connection, oversizedDedupKey, oversizedPayloadHash)
+			recordCategoryItemState(
 				connection,
 				"local only",
 				oversizedPayloadHash,
@@ -312,7 +315,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 		)
 		_expectRaises(
 			StorageFormatError,
-			lambda: _validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, _ZERO_OPERATION_ID)),
+			lambda: _validateSyncVersion(SyncVersion(_MAX_SYNC_CLOCK, ZERO_OPERATION_ID)),
 			"A terminal synchronization clock was accepted",
 		)
 		generationStorage = ClipboardStorage(root / "generation.db", root / "missing-generation.json")
@@ -329,7 +332,7 @@ def _runSelfCheck() -> None:  # noqa: C901
 			for state in expectedGenerationSnapshot.categories
 			if state.nameFolded == "middle"
 		)
-		committedMiddleOrderVersion = SyncVersion(middleOrderVersion.clock, _ZERO_OPERATION_ID)
+		committedMiddleOrderVersion = SyncVersion(middleOrderVersion.clock, ZERO_OPERATION_ID)
 		concurrentGenerationItem = ClipboardItem(
 			ClipboardItemType.PLAIN_TEXT,
 			text="generation concurrent",
