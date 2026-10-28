@@ -11,12 +11,14 @@ import ctypes
 from dataclasses import replace
 from hashlib import sha1, sha256
 from pathlib import Path
+import struct
 import sys
 from tempfile import TemporaryDirectory
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import call, MagicMock, Mock, patch
 from uuid import UUID
+import zlib
 
 from tests._module_loader import loadAddonModule
 
@@ -145,6 +147,28 @@ with patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: MagicM
 			f"{_PACKAGE_NAME}.storage": _STORAGE,
 		},
 	)
+oneDriveProtocol = sys.modules[f"{_PACKAGE_NAME}.oneDriveProtocol"]
+
+
+def _makeImageItem() -> storageModels.ClipboardItem:
+	"""Return one valid 1x1 PNG clipboard item for synchronization tests."""
+	png = bytearray(b"\x89PNG\r\n\x1a\n")
+	for chunkType, payload in (
+		(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)),
+		(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00")),
+		(b"IEND", b""),
+	):
+		png.extend(struct.pack(">I", len(payload)))
+		png.extend(chunkType)
+		png.extend(payload)
+		png.extend(struct.pack(">I", zlib.crc32(payload, zlib.crc32(chunkType)) & 0xFFFFFFFF))
+	return storageModels.ClipboardItem(
+		storageModels.ClipboardItemType.IMAGE,
+		imageData=bytes(png),
+		imageWidth=1,
+		imageHeight=1,
+		imageBitDepth=32,
+	)
 
 
 class _FakeStorage:
@@ -170,7 +194,12 @@ class _FakeStorage:
 
 	def addText(self, text: str) -> bytes:
 		"""Add one dirty local plain-text history item and return its payload hash."""
-		item = storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text)
+		return self.addItem(
+			storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text)
+		)
+
+	def addItem(self, item: storageModels.ClipboardItem) -> bytes:
+		"""Add one dirty local history item and return its payload hash."""
 		payloadHash = _getItemPayloadHash(item)
 		dedupKey = _getItemDedupKey(item)
 		state = storageModels.OneDriveHistoryState(
@@ -629,6 +658,9 @@ class OneDriveSyncTests(unittest.TestCase):
 		with patch.object(oneDriveSync, "_decodeItem", wraps=oneDriveSync._decodeItem) as decodeItem:
 			self.assertEqual(self._sync(second, graph).downloaded, 1)
 		self.assertEqual(decodeItem.call_count, 2)
+		# The download is fully validated once; reloading the staged copy skips the PNG decode.
+		self.assertEqual(decodeItem.call_args_list[0].kwargs, {})
+		self.assertEqual(decodeItem.call_args_list[1].kwargs, {"verifyImageDecodable": False})
 		self.assertEqual(second.liveTexts, {"first"})
 
 		first.addText("from first")
@@ -726,3 +758,59 @@ class OneDriveSyncTests(unittest.TestCase):
 		self.assertIn(orphanHash, graph.payloads)
 		self.assertLess(graph.events.index("putManifest"), graph.events.index("apply"))
 		self.assertLess(graph.events.index("apply"), graph.events.index("delete"))
+
+	def testImagePayloadIsDecodedOncePerUploadAndDownload(self) -> None:
+		"""Fully decode local images before upload and each downloaded image exactly once."""
+		graph = _FakeGraph()
+		first = _FakeStorage(8)
+		payloadHash = first.addItem(_makeImageItem())
+		with patch.object(
+			oneDriveProtocol,
+			"isPngImageDecodable",
+			wraps=oneDriveProtocol.isPngImageDecodable,
+		) as pngCheck:
+			self.assertEqual(self._sync(first, graph).uploaded, 1)
+		pngCheck.assert_called_once()
+		self.assertIn(payloadHash, graph.payloads)
+
+		second = _FakeStorage(9)
+		with patch.object(
+			oneDriveProtocol,
+			"isPngImageDecodable",
+			wraps=oneDriveProtocol.isPngImageDecodable,
+		) as pngCheck:
+			self.assertEqual(self._sync(second, graph).downloaded, 1)
+		pngCheck.assert_called_once()
+		self.assertEqual(second.items[payloadHash], first.items[payloadHash])
+
+	def testUndecodableLocalImageIsNotUploaded(self) -> None:
+		"""Fail only the local synchronization when a stored image cannot be decoded."""
+		graph = _FakeGraph()
+		storage = _FakeStorage(12)
+		storage.addItem(_makeImageItem())
+		originalSnapshot = storage.snapshot
+		with patch.object(oneDriveProtocol, "isPngImageDecodable", return_value=False):
+			with self.assertRaises(oneDriveSync.OneDriveError) as context:
+				self._sync(storage, graph)
+		self.assertEqual(str(context.exception), "A OneDrive clipboard image is invalid")
+		self.assertEqual(graph.payloads, {})
+		self.assertEqual(graph.putManifestCalls, 0)
+		self.assertEqual(storage.applyCalls, 0)
+		self.assertEqual(storage.snapshot, originalSnapshot)
+
+	def testUndecodableRemoteImageIsRejected(self) -> None:
+		"""Reject a downloaded image whose PNG pixels cannot be decoded before applying anything."""
+		graph = _FakeGraph()
+		first = _FakeStorage(10)
+		first.addItem(_makeImageItem())
+		self._sync(first, graph)
+		second = _FakeStorage(11)
+		originalSnapshot = second.snapshot
+		with patch.object(oneDriveProtocol, "isPngImageDecodable", return_value=False) as pngCheck:
+			with self.assertRaises(oneDriveSync.OneDriveError) as context:
+				self._sync(second, graph)
+		pngCheck.assert_called_once()
+		self.assertEqual(str(context.exception), "A OneDrive clipboard image is invalid")
+		self.assertEqual(second.applyCalls, 0)
+		self.assertEqual(second.items, {})
+		self.assertEqual(second.snapshot, originalSnapshot)

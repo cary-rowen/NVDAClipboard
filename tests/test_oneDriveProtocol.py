@@ -89,6 +89,33 @@ class OneDriveProtocolTests(unittest.TestCase):
 		with self.assertRaises(oneDriveProtocol.OneDriveError):
 			oneDriveProtocol._decodeItem(json.dumps(malformedItem).encode("utf-8"), payloadHash)
 
+	def testStagedReloadCanSkipPngDecodeButStillValidates(self) -> None:
+		"""Skip only the PNG pixel decode when reloading validated bytes, keeping other checks."""
+		item = self._makeImageItem()
+		payloadHash = storage.getItemPayloadHash(item)
+		encoded = oneDriveProtocol._encodeItem(item)
+		with patch.object(oneDriveProtocol, "isPngImageDecodable", return_value=False) as pngCheck:
+			self.assertEqual(
+				oneDriveProtocol._decodeItem(encoded, payloadHash, verifyImageDecodable=False),
+				item,
+			)
+			pngCheck.assert_not_called()
+			with self.assertRaises(oneDriveProtocol.OneDriveError):
+				oneDriveProtocol._encodeItem(item)
+			with self.assertRaises(oneDriveProtocol.OneDriveError) as context:
+				oneDriveProtocol._decodeItem(encoded, payloadHash)
+		self.assertEqual(str(context.exception), "A OneDrive clipboard image is invalid")
+		self.assertEqual(pngCheck.call_count, 2)
+		mismatchedPayload = json.loads(encoded) | {"imageWidth": 2}
+		with self.assertRaises(oneDriveProtocol.OneDriveError):
+			oneDriveProtocol._decodeItem(
+				json.dumps(mismatchedPayload).encode("utf-8"),
+				storage.getItemPayloadHash(replace(item, imageWidth=2)),
+				verifyImageDecodable=False,
+			)
+		with self.assertRaises(oneDriveProtocol.OneDriveError):
+			oneDriveProtocol._decodeItem(encoded, b"0" * 32, verifyImageDecodable=False)
+
 	def testMalformedCloudDataAlwaysRaisesOneDriveError(self) -> None:
 		"""Normalize hostile JSON, Base64, and UTF-8 failures at the cloud boundary."""
 		itemPayload = json.loads(oneDriveProtocol._encodeItem(self._makeImageItem()))

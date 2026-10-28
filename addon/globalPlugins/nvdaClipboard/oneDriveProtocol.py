@@ -318,8 +318,12 @@ def _encodeItem(item: ClipboardItem) -> bytes:
 	return data
 
 
-def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
-	"""Decode one downloaded item and verify its content-addressed hash."""
+def _decodeItem(data: bytes, expectedHash: bytes, *, verifyImageDecodable: bool = True) -> ClipboardItem:
+	"""Decode one downloaded item and verify its content-addressed hash.
+
+	Pass ``verifyImageDecodable=False`` only when reloading bytes that already
+	passed a full decode in this operation; the hash and structure are still checked.
+	"""
 	try:
 		payload = json.loads(data.decode("utf-8"))
 	except (ValueError, UnicodeError, RecursionError) as error:
@@ -355,7 +359,7 @@ def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
 		imageBitDepth=cast(int | None, metadata[2]),
 		canUpload=True,
 	)
-	if _validateSyncItem(item) != expectedHash:
+	if _validateSyncItem(item, verifyImageDecodable=verifyImageDecodable) != expectedHash:
 		raise OneDriveError(
 			# Translators: Error shown when cloud item content does not match its manifest hash.
 			_("A OneDrive clipboard history item failed its integrity check"),
@@ -363,8 +367,12 @@ def _decodeItem(data: bytes, expectedHash: bytes) -> ClipboardItem:
 	return item
 
 
-def _validateSyncItem(item: ClipboardItem) -> bytes:
-	"""Validate one cloud item and return its payload hash."""
+def _validateSyncItem(item: ClipboardItem, *, verifyImageDecodable: bool = True) -> bytes:
+	"""Validate one cloud item and return its payload hash.
+
+	When ``verifyImageDecodable`` is false, image data is checked only through its
+	PNG header metadata and size limits, skipping the full pixel decode.
+	"""
 	try:
 		isSyncItem = isOneDriveSyncItem(item)
 		if not isSyncItem or item.files:
@@ -378,7 +386,7 @@ def _validateSyncItem(item: ClipboardItem) -> bytes:
 				info is None
 				or info != (item.imageWidth, item.imageHeight, item.imageBitDepth)
 				or not isImageSizeSafe(info[0], info[1], max(32, info[2]))
-				or not isPngImageDecodable(item.imageData, info)
+				or (verifyImageDecodable and not isPngImageDecodable(item.imageData, info))
 			):
 				raise OneDriveError(
 					# Translators: Error shown when a cloud image fails PNG validation.

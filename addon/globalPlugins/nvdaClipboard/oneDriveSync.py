@@ -187,15 +187,19 @@ class _ItemStage:
 		self.path = path
 
 	def store(self, payloadHash: bytes, data: bytes) -> None:
-		"""Store one already validated bounded payload."""
+		"""Store one bounded payload that already passed full validation, including PNG decoding."""
 		if len(payloadHash) != 32 or len(data) > MAX_ITEM_FILE_BYTES:
 			raise ValueError(payloadHash)
 		self._path(payloadHash).write_bytes(data)
 
 	def load(self, payloadHash: bytes) -> ClipboardItem | None:
-		"""Load and validate one staged payload, or return ``None`` when absent."""
+		"""Load and validate one staged payload, or return ``None`` when absent.
+
+		Staged payloads were fully validated before ``store``, so reloading checks the
+		structure and content hash again but skips the repeated PNG decode.
+		"""
 		data = self.read(payloadHash)
-		return _decodeItem(data, payloadHash) if data is not None else None
+		return _decodeItem(data, payloadHash, verifyImageDecodable=False) if data is not None else None
 
 	def read(self, payloadHash: bytes) -> bytes | None:
 		"""Read one staged payload, or return ``None`` when absent."""

@@ -899,10 +899,13 @@ def _insertItem(
 
 def _findReusableItemId(
 	connection: sqlite3.Connection,
-	item: ClipboardItem,
 	payloadHash: bytes,
 ) -> int | None:
-	"""Return the newest intact entry with exactly matching immutable content."""
+	"""Return the newest intact entry with exactly matching immutable content.
+
+	The SHA-256 payload hash covers every immutable field, so an intact row whose
+	verified hash matches is treated as the same content without a field comparison.
+	"""
 	row = connection.execute(
 		"""
 		SELECT itemId, contentType, text, html, rtf, imageData, imageByteCount,
@@ -914,10 +917,11 @@ def _findReusableItemId(
 	if row is None:
 		return None
 	try:
-		storedItem = _rowToItem(row)
+		# Reading the row re-verifies its stored hash, so corrupted rows are never reused.
+		_ = _rowToItem(row)
 	except StorageError:
 		return None
-	return cast(int, row["itemId"]) if storedItem == item else None
+	return cast(int, row["itemId"])
 
 
 def _moveHistoryItemToFront(connection: sqlite3.Connection, itemId: int) -> None:
@@ -1003,7 +1007,7 @@ def _prependVersion2HistoryItem(connection: sqlite3.Connection, item: ClipboardI
 	).fetchone()
 	if row is None:
 		payloadHash = _payloadHash(item)
-		itemId = _findReusableItemId(connection, item, payloadHash)
+		itemId = _findReusableItemId(connection, payloadHash)
 		if itemId is None:
 			itemId = _insertItem(connection, item, dedupKey, payloadHash)
 	else:
@@ -1868,8 +1872,10 @@ def _loadOneDrivePayloadIds(
 			(payloadHash,),
 		).fetchone()
 		if row is not None:
+			# Reading the row validates it and verifies its hash against the queried payload hash.
 			storedItem = _rowToItem(row)
-			_validateOneDriveItem(payloadHash, storedItem)
+			if not isOneDriveSyncItem(storedItem):
+				raise StorageFormatError
 			payloadItemIds[payloadHash] = cast(int, row["itemId"])
 			imageBytes += cast(int, row["imageByteCount"])
 			continue
@@ -2468,7 +2474,7 @@ class ClipboardStorage:
 						replacedItemId = cast(int, row[0])
 						replacedDedupKey = cast(bytes, row[1])
 						replacedCanSync = bool(cast(int, row[2]))
-				itemId = _findReusableItemId(connection, item, payloadHash)
+				itemId = _findReusableItemId(connection, payloadHash)
 				wasInserted = itemId is None
 				if itemId is None:
 					itemId = _insertItem(connection, item, dedupKey, payloadHash)
@@ -2591,7 +2597,7 @@ class ClipboardStorage:
 			with self._transaction() as connection:
 				categoryId = self._categoryId(connection, categoryName)
 				nameFolded = _reviveCategoryIfNeeded(connection, categoryId)
-				itemId = _findReusableItemId(connection, item, payloadHash)
+				itemId = _findReusableItemId(connection, payloadHash)
 				wasInserted = itemId is None
 				if itemId is None:
 					itemId = _insertItem(connection, item, payloadHash=payloadHash)
@@ -2665,7 +2671,7 @@ class ClipboardStorage:
 						canUpload=item.canUpload,
 					)
 					payloadHash = _payloadHash(replacement)
-					replacementId = _findReusableItemId(connection, replacement, payloadHash)
+					replacementId = _findReusableItemId(connection, payloadHash)
 					if categoryId is None:
 						if replacementId is None or _historyReferencesItem(connection, replacementId):
 							replacementId = _insertItem(connection, replacement, payloadHash=payloadHash)
