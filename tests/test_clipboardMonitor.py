@@ -23,7 +23,8 @@ createAddonPackage(_PACKAGE_NAME)
 _WX = SimpleNamespace()
 
 with (
-	patch.object(ctypes, "windll", Mock(), create=True),
+	patch.object(ctypes, "WinDLL", side_effect=lambda *_args, **_kwargs: Mock(), create=True),
+	patch.object(ctypes, "get_last_error", Mock(return_value=0), create=True),
 	patch.object(ctypes, "WinError", lambda *_args: OSError(), create=True),
 	patch.dict(
 		sys.modules,
@@ -825,3 +826,42 @@ class ClipboardMonitorTests(unittest.TestCase):
 		self.assertEqual((clipboardMonitor.CF_UNICODETEXT,), context.exception.__cause__.args)
 		monitor.invalidatePendingSnapshots.assert_called_once_with()
 		monitor.handleClipboardUpdate.assert_called_once_with()
+
+
+class SharedWinDllTests(unittest.TestCase):
+	"""Keep add-on ctypes prototypes off the process-wide ``ctypes.windll`` libraries."""
+
+	def testAddonDoesNotUseSharedWindll(self) -> None:
+		"""No add-on module references ``windll``, whose function prototypes NVDA and other add-ons share."""
+		packageDirectory = addonSourcePath("__init__").parent
+		offenders = [
+			str(path.relative_to(packageDirectory))
+			for path in sorted(packageDirectory.rglob("*.py"))
+			if "_vendor" not in path.relative_to(packageDirectory).parts
+			and any(
+				(isinstance(node, ast.Name) and node.id == "windll")
+				or (isinstance(node, ast.Attribute) and node.attr == "windll")
+				or (isinstance(node, ast.alias) and node.name == "windll")
+				for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+			)
+		]
+		self.assertEqual([], offenders)
+
+	def testClipboardMonitorUsesPrivateLastErrorLibraries(self) -> None:
+		"""Load user32, kernel32 and gdi32 as private instances that capture the last error."""
+		tree = ast.parse(addonSourcePath("clipboardMonitor").read_text(encoding="utf-8"))
+		libraries = {
+			node.args[0].value
+			for node in ast.walk(tree)
+			if isinstance(node, ast.Call)
+			and isinstance(node.func, ast.Name)
+			and node.func.id == "WinDLL"
+			and isinstance(node.args[0], ast.Constant)
+			and any(
+				keyword.arg == "use_last_error"
+				and isinstance(keyword.value, ast.Constant)
+				and keyword.value.value is True
+				for keyword in node.keywords
+			)
+		}
+		self.assertEqual({"user32", "kernel32", "gdi32"}, libraries)

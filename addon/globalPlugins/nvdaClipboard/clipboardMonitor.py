@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import ctypes
-from ctypes import WinError, memmove, string_at, windll
+from ctypes import WinDLL, WinError, get_last_error, memmove, string_at
 import ctypes.wintypes as w
 from dataclasses import dataclass, replace
 from functools import partial
@@ -201,9 +201,12 @@ class _BITMAP(ctypes.Structure):
 	)
 
 
-_user32 = windll.user32
-_kernel32 = windll.kernel32
-_gdi32 = windll.gdi32
+# Private library instances keep argtypes/restype off the process-wide ``ctypes.windll`` objects,
+# which NVDA and every other add-on share. Their Windows errors are read with ``get_last_error``;
+# functions taken from NVDA's ``winBindings`` do not use ``use_last_error`` and keep bare ``WinError()``.
+_user32 = WinDLL("user32", use_last_error=True)
+_kernel32 = WinDLL("kernel32", use_last_error=True)
+_gdi32 = WinDLL("gdi32", use_last_error=True)
 
 _addClipboardFormatListener = _user32.AddClipboardFormatListener
 _addClipboardFormatListener.argtypes = (w.HWND,)
@@ -295,7 +298,7 @@ def _registerFormats() -> _RegisteredFormats:
 		field: int(_registerClipboardFormat(name)) for field, name in _REGISTERED_FORMAT_NAMES.items()
 	}
 	if not all(formatIds.values()):
-		raise WinError()
+		raise WinError(get_last_error())
 	return _RegisteredFormats(**formatIds)
 
 
@@ -530,7 +533,7 @@ class ClipboardMonitor:
 			return
 		window = _createClipboardMessageWindow(self)
 		if not _addClipboardFormatListener(window.handle):
-			error = WinError()
+			error = WinError(get_last_error())
 			window.destroy()
 			raise error
 		self._window = window
@@ -547,7 +550,9 @@ class ClipboardMonitor:
 		if self._window is None:
 			return
 		if not _removeClipboardFormatListener(self._window.handle):
-			log.debugWarning("Could not remove clipboard format listener.", exc_info=WinError())
+			log.debugWarning(
+				"Could not remove clipboard format listener.", exc_info=WinError(get_last_error())
+			)
 		self._window.destroy()
 		self._window = None
 
@@ -1107,7 +1112,7 @@ class ClipboardMonitor:
 			raise WinError()
 		size = int(_globalSize(handle))
 		if size <= 0:
-			raise WinError()
+			raise WinError(get_last_error())
 		if size > maximumBytes:
 			raise _ClipboardDataLimitError(size)
 		address = _globalLock(handle)
