@@ -109,6 +109,7 @@ class TextTransformTests(unittest.TestCase):
 		self.assertEqual("a\nb\nc\n", textTransforms.trimLeadingSpaces(" a\r\n\tb\nc\n"))
 		self.assertEqual("a\nb\nc\n", textTransforms.trimLeadingAndTrailingSpaces(" a \r\n\tb\t\n c \n"))
 		self.assertEqual("a b c", textTransforms.replaceLineBreaksWithSpaces("a\r\nb\nc"))
+		self.assertEqual("a b c\n", textTransforms.replaceLineBreaksWithSpaces("a\r\nb\nc\n"))
 		self.assertEqual("a\nb\n", textTransforms.removeBlankLines("a\n\n \n\t\nb\n"))
 		self.assertEqual("", textTransforms.removeBlankLines("\n \n\t\n"))
 		self.assertEqual("a\n\nb\n\n", textTransforms.removeConsecutiveBlankLines("a\n\n \n\t\nb\n\n"))
@@ -230,6 +231,24 @@ class TextTransformTests(unittest.TestCase):
 		replaceCall = winUser.sendMessage.call_args_list[-1]
 		self.assertEqual((100, textTransforms._EM_REPLACESEL, True), replaceCall.args[:3])
 		self.assertEqual(["a\r\nb\r\n"], sentTexts)
+
+	def testReplaceLineBreaksOnSelectionKeepsFollowingLinesSeparate(self) -> None:
+		"""Join only the selected lines, not the line after the selection."""
+		for selectionEnd, expected in ((5, "first\nsecond\nthird"), (12, "first second\nthird")):
+			with self.subTest(selectionEnd=selectionEnd):
+				editor = Mock()
+				editor.GetValue.return_value = "first\nsecond\nthird"
+				editor.GetSelection.return_value = (0, selectionEnd)
+				editor.GetInsertionPoint.return_value = 0
+				with patch.object(textTransforms, "_replaceEditorRange") as replaceEditorRange:
+					textTransforms.applyEditorTextTransform(
+						editor, textTransforms.replaceLineBreaksWithSpaces
+					)
+				text = editor.GetValue.return_value
+				if replaceEditorRange.called:
+					_editor, start, end, replacement = replaceEditorRange.call_args.args
+					text = text[:start] + replacement + text[end:]
+				self.assertEqual(expected, text)
 
 
 if __name__ == "__main__":
