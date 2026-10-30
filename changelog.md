@@ -1,4 +1,3 @@
-### 0.5.0
+### 0.5.1
 
-- Refactored the codebase.
-- Fixed various bugs.
+- Added a gesture command for manually sending clipboard text to Tiantan Cloud Clipboard.

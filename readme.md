@@ -100,6 +100,8 @@ This feature is available only to Tiantan VIP users and is disabled by default. 
 Tiantan Cloud Clipboard synchronizes text only; formatting, images, and copied files are not uploaded.
 Automatic sending is enabled by default and can be turned off from the **Cloud** menu, which also provides manual send and receive commands.
 
+The "Sends clipboard text to Tiantan Cloud Clipboard" command manually sends the current clipboard text, even when automatic sending is off, and announces "Sent to Tiantan Cloud Clipboard" after a successful upload. It has no default gesture; you can assign one under **Clipboard** in NVDA's Input Gestures dialog.
+
 The "Receives and pastes from Tiantan Cloud Clipboard" command receives Tiantan text and immediately pastes it into the focused application. It has no default gesture; you can assign one in NVDA's Input Gestures dialog. A manual receive leaves the text on the clipboard without pasting it.
 
 ## Privacy
@@ -136,6 +138,7 @@ Laptop and Desktop refer to NVDA's keyboard layouts. Gestures in the Desktop col
 | Append last spoken text | `NVDA+Windows+A` | `NVDA+Windows+A` |
 | Paste last spoken text | ``NVDA+` `` | ``NVDA+` `` |
 | Receive and paste Tiantan Cloud Clipboard text | Unassigned by default | Unassigned by default |
+| Send clipboard text to Tiantan Cloud Clipboard | Unassigned by default | Unassigned by default |
 | Copy navigator object as an image | `NVDA+PrintScreen` | `NVDA+PrintScreen` |
 | Cycle through categories of stored entries | `Ctrl+Windows+=` | `Ctrl+Windows+NumPad Divide` |
 | Next stored entry in the current category | `Ctrl+Windows+]` | `Ctrl+Windows+NumPad Plus` |

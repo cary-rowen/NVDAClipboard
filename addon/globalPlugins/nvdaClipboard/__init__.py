@@ -326,6 +326,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		self._runAction(self.controller.pasteLastSpokenText, _getKeyboardGestureVkCodes(gesture))
 
 	@script(
+		# Translators: Input help description for manually sending clipboard text to Tiantan Cloud Clipboard.
+		description=_("Sends clipboard text to Tiantan Cloud Clipboard"),
+		speakOnDemand=True,
+	)
+	def script_sendToTiantan(self, gesture: inputCore.InputGesture) -> None:
+		self._runAction(self.controller.sendToTiantan)
+
+	@script(
 		# Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
 		description=_("Receives and pastes from Tiantan Cloud Clipboard"),
 		speakOnDemand=True,

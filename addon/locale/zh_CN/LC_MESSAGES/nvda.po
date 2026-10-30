@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: nvdaClipboard 0.4.8\n"
 "Report-Msgid-Bugs-To: 'nvda-translations@groups.io'\n"
-"POT-Creation-Date: 2026-10-28 23:56+0800\n"
-"PO-Revision-Date: 2026-10-28 23:59+0800\n"
+"POT-Creation-Date: 2026-10-30 19:18+0800\n"
+"PO-Revision-Date: 2026-10-31 01:40+0800\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: zh_CN\n"
@@ -148,38 +148,43 @@ msgstr "将最后朗读的文本追加到剪贴板"
 msgid "Pastes the last spoken text"
 msgstr "粘贴最后朗读的文本"
 
-#. Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
+#. Translators: Input help description for manually sending clipboard text to Tiantan Cloud Clipboard.
 #: addon\globalPlugins\nvdaClipboard\__init__.py:330
+msgid "Sends clipboard text to Tiantan Cloud Clipboard"
+msgstr "将剪贴板文本发送到天坦云剪贴板"
+
+#. Translators: Input help description for receiving and pasting Tiantan Cloud Clipboard text.
+#: addon\globalPlugins\nvdaClipboard\__init__.py:338
 msgid "Receives and pastes from Tiantan Cloud Clipboard"
 msgstr "从天坦云剪贴板接收并粘贴"
 
 #. Translators: Input help description for copying a navigator object screenshot.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:339
+#: addon\globalPlugins\nvdaClipboard\__init__.py:347
 msgid "Copies an image of the current navigator object to the clipboard"
 msgstr "将当前导航对象的图片复制到剪贴板"
 
 #. Translators: Input help description for cycling through categories of stored entries.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:349
+#: addon\globalPlugins\nvdaClipboard\__init__.py:357
 msgid "Cycles through categories of stored entries"
 msgstr "循环切换已存条目类别"
 
 #. Translators: Input help description for moving to the next stored entry in the current category.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:359
+#: addon\globalPlugins\nvdaClipboard\__init__.py:367
 msgid "Moves to the next stored entry in the current category"
 msgstr "移动到当前类别中的下一个已存条目"
 
 #. Translators: Input help description for moving to the previous stored entry in the current category.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:369
+#: addon\globalPlugins\nvdaClipboard\__init__.py:377
 msgid "Moves to the previous stored entry in the current category"
 msgstr "移动到当前类别中的上一个已存条目"
 
 #. Translators: Input help description for putting the current stored entry on the system clipboard.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:379
+#: addon\globalPlugins\nvdaClipboard\__init__.py:387
 msgid "Puts the current stored entry on the system clipboard"
 msgstr "将当前已存条目放入系统剪贴板"
 
 #. Translators: Input help description for saving a clipboard image.
-#: addon\globalPlugins\nvdaClipboard\__init__.py:389
+#: addon\globalPlugins\nvdaClipboard\__init__.py:397
 msgid "Saves the clipboard image to a file"
 msgstr "将剪贴板图片保存到文件"
 
