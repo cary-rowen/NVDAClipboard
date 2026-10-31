@@ -115,6 +115,7 @@ if TYPE_CHECKING:
 addonHandler.initTranslation()
 
 _SUMMARY_REPORT_TIMEOUT_MS = 2000
+_FILE_SIZE_CHECK_INTERVAL_MS = 1000
 
 # Translators: Error shown when an add-on window cannot open because NVDA's main window is unavailable.
 _MAIN_FRAME_UNAVAILABLE = _("NVDA's main window is unavailable")
@@ -507,7 +508,11 @@ class ClipboardController:
 					self._reportPendingSummary,
 					calculation,
 				)
+				if isinstance(calculation, FileSizeCalculation):
+					self._checkFileSizeCalculation(calculation)
 			except Exception:
+				if isinstance(calculation, FileSizeCalculation):
+					calculation.cancel()
 				self._pendingSummaryReport = None
 				self._reportCalculatedSummary(calculation)
 				return
@@ -516,6 +521,16 @@ class ClipboardController:
 			return
 		self._pendingSummaryReport = None
 		self._reportCalculatedSummary(calculation)
+
+	def _checkFileSizeCalculation(self, calculation: FileSizeCalculation) -> None:
+		# Replaced scans still need cancellation until their I/O and cleanup have finished.
+		if not calculation.poll():
+			return
+		try:
+			callLater(_FILE_SIZE_CHECK_INTERVAL_MS, self._checkFileSizeCalculation, calculation)
+		except Exception:
+			log.exception("Unable to schedule clipboard file size timeout check")
+			calculation.cancel()
 
 	def showClipboardContent(self) -> None:
 		"""Show the current clipboard content in the configured browseable format."""
@@ -555,6 +570,7 @@ class ClipboardController:
 
 	def _reportFileSizeSummary(self, calculation: FileSizeCalculation) -> None:
 		"""Report the latest size and item counts for the current clipboard files."""
+		_ = calculation.poll()
 		ui.message(formatFileSizeSummary(self._summary, calculation.getProgress()))
 
 	def _reportTextStatisticsSummary(self, calculation: TextStatisticsCalculation) -> None:

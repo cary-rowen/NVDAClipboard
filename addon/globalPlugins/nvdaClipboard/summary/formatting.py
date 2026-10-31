@@ -113,7 +113,9 @@ def formatDataSize(byteCount: int) -> str:
 
 def formatFileSizeSummary(contentSummary: str, progress: FileSizeProgress) -> str:
 	"""Return the latest size and item counts for the current clipboard files."""
-	hasResults = bool(progress.fileCount or progress.directoryCount)
+	hasResults = bool(
+		progress.fileCount or (progress.directoryCount and progress.isComplete and not progress.isIncomplete)
+	)
 	if hasResults:
 		details = [formatDataSize(progress.byteCount)]
 		if progress.fileCount:
@@ -138,8 +140,8 @@ def formatFileSizeSummary(contentSummary: str, progress: FileSizeProgress) -> st
 		detailsText = _(", ").join(details)
 		if progress.isComplete:
 			if progress.isIncomplete:
-				# Translators: Clipboard file calculation with partial size and item counts.
-				summary = _("{summary}; contents total about {details}").format(
+				# Translators: Finished clipboard file calculation; these counts exclude unreadable contents.
+				summary = _("{summary}; calculation finished, incomplete results: {details}").format(
 					details=detailsText,
 					summary=contentSummary,
 				)
@@ -158,7 +160,11 @@ def formatFileSizeSummary(contentSummary: str, progress: FileSizeProgress) -> st
 	else:
 		if progress.isComplete:
 			# Translators: Clipboard file calculation where no content details were available.
-			summary = _("{summary}; could not calculate contents").format(summary=contentSummary)
+			summary = _(
+				"{summary}; could not calculate contents; copy the files again later to retry"
+			).format(
+				summary=contentSummary,
+			)
 		else:
 			# Translators: Clipboard file calculation before any content details are available.
 			summary = _("{summary}; calculating contents").format(summary=contentSummary)

@@ -25,6 +25,7 @@ from unittest.mock import Mock, patch
 from tests._manager_loader import _PlaceholderModule, fakeNvdaModules
 from tests._module_loader import createAddonPackage, loadAddonModule
 from tests.test_clipboardMonitor import clipboardMonitor
+from tests.test_fileSize import fileSize
 
 
 _PACKAGE_NAME = "nvdaClipboardWorkerPipelineTests"
@@ -220,6 +221,104 @@ def _pngSnapshot(imageData: bytes = b"png", text: str = "") -> object:
 		imageHeight=1,
 		imageBitDepth=32,
 	)
+
+
+class FileSizeSummaryPipelineTests(_PipelineTestCase):
+	def setUp(self) -> None:
+		super().setUp()
+		self.controller = _createController(_ManualWorker())
+		self.controller._summary = "Files"
+		self.calculation = Mock(spec=fileSize.FileSizeCalculation)
+		self.calculation.start.side_effect = (True, False)
+		self.calculation.poll.return_value = True
+		self.calculation.getProgress.return_value = fileSize.FileSizeProgress()
+		self.controller._summaryCalculation = self.calculation
+		self.enterContext(patch.object(controllerModule, "FileSizeCalculation", fileSize.FileSizeCalculation))
+		self.callLater = self.enterContext(patch.object(controllerModule, "callLater"))
+		self.enterContext(
+			patch.object(
+				controllerModule,
+				"speech",
+				SimpleNamespace(
+					SpeechMode=SimpleNamespace(onDemand="onDemand"),
+					getState=lambda: SimpleNamespace(speechMode="talk"),
+				),
+			),
+		)
+
+	def _fireTimer(self, delay: int) -> None:
+		call = next(call for call in self.callLater.call_args_list if call.args[0] == delay)
+		call.args[1](*call.args[2:])
+
+	def testCompletionAfterInitialReplyIsSilentUntilQueried(self) -> None:
+		"""Start monitoring once, answer once, and leave later completion for the next key press."""
+		self.controller.reportClipboardSummary()
+		self.assertEqual([], self.spokenMessages())
+		self._fireTimer(controllerModule._SUMMARY_REPORT_TIMEOUT_MS)
+		self.assertEqual(["Files; calculating contents"], self.spokenMessages())
+
+		self.calculation.getProgress.return_value = fileSize.FileSizeProgress(
+			byteCount=4,
+			fileCount=1,
+			isComplete=True,
+		)
+		self.calculation.poll.return_value = False
+		scheduled = self.callLater.call_count
+		self._fireTimer(controllerModule._FILE_SIZE_CHECK_INTERVAL_MS)
+		self.assertEqual(scheduled, self.callLater.call_count, "Finished scan kept polling")
+		self.controller._onSummaryCalculationComplete(self.calculation)
+		self._fireTimer(0)
+		self.assertEqual(1, len(self.spokenMessages()), "Completion interrupted speech")
+		self.controller.reportClipboardSummary()
+		self.assertEqual("Files; contents total 4 bytes, 1 file", self.spokenMessages()[-1])
+		self.assertEqual(scheduled + 1, self.callLater.call_count, "Query scheduled another scan timer")
+
+	def testCopyingAgainKeepsCleanupPollingWithoutReportingOldResults(self) -> None:
+		"""Keep cancelling a replaced scan until it exits, without reporting its result."""
+		self.controller.reportClipboardSummary()
+		snapshot = clipboardMonitor.ClipboardSnapshot(
+			clipboardMonitor.ClipboardContentType.FILES,
+			files=(r"Z:\folder",),
+		)
+		self.controller._applyCurrentSnapshot(snapshot)
+		self.calculation.cancel.assert_called_once_with()
+		self.assertIsNot(self.calculation, self.controller._summaryCalculation)
+		self.calculation.getProgress.return_value = fileSize.FileSizeProgress(
+			isComplete=True,
+			isIncomplete=True,
+		)
+		self.calculation.poll.reset_mock()
+		self.callLater.reset_mock()
+		self.controller._checkFileSizeCalculation(self.calculation)
+		self.controller._reportPendingSummary(self.calculation)
+		self.calculation.poll.assert_called_once_with()
+		self.callLater.assert_called_once_with(
+			controllerModule._FILE_SIZE_CHECK_INTERVAL_MS,
+			self.controller._checkFileSizeCalculation,
+			self.calculation,
+		)
+		self.assertEqual([], self.spokenMessages())
+		self.calculation.poll.return_value = False
+		self.callLater.reset_mock()
+		self.controller._checkFileSizeCalculation(self.calculation)
+		self.callLater.assert_not_called()
+
+	def testShutdownKeepsOnlyCleanupPolling(self) -> None:
+		"""Plugin shutdown keeps cancelling pending I/O; losing wx still requests cancellation."""
+		self.controller.terminate()
+		self.calculation.cancel.assert_called_once_with()
+		self.controller._checkFileSizeCalculation(self.calculation)
+		self.controller._reportPendingSummary(self.calculation)
+		self.calculation.poll.assert_called_once_with()
+		self.callLater.assert_called_once_with(
+			controllerModule._FILE_SIZE_CHECK_INTERVAL_MS,
+			self.controller._checkFileSizeCalculation,
+			self.calculation,
+		)
+		self.assertEqual([], self.spokenMessages())
+		self.callLater.side_effect = RuntimeError("wx.App no longer exists")
+		self.controller._checkFileSizeCalculation(self.calculation)
+		self.assertEqual(2, self.calculation.cancel.call_count)
 
 
 class PngClipboardWritePipelineTests(_PipelineTestCase):
