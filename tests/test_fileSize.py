@@ -141,7 +141,8 @@ class FileSizeCalculationTests(unittest.TestCase):
 					pathStat.assert_called_once_with(path, follow_symlinks=False)
 					scan.assert_called_once_with(path)
 					self.assertEqual(
-						(4, 1, 0), (progress.byteCount, progress.fileCount, progress.directoryCount)
+						(4, 1, 0),
+						(progress.byteCount, progress.fileCount, progress.directoryCount),
 					)
 					self.assertFalse(progress.isIncomplete)
 
@@ -278,7 +279,9 @@ class FileSizeCalculationTests(unittest.TestCase):
 					release.set()
 					self.assertTrue(finished.wait(2), "Scan did not exit after release")
 				self.assertEqual(
-					progress, calculation.getProgress(), "Late completion replaced partial results"
+					progress,
+					calculation.getProgress(),
+					"Late completion replaced partial results",
 				)
 
 	def testSlowDirectoryProgressDoesNotTimeOut(self) -> None:

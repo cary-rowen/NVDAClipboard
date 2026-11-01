@@ -271,7 +271,8 @@ class FileSizeSummaryPipelineTests(_PipelineTestCase):
 		self.assertEqual(1, len(self.spokenMessages()), "Completion interrupted speech")
 		self.controller.reportClipboardSummary()
 		self.assertEqual(
-			f"Files; contents total {formatting.formatDataSize(4)}, 1 file", self.spokenMessages()[-1]
+			f"Files; contents total {formatting.formatDataSize(4)}, 1 file",
+			self.spokenMessages()[-1],
 		)
 		self.assertEqual(scheduled + 1, self.callLater.call_count, "Query scheduled another scan timer")
 

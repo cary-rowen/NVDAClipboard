@@ -155,7 +155,7 @@ def formatFileSizeSummary(contentSummary: str, progress: FileSizeProgress) -> st
 		if progress.isComplete:
 			# Translators: Clipboard file calculation where no content details were available.
 			summary = _(
-				"{summary}; could not calculate contents; copy the files again later to retry"
+				"{summary}; could not calculate contents; copy the files again later to retry",
 			).format(
 				summary=contentSummary,
 			)
