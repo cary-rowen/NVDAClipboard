@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from ctypes import OleDLL, c_ulonglong, create_unicode_buffer
+from ctypes.wintypes import LPWSTR, UINT
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,6 +26,10 @@ if TYPE_CHECKING:
 
 
 addonHandler.initTranslation()
+
+_SFBS_FLAGS_TRUNCATE_UNDISPLAYED_DECIMAL_DIGITS = 2
+_strFormatByteSizeEx = OleDLL("shlwapi").StrFormatByteSizeEx
+_strFormatByteSizeEx.argtypes = (c_ulonglong, UINT, LPWSTR, UINT)
 
 _CANONICAL_SOLID_COLOR_NAMES = {
 	# Translators: Exact name of the RGB color (255, 0, 0).
@@ -90,32 +96,20 @@ def formatImageDetails(item: ClipboardItemContent) -> str:
 
 
 def formatDataSize(byteCount: int) -> str:
-	"""Return a compact localized binary-data size."""
-	if byteCount >= 1024 * 1024 * 1024 * 1024:
-		# Translators: Binary data size in terabytes.
-		return _("{size:.1f} TB").format(size=byteCount / (1024 * 1024 * 1024 * 1024))
-	if byteCount >= 1024 * 1024 * 1024:
-		# Translators: Binary data size in gigabytes.
-		return _("{size:.1f} GB").format(size=byteCount / (1024 * 1024 * 1024))
-	if byteCount >= 1024 * 1024:
-		# Translators: Binary data size in megabytes.
-		return _("{size:.1f} MB").format(size=byteCount / (1024 * 1024))
-	if byteCount >= 1024:
-		# Translators: Binary data size in kilobytes.
-		return _("{size:.1f} KB").format(size=byteCount / 1024)
-	return ngettext(
-		# Translators: Binary data size in bytes.
-		"{count} byte",
-		"{count} bytes",
+	"""Format a size using Windows' localized units and Explorer's displayed precision."""
+	sizeBuffer = create_unicode_buffer(64)
+	_strFormatByteSizeEx(
 		byteCount,
-	).format(count=byteCount)
+		_SFBS_FLAGS_TRUNCATE_UNDISPLAYED_DECIMAL_DIGITS,
+		sizeBuffer,
+		len(sizeBuffer),
+	)
+	return sizeBuffer.value
 
 
 def formatFileSizeSummary(contentSummary: str, progress: FileSizeProgress) -> str:
 	"""Return the latest size and item counts for the current clipboard files."""
-	hasResults = bool(
-		progress.fileCount or (progress.directoryCount and progress.isComplete and not progress.isIncomplete)
-	)
+	hasResults = bool(progress.fileCount or (progress.isComplete and not progress.isIncomplete))
 	if hasResults:
 		details = [formatDataSize(progress.byteCount)]
 		if progress.fileCount:

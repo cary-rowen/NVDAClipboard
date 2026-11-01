@@ -24,7 +24,6 @@ from ..background import BackgroundCalculation
 
 __all__ = ["FileSizeCalculation", "FileSizeProgress"]
 
-_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 _THREAD_TERMINATE = 0x0001
 _ERROR_NOT_FOUND = 1168
 _STALL_TIMEOUT_SECONDS = 30
@@ -149,10 +148,12 @@ class FileSizeCalculation(BackgroundCalculation[FileSizeProgress]):
 			except OSError:
 				totals.isIncomplete = True
 			else:
-				if _isReparsePoint(pathStat):
+				if pathStat.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
 					totals.isIncomplete = True
 				elif stat.S_ISDIR(pathStat.st_mode):
-					totals.directoryCount += 1
+					# Explorer excludes the selected folder itself for a single-folder selection.
+					if len(self._paths) > 1:
+						totals.directoryCount += 1
 					self._publish(totals)
 					self._scanDirectory(path, totals)
 				elif stat.S_ISREG(pathStat.st_mode):
@@ -194,7 +195,7 @@ class FileSizeCalculation(BackgroundCalculation[FileSizeProgress]):
 				except OSError:
 					totals.isIncomplete = True
 				else:
-					if _isReparsePoint(entryStat):
+					if entryStat.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
 						totals.isIncomplete = True
 					elif stat.S_ISDIR(entryStat.st_mode):
 						totals.directoryCount += 1
@@ -232,8 +233,3 @@ class FileSizeCalculation(BackgroundCalculation[FileSizeProgress]):
 				isComplete=isComplete,
 				isIncomplete=totals.isIncomplete,
 			)
-
-
-def _isReparsePoint(pathStat: os.stat_result) -> bool:
-	"""Return whether a stat result represents a Windows reparse point."""
-	return bool(getattr(pathStat, "st_file_attributes", 0) & _FILE_ATTRIBUTE_REPARSE_POINT)

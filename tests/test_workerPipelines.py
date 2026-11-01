@@ -25,7 +25,7 @@ from unittest.mock import Mock, patch
 from tests._manager_loader import _PlaceholderModule, fakeNvdaModules
 from tests._module_loader import createAddonPackage, loadAddonModule
 from tests.test_clipboardMonitor import clipboardMonitor
-from tests.test_fileSize import fileSize
+from tests.test_fileSize import fileSize, formatting
 
 
 _PACKAGE_NAME = "nvdaClipboardWorkerPipelineTests"
@@ -270,7 +270,9 @@ class FileSizeSummaryPipelineTests(_PipelineTestCase):
 		self._fireTimer(0)
 		self.assertEqual(1, len(self.spokenMessages()), "Completion interrupted speech")
 		self.controller.reportClipboardSummary()
-		self.assertEqual("Files; contents total 4 bytes, 1 file", self.spokenMessages()[-1])
+		self.assertEqual(
+			f"Files; contents total {formatting.formatDataSize(4)}, 1 file", self.spokenMessages()[-1]
+		)
 		self.assertEqual(scheduled + 1, self.callLater.call_count, "Query scheduled another scan timer")
 
 	def testCopyingAgainKeepsCleanupPollingWithoutReportingOldResults(self) -> None:

@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from ctypes import WinDLL, c_longlong, create_unicode_buffer
+from ctypes.wintypes import LPWSTR, UINT
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -86,6 +88,24 @@ class FileSizeCalculationTests(unittest.TestCase):
 		self.assertTrue(progress.isComplete)
 		self.assertFalse(progress.isIncomplete)
 
+	def testSingleFolderCountsOnlyItsContents(self) -> None:
+		"""Exclude the selected folder itself, including when it is empty."""
+		with TemporaryDirectory() as temporaryDirectory:
+			root = Path(temporaryDirectory)
+			empty = self._run(fileSize.FileSizeCalculation((str(root),)))
+			self.assertEqual(0, empty.directoryCount)
+			self.assertEqual(
+				f"Files; contents total {formatting.formatDataSize(0)}",
+				formatting.formatFileSizeSummary("Files", empty),
+			)
+			nested = root / "nested"
+			nested.mkdir()
+			(nested / "file.bin").write_bytes(b"1234")
+			progress = self._run(fileSize.FileSizeCalculation((str(root),)))
+		self.assertEqual((4, 1, 1), (progress.byteCount, progress.fileCount, progress.directoryCount))
+		self.assertTrue(progress.isComplete)
+		self.assertFalse(progress.isIncomplete)
+
 	def testMissingAndUnreadablePathsKeepPartialResults(self) -> None:
 		"""Keep readable file sizes when another item is missing or inaccessible."""
 		with TemporaryDirectory() as temporaryDirectory:
@@ -121,7 +141,7 @@ class FileSizeCalculationTests(unittest.TestCase):
 					pathStat.assert_called_once_with(path, follow_symlinks=False)
 					scan.assert_called_once_with(path)
 					self.assertEqual(
-						(4, 1, 1), (progress.byteCount, progress.fileCount, progress.directoryCount)
+						(4, 1, 0), (progress.byteCount, progress.fileCount, progress.directoryCount)
 					)
 					self.assertFalse(progress.isIncomplete)
 
@@ -313,21 +333,32 @@ class FileSizeCalculationTests(unittest.TestCase):
 		"""Only confirmed empty contents are zero bytes; partial counts are never called a total."""
 		for progress, expected in (
 			(
-				fileSize.FileSizeProgress(directoryCount=1),
+				fileSize.FileSizeProgress(),
 				"Files; calculating contents",
 			),
 			(
-				fileSize.FileSizeProgress(directoryCount=1, isComplete=True),
-				"Files; contents total 0 bytes, 1 folder",
+				fileSize.FileSizeProgress(isComplete=True),
+				f"Files; contents total {formatting.formatDataSize(0)}",
 			),
 			(
-				fileSize.FileSizeProgress(directoryCount=1, isComplete=True, isIncomplete=True),
+				fileSize.FileSizeProgress(isComplete=True, isIncomplete=True),
 				"Files; could not calculate contents; copy the files again later to retry",
 			),
 			(
 				fileSize.FileSizeProgress(byteCount=4, fileCount=1, isComplete=True, isIncomplete=True),
-				"Files; calculation finished, incomplete results: 4 bytes, 1 file",
+				f"Files; calculation finished, incomplete results: {formatting.formatDataSize(4)}, 1 file",
 			),
 		):
 			with self.subTest(progress=progress):
 				self.assertEqual(expected, formatting.formatFileSizeSummary("Files", progress))
+
+	def testDataSizesMatchWindows(self) -> None:
+		"""Match Windows' full localized output, including byte sizes and totals above 4 GB."""
+		windowsFormat = WinDLL("shlwapi").StrFormatByteSizeW
+		windowsFormat.argtypes = (c_longlong, LPWSTR, UINT)
+		windowsFormat.restype = LPWSTR
+		for byteCount in (0, 1023, 1024, 10_500, 5_351_040_416, 1_726_779_832):
+			with self.subTest(byteCount=byteCount):
+				buffer = create_unicode_buffer(64)
+				expected = windowsFormat(byteCount, buffer, len(buffer))
+				self.assertEqual(expected, formatting.formatDataSize(byteCount))
