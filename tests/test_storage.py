@@ -51,6 +51,48 @@ def _expectRaises(
 	raise AssertionError(message)
 
 
+_LEGACY_ITEM_COLUMNS = (
+	"itemId",
+	"contentType",
+	"text",
+	"textPreview",
+	"html",
+	"rtf",
+	"imageData",
+	"imageByteCount",
+	"imageWidth",
+	"imageHeight",
+	"imageBitDepth",
+	"filesJson",
+	"fileCount",
+	"filesPreviewJson",
+	"canUpload",
+	"dedupKey",
+	"payloadHash",
+)
+
+
+def _useLegacyItemColumnOrder(dataPath: Path, afterCopySql: str = "") -> None:
+	"""Rewrite the items table in the column order that older add-on versions created."""
+	columnList = ", ".join(_LEGACY_ITEM_COLUMNS)
+	connection = sqlite3.connect(dataPath)
+	try:
+		connection.executescript(
+			f"""
+			BEGIN;
+			CREATE TABLE legacyItems (itemId INTEGER PRIMARY KEY, {", ".join(_LEGACY_ITEM_COLUMNS[1:])});
+			INSERT INTO legacyItems ({columnList}) SELECT {columnList} FROM items;
+			{afterCopySql}
+			DROP TABLE items;
+			ALTER TABLE legacyItems RENAME TO items;
+			{_ITEMS_INDEXES_SQL}
+			COMMIT;
+			""",
+		)
+	finally:
+		connection.close()
+
+
 # Keep this linear cross-feature scenario intact so storage interactions are exercised in one database lifecycle.
 def _runSelfCheck() -> None:  # noqa: C901
 	"""Exercise migration, synchronization state, batch references, and reopening."""
@@ -837,6 +879,106 @@ class StorageSelfCheckTests(unittest.TestCase):
 					self.assertIsNotNone(indexRow)
 				finally:
 					storage.close()
+
+	def testLegacyItemColumnOrderIsRebuiltWithoutLosingReferences(self) -> None:
+		"""Move large item values last without cascading deletes or changing stored state."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			dataPath = root / "legacy-columns.db"
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			storage.createCategory("Saved")
+			itemIds = tuple(
+				storage.addHistory(item)
+				for item in (
+					ClipboardItem(ClipboardItemType.FORMATTED_TEXT, text="formatted", html=b"<b>x</b>"),
+					ClipboardItem(
+						ClipboardItemType.IMAGE,
+						imageData=b"image",
+						imageWidth=1,
+						imageHeight=1,
+						imageBitDepth=32,
+					),
+					ClipboardItem(ClipboardItemType.FILES, files=("C:\\a.txt",)),
+				)
+			)
+			assert None not in itemIds
+			storage.copyHistoryItemsToCategoryById(itemIds[:1], "Saved")
+			storage.bindOneDriveAccount("account.tenant")
+
+			def storedState(storage: ClipboardStorage) -> tuple[object, ...]:
+				return (
+					storage.history,
+					storage.categoryNames,
+					storage.getItems("Saved"),
+					storage.getOneDriveSnapshot(),
+					tuple(storage.getItemById(None, itemId) for itemId in itemIds),
+				)
+
+			before = storedState(storage)
+			storage.close()
+			_useLegacyItemColumnOrder(dataPath)
+
+			for _ in range(2):
+				storage = ClipboardStorage(dataPath, root / "missing-history.json")
+				try:
+					self.assertEqual(before, storedState(storage))
+					with storage._readConnection() as connection:
+						columns = tuple(row[1] for row in connection.execute("PRAGMA table_info(items)"))
+						indexes = {
+							row[0]
+							for row in connection.execute(
+								"SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'items'",
+							)
+						}
+						self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+						self.assertEqual(connection.execute("PRAGMA freelist_count").fetchone()[0], 0)
+					self.assertEqual(columns, _ITEM_COLUMNS)
+					self.assertEqual(indexes, {"items_dedupKey_idx", "items_payloadHash_idx"})
+				finally:
+					storage.close()
+
+	def testUnknownItemColumnsAreNotRebuilt(self) -> None:
+		"""Keep an items table with columns this version does not know instead of dropping them."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			dataPath = root / "future-columns.db"
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="kept"))
+			storage.close()
+			connection = sqlite3.connect(dataPath)
+			connection.execute("ALTER TABLE items ADD COLUMN futureColumn TEXT")
+			connection.execute("UPDATE items SET futureColumn = 'future'")
+			connection.commit()
+			connection.close()
+
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			try:
+				with storage._readConnection() as connection:
+					values = connection.execute("SELECT futureColumn FROM items").fetchall()
+				self.assertEqual([tuple(row) for row in values], [("future",)])
+			finally:
+				storage.close()
+
+	def testFailedItemColumnRebuildKeepsLegacyLayout(self) -> None:
+		"""Open the old layout unchanged when its rows cannot be copied into the rebuilt table."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			dataPath = root / "legacy-columns.db"
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="kept"))
+			storage.close()
+			# The legacy table has no CHECK constraint, so the rebuilt table rejects this copied value.
+			_useLegacyItemColumnOrder(dataPath, "UPDATE legacyItems SET canUpload = 2;")
+
+			storage = ClipboardStorage(dataPath, root / "missing-history.json")
+			try:
+				self.assertEqual([item.textPreview for item in storage.history], ["kept"])
+				with storage._readConnection() as connection:
+					columns = tuple(row[1] for row in connection.execute("PRAGMA table_info(items)"))
+				self.assertEqual(columns, _LEGACY_ITEM_COLUMNS)
+			finally:
+				storage.close()
+			self.assertFalse(dataPath.with_name(dataPath.name + ".corrupt").exists())
 
 	def testImageLimitFailureRollsBackHistoryPruning(self) -> None:
 		"""Restore all stored state when pruning cannot make room alongside a collected image."""

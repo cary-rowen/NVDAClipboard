@@ -176,6 +176,7 @@ def _openDatabase(path: Path) -> sqlite3.Connection:
 		connection.execute("PRAGMA foreign_keys = ON").close()
 		connection.execute("PRAGMA busy_timeout = 5000").close()
 		_initializeSchema(connection)
+		_moveItemLargeColumnsLast(connection)
 		connection.execute("PRAGMA journal_mode = WAL").close()
 		connection.execute("PRAGMA synchronous = NORMAL").close()
 	except Exception:
@@ -230,6 +231,103 @@ def _openDatabaseWithRecovery(path: Path) -> sqlite3.Connection:
 	return _openDatabase(path)
 
 
+# Large values come last: SQLite reads every overflow page of an earlier value to reach a later column.
+_ITEM_COLUMNS = (
+	"itemId",
+	"contentType",
+	"textPreview",
+	"imageByteCount",
+	"imageWidth",
+	"imageHeight",
+	"imageBitDepth",
+	"fileCount",
+	"filesPreviewJson",
+	"canUpload",
+	"dedupKey",
+	"payloadHash",
+	"text",
+	"filesJson",
+	"html",
+	"rtf",
+	"imageData",
+)
+_ITEMS_INDEXES_SQL = """
+CREATE INDEX items_dedupKey_idx ON items (dedupKey);
+CREATE INDEX items_payloadHash_idx ON items (payloadHash);
+"""
+
+
+def _itemsTableSql(tableName: str) -> str:
+	"""Return the ``items`` table definition, in ``_ITEM_COLUMNS`` order, under one table name."""
+	return f"""
+	CREATE TABLE {tableName} (
+		itemId INTEGER PRIMARY KEY,
+		contentType TEXT NOT NULL CHECK (contentType IN (
+			'{ClipboardItemType.PLAIN_TEXT.value}',
+			'{ClipboardItemType.FORMATTED_TEXT.value}',
+			'{ClipboardItemType.IMAGE.value}',
+			'{ClipboardItemType.TEXT_AND_IMAGE.value}',
+			'{ClipboardItemType.FILES.value}'
+		)),
+		textPreview TEXT NOT NULL,
+		imageByteCount INTEGER NOT NULL,
+		imageWidth INTEGER,
+		imageHeight INTEGER,
+		imageBitDepth INTEGER,
+		fileCount INTEGER NOT NULL,
+		filesPreviewJson TEXT NOT NULL,
+		canUpload INTEGER NOT NULL CHECK (canUpload IN (0, 1)),
+		dedupKey BLOB NOT NULL,
+		payloadHash BLOB NOT NULL,
+		text TEXT NOT NULL,
+		filesJson TEXT NOT NULL,
+		html BLOB,
+		rtf BLOB,
+		imageData BLOB
+	)
+	"""
+
+
+def _moveItemLargeColumnsLast(connection: sqlite3.Connection) -> None:
+	"""Rebuild an ``items`` table created with large values before metadata columns.
+
+	The schema version is unchanged because every query names its columns, so older
+	add-on versions can still open the rebuilt table. A failed rebuild keeps the old layout.
+	"""
+	columns = tuple(cast(str, row[1]) for row in connection.execute("PRAGMA table_info(items)").fetchall())
+	# Only reorder known columns: a layout from a newer add-on may hold columns this version would drop.
+	if columns == _ITEM_COLUMNS or sorted(columns) != sorted(_ITEM_COLUMNS):
+		return
+	columnList = ", ".join(_ITEM_COLUMNS)
+	# Dropping the old table must not cascade to history or category references.
+	connection.execute("PRAGMA foreign_keys = OFF").close()
+	try:
+		_ = connection.execute("BEGIN IMMEDIATE")
+		try:
+			_ = connection.execute(_itemsTableSql("itemsRebuild"))
+			_ = connection.execute(f"INSERT INTO itemsRebuild ({columnList}) SELECT {columnList} FROM items")
+			_ = connection.execute("DROP TABLE items")
+			_ = connection.execute("ALTER TABLE itemsRebuild RENAME TO items")
+			for statement in _ITEMS_INDEXES_SQL.strip().splitlines():
+				_ = connection.execute(statement)
+			_ = connection.execute("COMMIT")
+		except Exception:
+			with suppress(sqlite3.Error):
+				_ = connection.execute("ROLLBACK")
+			raise
+	except sqlite3.Error:
+		log.warning("Could not move large NVDA Clipboard item columns last.", exc_info=True)
+		return
+	finally:
+		connection.execute("PRAGMA foreign_keys = ON").close()
+	# The copy left the old table's pages free, and WAL mode keeps every rewritten page in the log file.
+	try:
+		connection.execute("VACUUM").close()
+		connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").close()
+	except sqlite3.Error:
+		log.warning("Could not compact the NVDA Clipboard database after moving item columns.", exc_info=True)
+
+
 def _initializeSchema(connection: sqlite3.Connection) -> None:
 	"""Create the fixed schema or validate its user version."""
 	versionRow = connection.execute("PRAGMA user_version").fetchone()
@@ -269,33 +367,8 @@ def _initializeSchema(connection: sqlite3.Connection) -> None:
 		_ = connection.executescript(
 			f"""
 			BEGIN IMMEDIATE;
-			CREATE TABLE items (
-				itemId INTEGER PRIMARY KEY,
-				contentType TEXT NOT NULL CHECK (contentType IN (
-					'{ClipboardItemType.PLAIN_TEXT.value}',
-					'{ClipboardItemType.FORMATTED_TEXT.value}',
-					'{ClipboardItemType.IMAGE.value}',
-					'{ClipboardItemType.TEXT_AND_IMAGE.value}',
-					'{ClipboardItemType.FILES.value}'
-				)),
-				text TEXT NOT NULL,
-				textPreview TEXT NOT NULL,
-				html BLOB,
-				rtf BLOB,
-				imageData BLOB,
-				imageByteCount INTEGER NOT NULL,
-				imageWidth INTEGER,
-				imageHeight INTEGER,
-				imageBitDepth INTEGER,
-				filesJson TEXT NOT NULL,
-				fileCount INTEGER NOT NULL,
-				filesPreviewJson TEXT NOT NULL,
-				canUpload INTEGER NOT NULL CHECK (canUpload IN (0, 1)),
-				dedupKey BLOB NOT NULL,
-				payloadHash BLOB NOT NULL
-			);
-			CREATE INDEX items_dedupKey_idx ON items (dedupKey);
-			CREATE INDEX items_payloadHash_idx ON items (payloadHash);
+			{_itemsTableSql("items")};
+			{_ITEMS_INDEXES_SQL}
 			CREATE TABLE history (
 				itemId INTEGER PRIMARY KEY REFERENCES items (itemId) ON DELETE CASCADE,
 				sortOrder INTEGER NOT NULL
