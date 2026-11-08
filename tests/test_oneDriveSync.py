@@ -14,6 +14,7 @@ from pathlib import Path
 import struct
 import sys
 from tempfile import TemporaryDirectory
+from threading import Lock
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import call, MagicMock, Mock, patch
@@ -428,6 +429,8 @@ class OneDriveSyncTests(unittest.TestCase):
 		manager._storage = storage
 		manager._ensureActive = Mock()
 		manager._updateProgress = Mock()
+		manager._lock = Lock()
+		manager._verifiedRemoteItems = {}
 		return manager
 
 	def _sync(
@@ -796,6 +799,44 @@ class OneDriveSyncTests(unittest.TestCase):
 			self.assertEqual(self._sync(second, graph).downloaded, 1)
 		pngCheck.assert_called_once()
 		self.assertEqual(second.items[payloadHash], first.items[payloadHash])
+
+	def testVerifiedRemotePayloadsAreNotReencodedUntilTheirListingChanges(self) -> None:
+		"""Skip unchanged verified payloads while still repairing changed or missing remote files."""
+		graph = _FakeGraph()
+		storage = _FakeStorage(13)
+		manager = self._makeManager(storage)
+		textHash = storage.addText("verified text")
+		imageHash = storage.addItem(_makeImageItem())
+		self.assertEqual(self._sync(storage, graph, manager).uploaded, 2)
+		uploadedData = dict(graph.payloads)
+
+		newHash = storage.addText("new text")
+		with patch.object(oneDriveSync, "_encodeItem", wraps=oneDriveSync._encodeItem) as encodeItem:
+			self.assertEqual(self._sync(storage, graph, manager).uploaded, 1)
+		self.assertEqual([_getItemPayloadHash(call.args[0]) for call in encodeItem.call_args_list], [newHash])
+
+		graph.payloads[textHash] = b"damaged"
+		del graph.payloads[imageHash]
+		with patch.object(oneDriveSync, "_encodeItem", wraps=oneDriveSync._encodeItem) as encodeItem:
+			self.assertEqual(self._sync(storage, graph, manager).uploaded, 2)
+		self.assertEqual(
+			sorted(_getItemPayloadHash(call.args[0]) for call in encodeItem.call_args_list),
+			sorted((textHash, imageHash)),
+		)
+		self.assertEqual(graph.payloads[textHash], uploadedData[textHash])
+		self.assertEqual(graph.payloads[imageHash], uploadedData[imageHash])
+
+	def testAccountChangeForgetsVerifiedRemotePayloads(self) -> None:
+		"""Keep verified OneDrive listings only while the signed-in account stays the same."""
+		manager = self._makeManager(_FakeStorage(1))
+		manager._state = oneDriveSync.OneDriveSyncState(True, True, False, False, "Account", "")
+		manager._accountToken = oneDriveAuth.AccountToken("token", "first", "Account", {})
+		verified = {b"payload": oneDriveGraph.RemoteItemFile(1, "hash")}
+		manager._verifiedRemoteItems = dict(verified)
+		manager._setAccountToken(oneDriveAuth.AccountToken("refreshed", "first", "Account", {}))
+		self.assertEqual(manager._verifiedRemoteItems, verified)
+		manager._setAccountToken(oneDriveAuth.AccountToken("token", "second", "Other", {}))
+		self.assertEqual(manager._verifiedRemoteItems, {})
 
 	def testUndecodableLocalImageIsNotUploaded(self) -> None:
 		"""Fail only the local synchronization when a stored image cannot be decoded."""

@@ -185,6 +185,8 @@ class OneDriveSyncManager:
 		self._pollTimer: Timer | None = None
 		self._lastManifestEtag: str | None = None
 		self._lastFullSyncAt: float | None = None
+		# Payloads are content-addressed, so a listed file equal to one already verified still matches.
+		self._verifiedRemoteItems: dict[bytes, RemoteItemFile] = {}
 		self._hasPendingSync = False
 		self._signOutPending = False
 		self._pendingSignOutDone: _CompletionCallback | None = None
@@ -764,8 +766,27 @@ class OneDriveSyncManager:
 			# Translators: Progress while existing files are verified and missing files are uploaded.
 			uploadMessage = _("Ensuring OneDrive items are uploaded ({current}/{total})...")
 			self._updateProgress(uploadMessage.format(current=0, total=uploadTotal), force=True)
+		with self._lock:
+			# An account change replaces the cache, so later additions only reach this attempt's copy.
+			verifiedRemoteItems = {
+				payloadHash: itemFile
+				for payloadHash, itemFile in self._verifiedRemoteItems.items()
+				if payloadHash in livePayloads
+			}
+			self._verifiedRemoteItems = verifiedRemoteItems
 		for current, payloadHash in enumerate(sorted(livePayloads), start=1):
 			self._ensureActive()
+			itemFile = itemFiles.get(payloadHash)
+			if (
+				itemFile is not None
+				and payloadHash in remotePayloads
+				and verifiedRemoteItems.get(payloadHash) == itemFile
+			):
+				self._updateProgress(
+					uploadMessage.format(current=current, total=uploadTotal),
+					force=current == uploadTotal,
+				)
+				continue
 			item = self._storage.getOneDriveItem(payloadHash)
 			if item is None:
 				itemData = stage.read(payloadHash)
@@ -778,7 +799,6 @@ class OneDriveSyncManager:
 					oversizedPayloads.append(payloadHash)
 					item = None
 					continue
-			itemFile = itemFiles.get(payloadHash)
 			if (
 				itemFile is None
 				or payloadHash not in remotePayloads
@@ -790,6 +810,7 @@ class OneDriveSyncManager:
 					size=len(itemData),
 					sha1Hash=sha1(itemData).hexdigest(),
 				)
+			verifiedRemoteItems[payloadHash] = itemFiles[payloadHash]
 			self._updateProgress(
 				uploadMessage.format(current=current, total=uploadTotal),
 				force=current == uploadTotal,
@@ -998,6 +1019,7 @@ class OneDriveSyncManager:
 			if token is None or self._accountToken is None or self._accountToken.accountId != token.accountId:
 				self._lastManifestEtag = None
 				self._lastFullSyncAt = None
+				self._verifiedRemoteItems = {}
 			self._accountToken = token
 			self._state = replace(
 				self._state,
