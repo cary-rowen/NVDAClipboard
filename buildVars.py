@@ -34,13 +34,13 @@ addon_info = AddonInfo(
 	# Translators: Long description to be shown for this add-on on add-on information from add-on store
 	addon_description=_("""NVDA Clipboard makes the Windows clipboard easier to explore and reuse with NVDA. You can browse clipboard content, keep a history, work with images and copied files, and synchronize content between computers."""),
 	# version
-	addon_version="0.5.3",
+	addon_version="0.5.4",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.5.3
+	addon_changelog=_("""### 0.5.4
 
-- Clipboard summaries now support calculating file and folder sizes on network shares and mapped network drives. If a scan makes no progress for an extended period, the results collected so far are retained and reported as incomplete.
-- File and image sizes now use Windows formatting, with units displayed in the operating system's default language. Content summaries for a single folder no longer include the selected folder itself in the folder count."""),
+- Improved browsing performance for stored entries with large text or images.
+- Reduced repeated verification of unchanged content during OneDrive synchronization."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
