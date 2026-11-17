@@ -12,10 +12,47 @@ on:
   workflow_call:
 
 jobs:
+  checks:
+    if: github.repository != 'nvaccess/addonTemplate'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+    - name: Install uv
+      uses: astral-sh/setup-uv@v10.3.3
+    - name: Code checks
+      shell: bash
+      env:
+        PREK_SKIP: no-commit-to-branch,pyright
+      run: |
+        if uv run prek run --all-files; then
+          exit 0
+        fi
+        if [[ "$GITHUB_EVENT_NAME" != "push" || "$GITHUB_REF_TYPE" != "branch" ]] || git diff --quiet; then
+          exit 1
+        fi
+        uv run prek run --all-files
+        uv run python -m unittest discover -s tests -v
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -am "Apply automatic code formatting"
+        git push origin "HEAD:$GITHUB_REF"
+    - name: Record checked revision
+      id: revision
+      shell: bash
+      run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   build:
     # Building the add-on template as an add-on does not make sense (and fails).
     # Do not modify this repo name with your own one! (should remain the template)
     if: github.repository != 'nvaccess/addonTemplate'
+    needs: checks
 
     runs-on: ubuntu-latest
 
@@ -23,6 +60,7 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v7
       with:
+        ref: ${{ needs.checks.outputs.sha }}
         submodules: recursive
     - name: Install uv
       uses: astral-sh/setup-uv@v10.3.3
@@ -33,9 +71,6 @@ jobs:
         sudo apt-get update  -y
         sudo apt-get install -y gettext
         uv sync
-
-    - name: Code checks
-      run: export PREK_SKIP=no-commit-to-branch,pyright; uv run prek run --all-files
 
     - name: building addon
       run: uv run scons && uv run scons pot
