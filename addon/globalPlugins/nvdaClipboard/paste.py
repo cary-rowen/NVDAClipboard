@@ -64,6 +64,8 @@ class ClipboardChangeSource(Enum):
 	RECORD = auto()
 	# Apply as the current clipboard without recording it.
 	NO_RECORD = auto()
+	# Apply content present when monitoring started, silently adding it to history only if unknown there.
+	INITIAL = auto()
 	# Record appended text, replacing the history entry of the text it extends.
 	APPEND_TEXT = auto()
 	# Record manager editor text, ignoring its history result if the text became stale.

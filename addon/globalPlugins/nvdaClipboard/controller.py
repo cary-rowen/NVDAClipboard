@@ -272,6 +272,8 @@ class ClipboardController:
 			scheduleFailureMessage="Could not schedule a prepared PNG clipboard write.",
 		)
 		self._awaitingInitialSnapshot = False
+		# Clipboard sequence observed when monitoring started, identifying pre-existing content.
+		self._initialSequenceNumber = 0
 		self._lastAppliedSequenceNumber = 0
 		self._tiantanFetchInProgress = False
 		self._paster = TemporaryPaster(
@@ -303,6 +305,7 @@ class ClipboardController:
 				tiantanSync.initialize()
 			self.oneDriveSync.initialize()
 			self._awaitingInitialSnapshot = True
+			self._initialSequenceNumber = self.monitor.getSequenceNumber()
 			self.monitor.start()
 		except Exception:
 			try:
@@ -1238,8 +1241,11 @@ class ClipboardController:
 			self._awaitingInitialSnapshot = False
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 			return
+		# Content changed after monitoring started is a new copy, not pre-existing content.
 		source = (
-			ClipboardChangeSource.NO_RECORD if self._awaitingInitialSnapshot else ClipboardChangeSource.RECORD
+			ClipboardChangeSource.INITIAL
+			if self._awaitingInitialSnapshot and snapshot.sequenceNumber == self._initialSequenceNumber
+			else ClipboardChangeSource.RECORD
 		)
 		self._awaitingInitialSnapshot = False
 		self._applySnapshot(snapshot, source)
@@ -1266,12 +1272,13 @@ class ClipboardController:
 			ClipboardChangeSource.APPEND_TEXT,
 			ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT,
 		}
+		isInitial = source is ClipboardChangeSource.INITIAL
 		if snapshot.sequenceNumber:
 			self._lastAppliedSequenceNumber = snapshot.sequenceNumber
 		self._applyCurrentSnapshot(snapshot)
-		if shouldRecord and snapshot.canIncludeInHistory:
+		if (shouldRecord or isInitial) and snapshot.canIncludeInHistory:
 			if snapshot.contentType in IMAGE_CONTENT_TYPES:
-				self._historyWriter.queueImageSnapshot(snapshot)
+				self._historyWriter.queueImageSnapshot(snapshot, isInitial=isInitial)
 			else:
 				item = clipboardItemFromSnapshot(snapshot)
 				if item is not None:
@@ -1283,6 +1290,7 @@ class ClipboardController:
 						expectedText=item.text
 						if source == ClipboardChangeSource.MANAGER_TEXT_REPLACEMENT
 						else None,
+						isInitial=isInitial,
 					)
 		if shouldRecord and snapshot.canUpload and snapshot.text:
 			tiantanSync = self.tiantanSync
@@ -1325,7 +1333,7 @@ class ClipboardController:
 		"""Reset the history position and refresh visible metadata after a history record is stored."""
 		if self.isHistoryCategory(self._storedItemCategory):
 			self._storedItemIndex = 0
-		if result.imageWasDropped:
+		if result.imageWasDropped and not result.isInitial:
 			# Translators: Message shown when mixed clipboard content is retained as text only.
 			ui.message(_("The text was saved in history, but its image could not be stored"))
 		self.oneDriveSync.notifyLocalChange()

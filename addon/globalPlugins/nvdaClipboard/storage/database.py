@@ -709,6 +709,22 @@ def _historyReferencesItem(connection: sqlite3.Connection, itemId: int) -> bool:
 	return connection.execute("SELECT 1 FROM history WHERE itemId = ?", (itemId,)).fetchone() is not None
 
 
+def _isKnownHistoryIdentity(connection: sqlite3.Connection, dedupKey: bytes) -> bool:
+	"""Return whether history holds an identity or synchronization recorded its deletion."""
+	return (
+		connection.execute(
+			"""
+			SELECT 1 FROM history JOIN items USING (itemId) WHERE items.dedupKey = ?
+			UNION ALL
+			SELECT 1 FROM oneDriveHistory WHERE dedupKey = ? AND deleted = 1
+			LIMIT 1
+			""",
+			(dedupKey, dedupKey),
+		).fetchone()
+		is not None
+	)
+
+
 def _categoryReferencesItem(connection: sqlite3.Connection, categoryId: int, itemId: int) -> bool:
 	"""Return whether one category already contains one item reference."""
 	return (
@@ -1380,13 +1396,21 @@ class ClipboardStorage:
 				_reconcileOneDriveState(connection, loadItem)
 			return hasChanged
 
-	def addHistory(self, item: ClipboardItem, *, replaceText: str | None = None) -> int | None:
+	def addHistory(
+		self,
+		item: ClipboardItem,
+		*,
+		replaceText: str | None = None,
+		onlyIfUnknown: bool = False,
+	) -> int | None:
 		"""Add or move an entry to newest history and return its identifier.
 
-		Return ``None`` only when an image exceeds the single-entry limit or
+		Return ``None`` when an image exceeds the single-entry limit or
 		cannot fit after pruning uncollected image history.
 		When ``replaceText`` is supplied, replace the newest entry only if its text matches
 		after Win32 newline normalization.
+		With ``onlyIfUnknown``, also return ``None`` without changes when history already holds
+		the entry's identity or synchronization recorded its explicit deletion.
 		"""
 		_validateItem(item)
 		if len(item.imageData or b"") > MAX_IMAGE_BYTES:
@@ -1395,6 +1419,8 @@ class ClipboardStorage:
 		payloadHash = _payloadHash(item)
 		try:
 			with self._transaction() as connection:
+				if onlyIfUnknown and _isKnownHistoryIdentity(connection, dedupKey):
+					return None
 				replacedItemId = None
 				replacedDedupKey = None
 				replacedCanSync = False

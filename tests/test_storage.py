@@ -725,6 +725,29 @@ class StorageSelfCheckTests(unittest.TestCase):
 			assert tuple(item.textPreview for item in storage.history) == ("old newer", "old new", "old")
 			storage.close()
 
+	def testInitialContentIsAddedOnlyWhenUnknownToHistory(self) -> None:
+		"""Record pre-existing clipboard content once without reordering or reviving history."""
+		with TemporaryDirectory() as directory:
+			root = Path(directory)
+			storage = ClipboardStorage(root / "history.db", root / "missing-history.json")
+			try:
+				storage.bindOneDriveAccount("account.tenant")
+				olderId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="older"))
+				newerId = storage.addHistory(ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="newer"))
+				assert olderId is not None and newerId is not None
+				knownItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="older")
+				assert storage.addHistory(knownItem, onlyIfUnknown=True) is None
+				assert tuple(item.itemId for item in storage.history) == (newerId, olderId)
+				initialItem = ClipboardItem(ClipboardItemType.PLAIN_TEXT, text="initial")
+				initialId = storage.addHistory(initialItem, onlyIfUnknown=True)
+				assert initialId is not None
+				assert tuple(item.itemId for item in storage.history) == (initialId, newerId, olderId)
+				storage.deleteItemsById(None, (initialId,))
+				assert storage.addHistory(initialItem, onlyIfUnknown=True) is None
+				assert tuple(item.itemId for item in storage.history) == (newerId, olderId)
+			finally:
+				storage.close()
+
 	def testAppendingTextAfterDeletingTheNewestHistoryEntry(self) -> None:
 		for previousText in ("old", "older"):
 			with self.subTest(previousText=previousText), TemporaryDirectory() as directory:

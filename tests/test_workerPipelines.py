@@ -782,6 +782,25 @@ class HistoryWritePipelineTests(_PipelineTestCase):
 		)
 		self.onItemStored.assert_not_called()
 
+	def testInitialItemIsStoredOnlyIfUnknownAndSkippedSilently(self) -> None:
+		"""Store initial content only when unknown, silently skipping known content."""
+		self.storage.addHistory.side_effect = [None, 4]
+		for text in ("known", "new"):
+			self.writer.queueItem(
+				storageModels.ClipboardItem(storageModels.ClipboardItemType.PLAIN_TEXT, text=text),
+				isInitial=True,
+			)
+		self.waitForWorker()
+		self.mainThread.drain()
+		self.assertTrue(
+			all(call.kwargs["onlyIfUnknown"] for call in self.storage.addHistory.call_args_list),
+		)
+		self.assertEqual([], self.spokenMessages())
+		self.assertEqual(
+			[(historyWriterModule.HistoryWriteResult(4, isInitial=True), None)],
+			self.storedResults(),
+		)
+
 	def testControllerStoppedBeforeFinishDiscardsResult(self) -> None:
 		"""Report nothing once the controller stopped before the main thread ran."""
 		self.storage.addHistory.side_effect = [1, storageModels.StorageError("disk full")]

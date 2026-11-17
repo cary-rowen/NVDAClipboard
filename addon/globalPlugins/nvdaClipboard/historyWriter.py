@@ -41,6 +41,8 @@ class HistoryWriteResult:
 	itemId: int | None
 	imageWasDropped: bool = False
 	imageWasTooLarge: bool = False
+	# Whether the write records content already on the clipboard when monitoring started.
+	isInitial: bool = False
 
 
 def clipboardItemFromSnapshot(snapshot: ClipboardSnapshot) -> ClipboardItem | None:
@@ -172,34 +174,45 @@ class HistoryWriter:
 		*,
 		replaceText: str | None = None,
 		expectedText: str | None = None,
+		isInitial: bool = False,
 	) -> None:
-		"""Queue one immutable item for ordered history storage."""
-		future = self._executor.submit(self._storeItem, item, imageWasDropped, replaceText)
+		"""Queue one immutable item for ordered history storage.
+
+		Initial items are stored only when history does not know them, and their rejection is silent.
+		"""
+		future = self._executor.submit(
+			self._storeItem,
+			item,
+			imageWasDropped,
+			replaceText,
+			False,
+			isInitial,
+		)
 		future.add_done_callback(
 			partial(self._queueWriteCompletion, expectedText=expectedText),
 		)
 
-	def queueImageSnapshot(self, snapshot: ClipboardSnapshot) -> None:
+	def queueImageSnapshot(self, snapshot: ClipboardSnapshot, *, isInitial: bool = False) -> None:
 		"""Queue one image snapshot without allowing unbounded retained image data."""
 		imageDataMissing = snapshot.imageData is None
 		if imageDataMissing or not self._imageSlots.acquire(blocking=False):
 			item = clipboardItemFromSnapshot(
 				replace(snapshot, imageFormat=None, imageData=None),
 			)
-			if item is None and imageDataMissing:
+			if item is None and imageDataMissing and not isInitial:
 				# Translators: Message shown when a clipboard image could not be normalized for history.
 				ui.message(_("The image could not be added to clipboard history"))
 			elif item is not None:
-				self.queueItem(item, imageWasDropped=imageDataMissing)
+				self.queueItem(item, imageWasDropped=imageDataMissing, isInitial=isInitial)
 			return
 		try:
-			future = self._executor.submit(self._storeImageSnapshot, snapshot)
+			future = self._executor.submit(self._storeImageSnapshot, snapshot, isInitial)
 		except Exception:
 			self._imageSlots.release()
 			raise
 		future.add_done_callback(self._queueImageWriteCompletion)
 
-	def _storeImageSnapshot(self, snapshot: ClipboardSnapshot) -> HistoryWriteResult:
+	def _storeImageSnapshot(self, snapshot: ClipboardSnapshot, isInitial: bool = False) -> HistoryWriteResult:
 		"""Normalize and store one retained image snapshot on the serial worker."""
 		snapshot, imageWasTooLarge = normalizeImageSnapshot(snapshot)
 		item = clipboardItemFromSnapshot(snapshot)
@@ -208,11 +221,13 @@ class HistoryWriter:
 				None,
 				imageWasDropped=True,
 				imageWasTooLarge=imageWasTooLarge,
+				isInitial=isInitial,
 			)
 		return self._storeItem(
 			item,
 			imageWasDropped=snapshot.imageData is None,
 			imageWasTooLarge=imageWasTooLarge,
+			isInitial=isInitial,
 		)
 
 	def _storeItem(
@@ -221,14 +236,16 @@ class HistoryWriter:
 		imageWasDropped: bool,
 		replaceText: str | None = None,
 		imageWasTooLarge: bool = False,
+		isInitial: bool = False,
 	) -> HistoryWriteResult:
 		"""Write history on the serial worker, preserving text when a mixed image is rejected."""
-		itemId = self._storage.addHistory(item, replaceText=replaceText)
+		itemId = self._storage.addHistory(item, replaceText=replaceText, onlyIfUnknown=isInitial)
 		if itemId is not None or item.contentType != ClipboardItemType.TEXT_AND_IMAGE:
 			return HistoryWriteResult(
 				itemId,
 				imageWasDropped=imageWasDropped,
 				imageWasTooLarge=imageWasTooLarge or len(item.imageData or b"") > MAX_IMAGE_BYTES,
+				isInitial=isInitial,
 			)
 		fallbackType = (
 			ClipboardItemType.FORMATTED_TEXT
@@ -244,11 +261,13 @@ class HistoryWriter:
 				canUpload=item.canUpload,
 			),
 			replaceText=replaceText,
+			onlyIfUnknown=isInitial,
 		)
 		return HistoryWriteResult(
 			fallbackId,
 			imageWasDropped=True,
 			imageWasTooLarge=imageWasTooLarge or len(item.imageData or b"") > MAX_IMAGE_BYTES,
+			isInitial=isInitial,
 		)
 
 	def _queueWriteCompletion(
@@ -290,6 +309,9 @@ class HistoryWriter:
 			return
 		self._saveFailureReported = False
 		if result.itemId is None:
+			if result.isInitial:
+				# Known initial content is skipped by design; startup does not announce rejected content.
+				return
 			if result.imageWasTooLarge:
 				# Translators: Message shown when a clipboard image exceeds the single-image history limit.
 				ui.message(

@@ -1081,6 +1081,35 @@ class ClipboardSelectionControllerTests(unittest.TestCase):
 				self.assertFalse(controller._paster._temporaryPasteInProgress)
 				self.assertIsNone(controller._paster._temporaryPasteState)
 
+	def testInitialSnapshotSourceDependsOnStartupSequence(self) -> None:
+		"""Treat unchanged startup content as initial, and later or changed content as a new copy."""
+		changeSource = _ClipboardChangeSource
+		for awaiting, sequenceNumber, expectedSource in (
+			(True, 4, changeSource.INITIAL),
+			(True, 5, changeSource.RECORD),
+			(False, 4, changeSource.RECORD),
+		):
+			with self.subTest(awaiting=awaiting, sequenceNumber=sequenceNumber):
+				controller = SimpleNamespace(
+					_isStarted=True,
+					_pendingWrites=set(),
+					_awaitingInitialSnapshot=awaiting,
+					_initialSequenceNumber=4,
+					_paster=SimpleNamespace(matchesTemporaryContent=Mock(return_value=False)),
+					_applySnapshot=Mock(),
+				)
+				controller._consumePendingWrite = MethodType(_consumePendingWrite, controller)
+				snapshot = clipboardMonitor.ClipboardSnapshot(
+					clipboardMonitor.ClipboardContentType.TEXT,
+					text="before NVDA",
+					sequenceNumber=sequenceNumber,
+				)
+
+				_onClipboardSnapshot(controller, snapshot)
+
+				controller._applySnapshot.assert_called_once_with(snapshot, expectedSource)
+				self.assertFalse(controller._awaitingInitialSnapshot)
+
 	def testRegisteredWritesDoNotRefreshImageSummary(self) -> None:
 		"""Refresh image summaries only for consumed writes that were applied locally."""
 		for applied in (True, False):
