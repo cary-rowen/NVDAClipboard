@@ -34,13 +34,12 @@ addon_info = AddonInfo(
 	# Translators: Long description to be shown for this add-on on add-on information from add-on store
 	addon_description=_("""NVDA Clipboard makes the Windows clipboard easier to explore and reuse with NVDA. You can browse clipboard content, keep a history, work with images and copied files, and synchronize content between computers."""),
 	# version
-	addon_version="0.5.4",
+	addon_version="0.5.5",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""### 0.5.4
+	addon_changelog=_("""### 0.5.5
 
-- Improved browsing performance for stored entries with large text or images.
-- Reduced repeated verification of unchanged content during OneDrive synchronization."""),
+- Content already on the clipboard when NVDA starts is now saved to history."""),
 	# Author(s)
 	addon_author="Cary-rowen <cary-rowen@outlook.com>",
 	# URL for the add-on documentation support
